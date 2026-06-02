@@ -1,21 +1,104 @@
 use candle_core::{Result, Tensor};
-use candle_nn::{Conv1d, Conv1dConfig, ConvTranspose1d, ConvTranspose1dConfig, Linear, Module};
+use candle_nn::{ConvTranspose1d, ConvTranspose1dConfig, Linear, Module};
 
 use crate::weights::WeightLoader;
 
 pub fn snake_beta(x: &Tensor, alpha: &Tensor, beta: &Tensor) -> Result<Tensor> {
-    let alpha = alpha.reshape((1, alpha.elem_count(), 1))?;
-    let beta = beta.reshape((1, beta.elem_count(), 1))?;
-    let beta_x = x.broadcast_mul(&beta)?;
-    let sin2 = beta_x.sin()?.sqr()?;
-    let one = Tensor::new(1.0f32, x.device())?;
-    let sin2_scaled = sin2.broadcast_mul(&one.broadcast_div(&beta)?)?;
-    Ok(x.broadcast_add(&alpha.broadcast_mul(&sin2_scaled)?)?)
+    let alpha = alpha.reshape((1, alpha.elem_count(), 1))?.exp()?;
+    let beta = beta.reshape((1, beta.elem_count(), 1))?.exp()?;
+    let alpha_x = x.broadcast_mul(&alpha)?;
+    let sin2 = alpha_x.sin()?.sqr()?;
+    let denom = (beta + 1e-9f64)?;
+    Ok(x.broadcast_add(&sin2.broadcast_div(&denom)?)?)
+}
+
+pub struct CausalConvNet {
+    weight: Tensor,
+    bias: Option<Tensor>,
+    stride: usize,
+    dilation: usize,
+    groups: usize,
+    effective_kernel: usize,
+    padding: usize,
+}
+
+impl CausalConvNet {
+    pub fn new(
+        weight: Tensor,
+        bias: Option<Tensor>,
+        stride: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Self {
+        let kernel_size = weight.dims()[2];
+        let effective_kernel = (kernel_size - 1) * dilation + 1;
+        let padding = effective_kernel.saturating_sub(stride);
+        Self {
+            weight,
+            bias,
+            stride,
+            dilation,
+            groups,
+            effective_kernel,
+            padding,
+        }
+    }
+
+    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        let length = x.dim(2)?;
+        let n_frames = (length + self.padding).saturating_sub(self.effective_kernel) as f64
+            / self.stride as f64
+            + 1.0;
+        let ideal_length = ((n_frames.ceil() as usize).saturating_sub(1)) * self.stride
+            + (self.effective_kernel - self.padding);
+        let extra_padding = ideal_length.saturating_sub(length);
+        let x = x.pad_with_zeros(2, self.padding, extra_padding)?;
+        let y = x.conv1d(&self.weight, 0, self.stride, self.dilation, self.groups)?;
+        if let Some(bias) = &self.bias {
+            y.broadcast_add(&bias.unsqueeze(0)?.unsqueeze(2)?)
+        } else {
+            Ok(y)
+        }
+    }
+}
+
+pub struct CausalTransConvNet {
+    conv: ConvTranspose1d,
+    right_crop: usize,
+}
+
+impl CausalTransConvNet {
+    pub fn new(weight: Tensor, bias: Option<Tensor>, stride: usize) -> Self {
+        let kernel_size = weight.dims()[2];
+        Self {
+            conv: ConvTranspose1d::new(
+                weight,
+                bias,
+                ConvTranspose1dConfig {
+                    stride,
+                    padding: 0,
+                    output_padding: 0,
+                    dilation: 1,
+                    groups: 1,
+                },
+            ),
+            right_crop: kernel_size.saturating_sub(stride),
+        }
+    }
+
+    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        let y = self.conv.forward(x)?;
+        if self.right_crop == 0 {
+            return Ok(y);
+        }
+        let len = y.dim(2)?;
+        y.narrow(2, 0, len.saturating_sub(self.right_crop))
+    }
 }
 
 pub struct ConvNeXtBlock {
     pub gamma: Tensor,
-    pub dwconv: Conv1d,
+    pub dwconv: CausalConvNet,
     pub norm: candle_nn::LayerNorm,
     pub pwconv1: Linear,
     pub pwconv2: Linear,
@@ -27,13 +110,6 @@ impl ConvNeXtBlock {
         let dw_w = w.get(&format!("{prefix}.dwconv.conv.weight"))?.clone();
         let dw_b = w.get(&format!("{prefix}.dwconv.conv.bias"))?.clone();
         let ch = dw_w.dims()[0];
-        let cfg = Conv1dConfig {
-            padding: 3,
-            stride: 1,
-            dilation: 1,
-            groups: ch,
-            cudnn_fwd_algo: None,
-        };
         let nw = w.get(&format!("{prefix}.norm.weight"))?.clone();
         let nb = w.get(&format!("{prefix}.norm.bias"))?.clone();
         let p1w = w.get(&format!("{prefix}.pwconv1.weight"))?.clone();
@@ -42,7 +118,7 @@ impl ConvNeXtBlock {
         let p2b = w.get(&format!("{prefix}.pwconv2.bias"))?.clone();
         Ok(Self {
             gamma,
-            dwconv: Conv1d::new(dw_w, Some(dw_b), cfg),
+            dwconv: CausalConvNet::new(dw_w, Some(dw_b), 1, 1, ch),
             norm: candle_nn::LayerNorm::new(nw, nb, 1e-6),
             pwconv1: Linear::new(p1w, Some(p1b)),
             pwconv2: Linear::new(p2w, Some(p2b)),
@@ -93,8 +169,8 @@ impl UpsampleBlock {
 }
 
 pub struct ResidualUnit {
-    c1: Conv1d,
-    c2: Conv1d,
+    c1: CausalConvNet,
+    c2: CausalConvNet,
     a1: Tensor,
     b1: Tensor,
     a2: Tensor,
@@ -102,32 +178,16 @@ pub struct ResidualUnit {
 }
 
 impl ResidualUnit {
-    pub fn from_loader(w: &WeightLoader, prefix: &str) -> crate::Result<Self> {
-        let k1 = w.get(&format!("{prefix}.conv1.conv.weight"))?.dims()[2];
-        let k2 = w.get(&format!("{prefix}.conv2.conv.weight"))?.dims()[2];
+    pub fn from_loader(w: &WeightLoader, prefix: &str, dilation: usize) -> crate::Result<Self> {
+        let _k1 = w.get(&format!("{prefix}.conv1.conv.weight"))?.dims()[2];
+        let _k2 = w.get(&format!("{prefix}.conv2.conv.weight"))?.dims()[2];
+        let c1_w = w.get(&format!("{prefix}.conv1.conv.weight"))?.clone();
+        let c1_b = w.get(&format!("{prefix}.conv1.conv.bias"))?.clone();
+        let c2_w = w.get(&format!("{prefix}.conv2.conv.weight"))?.clone();
+        let c2_b = w.get(&format!("{prefix}.conv2.conv.bias"))?.clone();
         Ok(Self {
-            c1: Conv1d::new(
-                w.get(&format!("{prefix}.conv1.conv.weight"))?.clone(),
-                Some(w.get(&format!("{prefix}.conv1.conv.bias"))?.clone()),
-                Conv1dConfig {
-                    padding: k1 / 2,
-                    stride: 1,
-                    dilation: 1,
-                    groups: 1,
-                    cudnn_fwd_algo: None,
-                },
-            ),
-            c2: Conv1d::new(
-                w.get(&format!("{prefix}.conv2.conv.weight"))?.clone(),
-                Some(w.get(&format!("{prefix}.conv2.conv.bias"))?.clone()),
-                Conv1dConfig {
-                    padding: k2 / 2,
-                    stride: 1,
-                    dilation: 1,
-                    groups: 1,
-                    cudnn_fwd_algo: None,
-                },
-            ),
+            c1: CausalConvNet::new(c1_w, Some(c1_b), 1, dilation, 1),
+            c2: CausalConvNet::new(c2_w, Some(c2_b), 1, 1, 1),
             a1: w.get(&format!("{prefix}.act1.alpha"))?.clone(),
             b1: w.get(&format!("{prefix}.act1.beta"))?.clone(),
             a2: w.get(&format!("{prefix}.act2.alpha"))?.clone(),
@@ -146,7 +206,7 @@ impl ResidualUnit {
 pub struct DecoderBlock {
     sb_a: Tensor,
     sb_b: Tensor,
-    ct: ConvTranspose1d,
+    ct: CausalTransConvNet,
     rus: Vec<ResidualUnit>,
 }
 
@@ -156,29 +216,18 @@ impl DecoderBlock {
         let ct_b = w.get(&format!("{prefix}.block.1.conv.bias"))?.clone();
         let k = ct_w.dims()[2];
         let s = k / 2;
-        let p = (k - s + 1) / 2;
-        let op = (k - s) % 2;
         let mut rus = Vec::new();
-        for i in 2..=4 {
+        for (i, dilation) in [(2, 1), (3, 3), (4, 9)] {
             rus.push(ResidualUnit::from_loader(
                 w,
                 &format!("{prefix}.block.{i}"),
+                dilation,
             )?);
         }
         Ok(Self {
             sb_a: w.get(&format!("{prefix}.block.0.alpha"))?.clone(),
             sb_b: w.get(&format!("{prefix}.block.0.beta"))?.clone(),
-            ct: ConvTranspose1d::new(
-                ct_w,
-                Some(ct_b),
-                ConvTranspose1dConfig {
-                    stride: s,
-                    padding: p,
-                    output_padding: op,
-                    dilation: 1,
-                    groups: 1,
-                },
-            ),
+            ct: CausalTransConvNet::new(ct_w, Some(ct_b), s),
             rus,
         })
     }

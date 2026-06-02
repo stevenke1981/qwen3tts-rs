@@ -2,8 +2,8 @@
 //!
 //! 將 LLM 原始輸出（位元組串流或 `Vec<Vec<u16>>`）轉換為 `TokenStream`。
 
-use crate::text_frontend::{SynthesisOptions, TokenStream};
 use crate::Result;
+use crate::text_frontend::{SynthesisOptions, TokenStream};
 
 // ---------------------------------------------------------------------------
 // 常數
@@ -91,8 +91,16 @@ impl TokenParser {
 
         let num_frames = u32::from_le_bytes(data[0..4].try_into().unwrap()) as usize;
         let expected_size = header_size + num_frames * NUM_CODEBOOKS * 2;
+        let frame_size = NUM_CODEBOOKS * 2; // 16 u16 = 32 bytes
+
+        if num_frames == 0 && data.len() > header_size && data.len() % frame_size == 0 {
+            return self.parse_frame_bytes(data, data.len() / frame_size, 0);
+        }
 
         if data.len() < expected_size {
+            if data.len() % frame_size == 0 {
+                return self.parse_frame_bytes(data, data.len() / frame_size, 0);
+            }
             return Err(crate::Error::Config(format!(
                 "Token data too short: {} bytes, expected {}",
                 data.len(),
@@ -100,11 +108,20 @@ impl TokenParser {
             )));
         }
 
+        self.parse_frame_bytes(data, num_frames, header_size)
+    }
+
+    fn parse_frame_bytes(
+        &self,
+        data: &[u8],
+        num_frames: usize,
+        base_offset: usize,
+    ) -> Result<TokenStream> {
         let mut stream = TokenStream::new(self.sample_rate);
-        let frame_size = NUM_CODEBOOKS * 2; // 16 u16 = 32 bytes
+        let frame_size = NUM_CODEBOOKS * 2;
 
         for i in 0..num_frames {
-            let offset = header_size + i * frame_size;
+            let offset = base_offset + i * frame_size;
             let raw = &data[offset..offset + frame_size];
 
             let mut frame = [0u16; NUM_CODEBOOKS];
@@ -158,6 +175,25 @@ mod tests {
         let parser = TokenParser::new(24000);
         let mut data = Vec::new();
         data.extend_from_slice(&3u32.to_le_bytes()); // 3 frames
+        for i in 0..3 {
+            for _ in 0..16 {
+                data.extend_from_slice(&(i as u16 * 10).to_le_bytes());
+            }
+        }
+
+        let stream = parser
+            .parse_bytes(&data, &SynthesisOptions::default())
+            .unwrap();
+        assert_eq!(stream.num_frames(), 3);
+        assert_eq!(stream.frames[0][0], 0);
+        assert_eq!(stream.frames[1][0], 10);
+        assert_eq!(stream.frames[2][0], 20);
+    }
+
+    #[test]
+    fn test_parse_raw_u16_frames() {
+        let parser = TokenParser::new(24000);
+        let mut data = Vec::new();
         for i in 0..3 {
             for _ in 0..16 {
                 data.extend_from_slice(&(i as u16 * 10).to_le_bytes());

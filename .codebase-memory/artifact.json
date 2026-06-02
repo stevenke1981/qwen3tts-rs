@@ -1,0 +1,11 @@
+{
+    "schema_version": 1,
+    "commit": "",
+    "indexed_at": "2026-06-02T11:52:22Z",
+    "project": "D-qwen3tts-rs",
+    "nodes": 856,
+    "edges": 1573,
+    "original_size": 2621440,
+    "compressed_size": 530012,
+    "compression_level": 9
+}

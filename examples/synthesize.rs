@@ -28,7 +28,7 @@
 use std::path::Path;
 
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend};
-use qwen3tts::{Decoder12Hz, DecoderConfig, TtsDecoder};
+use qwen3tts::{Decoder12Hz, DecoderConfig};
 
 fn main() {
     // ----- 解析命令列參數 -----
@@ -130,7 +130,9 @@ fn main() {
     if !weight_dir.join("codebook.safetensors").exists() {
         eprintln!("錯誤: {weight_dir:?} 不存在。");
         eprintln!("請先下載 Tokenizer 權重:");
-        eprintln!("  huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz --local-dir weights/tokenizer");
+        eprintln!(
+            "  huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz --local-dir weights/tokenizer"
+        );
         std::process::exit(1);
     }
 
@@ -181,16 +183,7 @@ fn main() {
     // ----- 步驟 3: 解碼 Token → PCM 音訊 -----
     println!("[3/3] 解碼 Token → 音訊…");
     let sample_rate = 24000u32;
-    let mut all_samples: Vec<f32> = Vec::with_capacity(num_frames * 1920);
-
-    for (i, frame) in stream.frames.iter().enumerate() {
-        let pcm = decoder.decode_chunk(frame).expect("解碼幀失敗");
-        all_samples.extend_from_slice(&pcm);
-
-        if (i + 1) % (num_frames.max(1) / 10 + 1) == 0 || i == num_frames - 1 {
-            println!("      解碼 {}/{}", i + 1, num_frames);
-        }
-    }
+    let all_samples = decoder.decode_frames(&stream.frames).expect("解碼失敗");
 
     let duration_sec = all_samples.len() as f64 / sample_rate as f64;
     println!(

@@ -194,19 +194,23 @@ fn precompute_rope(
 }
 
 fn apply_sliding_window_mask(attn: &Tensor, seq_len: usize, window: usize) -> Result<Tensor> {
-    if seq_len <= window {
-        return Ok(attn.clone());
+    let mut mask = Vec::with_capacity(seq_len * seq_len);
+    for q in 0..seq_len {
+        let window_start = if window == 0 {
+            0
+        } else {
+            (q + 1).saturating_sub(window)
+        };
+        for k in 0..seq_len {
+            let visible = k <= q && k >= window_start;
+            mask.push(if visible { 0.0f32 } else { -1.0e9f32 });
+        }
     }
-    let start = seq_len - window;
-    let mut mask = Tensor::tril2(seq_len, DType::F32, attn.device())?;
-    mask = (mask - 1.0)?;
-    let neg_inf = Tensor::new(f32::NEG_INFINITY, attn.device())?;
-    mask = (mask * neg_inf)?;
-    let window_mask = Tensor::tril2(start, DType::F32, attn.device())?;
-    let window_mask = window_mask.unsqueeze(0)?.unsqueeze(0)?;
-    let window_mask = window_mask.pad_with_zeros(2, 0, window)?;
-    let window_mask = window_mask.pad_with_zeros(3, 0, window)?;
-    Ok((attn + mask.unsqueeze(0)?.unsqueeze(0)? + window_mask)?)
+
+    let mask = Tensor::from_slice(&mask, (seq_len, seq_len), attn.device())?
+        .unsqueeze(0)?
+        .unsqueeze(0)?;
+    attn.broadcast_add(&mask)
 }
 
 struct Ffn {

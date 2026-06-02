@@ -44,6 +44,7 @@ def generate_codes(
     model,
     text: str,
     language: str = "auto",
+    speaker: Optional[str] = None,
     temperature=0.9,
     top_k=50,
     top_p=1.0,
@@ -74,7 +75,7 @@ def generate_codes(
     lang_map = getattr(mm.config.talker_config, "codec_language_id", {})
     lang_lower = language.lower()
     if lang_lower == "auto":
-        lang_actual = "english"
+        lang_actual = detect_language(text, lang_map)
     elif lang_lower in lang_map:
         lang_actual = lang_lower
     else:
@@ -82,14 +83,18 @@ def generate_codes(
         matches = [k for k in lang_map if k.lower() == lang_lower]
         lang_actual = matches[0] if matches else "english"
 
+    speaker_actual = speaker if speaker else None
+
     print(f"[bridge] language={lang_actual}", file=sys.stderr)
+    if speaker_actual:
+        print(f"[bridge] speaker={speaker_actual}", file=sys.stderr)
 
     # ── Generate ─────────────────────────────────────────────────────
     with torch.no_grad():
         codes_list, _ = mm.generate(
             input_ids=input_ids,
             languages=[lang_actual],
-            speakers=[None],
+            speakers=[speaker_actual],
             do_sample=True,
             temperature=temperature,
             top_k=top_k,
@@ -102,6 +107,25 @@ def generate_codes(
     for codes in codes_list:
         result.append(codes.cpu().numpy().astype(np.uint16))
     return result
+
+
+def detect_language(text: str, lang_map: dict) -> str:
+    """Infer Qwen3-TTS language key from Unicode ranges."""
+    ranges = [
+        ("chinese", "\u4e00", "\u9fff"),
+        ("japanese", "\u3040", "\u30ff"),
+        ("korean", "\uac00", "\ud7af"),
+        ("russian", "\u0400", "\u04ff"),
+    ]
+    for language, start, end in ranges:
+        if language in lang_map and any(start <= ch <= end for ch in text):
+            return language
+
+    latin = sum(("A" <= ch <= "Z") or ("a" <= ch <= "z") for ch in text)
+    if latin > 0 and "english" in lang_map:
+        return "english"
+
+    return "english" if "english" in lang_map else next(iter(lang_map), "english")
 
 
 def write_codes_binary(codes_list, stream):
@@ -124,6 +148,7 @@ def main():
         "--model", type=str, default="Qwen/Qwen3-TTS-12Hz-0.6B-Base", help="Model ID"
     )
     parser.add_argument("--language", type=str, default="auto")
+    parser.add_argument("--speaker", type=str, default=None)
     parser.add_argument("--temperature", type=float, default=0.9)
     parser.add_argument("--top-k", type=int, default=50)
     parser.add_argument("--top-p", type=float, default=1.0)
@@ -157,6 +182,7 @@ def main():
         loaded,
         text,
         language=args.language,
+        speaker=args.speaker,
         temperature=args.temperature,
         top_k=args.top_k,
         top_p=args.top_p,

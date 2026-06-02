@@ -92,6 +92,8 @@ impl PythonBridge {
             .arg(&self.model_id)
             .arg("--language")
             .arg(&options.language)
+            .arg("--speaker")
+            .arg(options.speaker.as_deref().unwrap_or(""))
             .arg("--temperature")
             .arg(options.temperature.to_string())
             .arg("--top-k")

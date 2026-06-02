@@ -1,9 +1,8 @@
 use candle_core::{Device, Tensor};
-use candle_nn::{Conv1d, Conv1dConfig, Module};
 
 use crate::codec::{
-    snake_beta, CodebookLookup, DecoderBlock, ParallelCodebook, PreTransformer,
-    PreTransformerConfig, UpsampleBlock,
+    CausalConvNet, CodebookLookup, DecoderBlock, ParallelCodebook, PreTransformer,
+    PreTransformerConfig, UpsampleBlock, snake_beta,
 };
 use crate::weights::WeightLoader;
 use crate::{DecoderConfig, Error, Result, TtsDecoder};
@@ -19,9 +18,9 @@ pub struct Decoder12Hz {
 
     upsample_blocks: Vec<UpsampleBlock>,
 
-    decoder_start: Conv1d,
+    decoder_start: CausalConvNet,
     decoder_blocks: Vec<DecoderBlock>,
-    final_conv: Conv1d,
+    final_conv: CausalConvNet,
     final_snake_a: Tensor,
     final_snake_b: Tensor,
 
@@ -73,17 +72,7 @@ impl Decoder12Hz {
         }
 
         let (sw, sb) = loader.conv1d_pair("0.conv")?;
-        let decoder_start = Conv1d::new(
-            sw,
-            sb,
-            Conv1dConfig {
-                padding: 3,
-                stride: 1,
-                dilation: 1,
-                groups: 1,
-                cudnn_fwd_algo: None,
-            },
-        );
+        let decoder_start = CausalConvNet::new(sw, sb, 1, 1, 1);
 
         let mut decoder_blocks = Vec::new();
         for i in 1..=4 {
@@ -91,17 +80,7 @@ impl Decoder12Hz {
         }
 
         let (fw, fb) = loader.conv1d_pair("6.conv")?;
-        let final_conv = Conv1d::new(
-            fw,
-            fb,
-            Conv1dConfig {
-                padding: 3,
-                stride: 1,
-                dilation: 1,
-                groups: 1,
-                cudnn_fwd_algo: None,
-            },
-        );
+        let final_conv = CausalConvNet::new(fw, fb, 1, 1, 1);
 
         let fs_a = loader.get("5.alpha")?.clone();
         let fs_b = loader.get("5.beta")?.clone();
@@ -129,6 +108,53 @@ impl Decoder12Hz {
 
     pub fn set_temperature(&mut self, temperature: f64) {
         self.temperature = temperature;
+    }
+
+    /// Decode a complete 12Hz token sequence with the same causal batch path
+    /// used by the reference tokenizer decoder.
+    pub fn decode_frames(&mut self, frames: &[[u16; 16]]) -> Result<Vec<f32>> {
+        if frames.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let num_frames = frames.len();
+        let mut frame_embeddings: Vec<Vec<f32>> = Vec::with_capacity(num_frames);
+        for frame in frames {
+            let embeddings = self.codebook.decode(frame)?;
+            let frame_embed = embeddings.sum(0)?;
+            frame_embeddings.push(frame_embed.to_vec1()?);
+        }
+
+        let mut batch_data: Vec<f32> = Vec::with_capacity(self.config.embedding_dim * num_frames);
+        for ch in 0..self.config.embedding_dim {
+            for frame in &frame_embeddings {
+                batch_data.push(frame[ch]);
+            }
+        }
+
+        let x = Tensor::from_slice(
+            &batch_data,
+            (1, self.config.embedding_dim, num_frames),
+            &self.device,
+        )?;
+
+        let h = self.pre_conv.forward(&x)?.narrow(2, 0, num_frames)?;
+        let h = self.pre_transformer.forward(&h)?;
+
+        let mut h = h;
+        for ub in &self.upsample_blocks {
+            h = ub.forward(&h)?;
+        }
+
+        let mut h = self.decoder_start.forward(&h)?;
+        for db in &self.decoder_blocks {
+            h = db.forward(&h)?;
+        }
+
+        let h = snake_beta(&h, &self.final_snake_a, &self.final_snake_b)?;
+        let h = self.final_conv.forward(&h)?;
+
+        h.squeeze(0)?.squeeze(0)?.to_vec1().map_err(Into::into)
     }
 
     fn decode_chunk_inner(&mut self, tokens: &[u16]) -> Result<Vec<f32>> {

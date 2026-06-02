@@ -13,7 +13,9 @@ mod transformer;
 pub use activation::snake;
 pub use causal_conv::{CausalConv1d, CausalConvConfig, CausalConvState};
 pub use codebook::{CodebookLookup, ParallelCodebook};
-pub use decoder_blocks::{snake_beta, ConvNeXtBlock, DecoderBlock, ResidualUnit, UpsampleBlock};
+pub use decoder_blocks::{
+    CausalConvNet, ConvNeXtBlock, DecoderBlock, ResidualUnit, UpsampleBlock, snake_beta,
+};
 pub use flow_matching::{
     DiTBackbone, DiTConfig, DiTTimestepEmbedding, FlowMatchingDecoder, OdeSolver, OdeSolverConfig,
     OdeSolverType,
