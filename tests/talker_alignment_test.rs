@@ -812,3 +812,79 @@ fn talker_prompt_input_builder_matches_pytorch_fixture() {
     assert!(pad_cos >= 0.999, "pad cosine {pad_cos:.8} < 0.999");
     assert!(pad_max_abs <= 1e-3, "pad max_abs {pad_max_abs:.8} > 1e-3");
 }
+
+#[test]
+#[ignore = "loads the full 0.6B talker model; run explicitly for PyTorch alignment"]
+fn talker_prompt_generation_matches_pytorch_fixture() {
+    let fixture_path = Path::new("tests/fixtures/talker_prompt_generation.json");
+    if !fixture_path.exists() {
+        eprintln!("Skipping: fixture not found at {fixture_path:?}");
+        return;
+    }
+
+    let fixture = load_talker_single_frame_fixture(fixture_path);
+    let device = Device::Cpu;
+    let Some(talker) = load_talker(&device) else {
+        return;
+    };
+
+    let inputs_embeds = Tensor::from_slice(
+        &fixture.inputs_embeds,
+        (
+            fixture.inputs_embeds_shape[0],
+            fixture.inputs_embeds_shape[1],
+            fixture.inputs_embeds_shape[2],
+        ),
+        &device,
+    )
+    .expect("inputs embeds");
+    let attention_mask = Tensor::from_slice(
+        &fixture.attention_mask,
+        (
+            fixture.attention_mask_shape[0],
+            fixture.attention_mask_shape[1],
+        ),
+        &device,
+    )
+    .expect("attention mask");
+    let trailing_text_hidden = Tensor::from_slice(
+        &fixture.trailing_text_hidden,
+        (
+            fixture.trailing_text_hidden_shape[0],
+            fixture.trailing_text_hidden_shape[1],
+            fixture.trailing_text_hidden_shape[2],
+        ),
+        &device,
+    )
+    .expect("trailing text hidden");
+    let tts_pad_embed = Tensor::from_slice(
+        &fixture.tts_pad_embed,
+        (
+            fixture.tts_pad_embed_shape[0],
+            fixture.tts_pad_embed_shape[1],
+            fixture.tts_pad_embed_shape[2],
+        ),
+        &device,
+    )
+    .expect("tts pad embed");
+
+    let num_frames = fixture.generated_shape[0];
+    let codes = talker
+        .generate(
+            &inputs_embeds,
+            Some(&attention_mask),
+            Some(&trailing_text_hidden),
+            Some(&tts_pad_embed),
+            num_frames,
+            &device,
+        )
+        .expect("talker prompt generation");
+
+    assert_eq!(codes.dims(), fixture.generated_shape.as_slice());
+    let rust = codes.to_vec2::<u32>().expect("generated token ids");
+    println!(
+        "talker prompt-generation rust={rust:?} pytorch={:?}",
+        fixture.generated
+    );
+    assert_eq!(rust, fixture.generated);
+}

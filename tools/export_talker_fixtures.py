@@ -28,12 +28,14 @@ def flatten(tensor: torch.Tensor):
 def export_text_projection(model, out_dir: Path):
     talker = model.talker
     input_ids = torch.tensor(
-        [[
-            model.config.tts_bos_token_id,
-            model.config.tts_eos_token_id,
-            model.config.tts_pad_token_id,
-            198,
-        ]],
+        [
+            [
+                model.config.tts_bos_token_id,
+                model.config.tts_eos_token_id,
+                model.config.tts_pad_token_id,
+                198,
+            ]
+        ],
         dtype=torch.long,
         device=talker.device,
     )
@@ -57,18 +59,23 @@ def export_text_projection(model, out_dir: Path):
 def export_codec_embedding_and_head(model, out_dir: Path):
     talker = model.talker
     codec_ids = torch.tensor(
-        [[
-            model.config.talker_config.codec_bos_id,
-            model.config.talker_config.codec_pad_id,
-            model.config.talker_config.codec_eos_token_id,
-            model.config.talker_config.codec_language_id["chinese"],
-        ]],
+        [
+            [
+                model.config.talker_config.codec_bos_id,
+                model.config.talker_config.codec_pad_id,
+                model.config.talker_config.codec_eos_token_id,
+                model.config.talker_config.codec_language_id["chinese"],
+            ]
+        ],
         dtype=torch.long,
         device=talker.device,
     )
     hidden = (
-        torch.arange(2 * model.config.talker_config.hidden_size, dtype=torch.float32, device=talker.device)
-        .reshape(1, 2, model.config.talker_config.hidden_size)
+        torch.arange(
+            2 * model.config.talker_config.hidden_size,
+            dtype=torch.float32,
+            device=talker.device,
+        ).reshape(1, 2, model.config.talker_config.hidden_size)
         / 1024.0
     )
 
@@ -93,7 +100,9 @@ def export_codec_embedding_and_head(model, out_dir: Path):
 
 
 def causal_mask(seq_len: int, device):
-    mask = torch.full((seq_len, seq_len), float("-inf"), dtype=torch.float32, device=device)
+    mask = torch.full(
+        (seq_len, seq_len), float("-inf"), dtype=torch.float32, device=device
+    )
     mask = torch.triu(mask, diagonal=1)
     return mask.reshape(1, 1, seq_len, seq_len)
 
@@ -103,8 +112,9 @@ def export_talker_attention_layer0(model, out_dir: Path):
     cfg = model.config.talker_config
     seq_len = 3
     hidden = (
-        torch.arange(seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device)
-        .reshape(1, seq_len, cfg.hidden_size)
+        torch.arange(
+            seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device
+        ).reshape(1, seq_len, cfg.hidden_size)
         / 1024.0
     )
     position_ids = torch.arange(seq_len, dtype=torch.long, device=talker.device)
@@ -118,7 +128,9 @@ def export_talker_attention_layer0(model, out_dir: Path):
             position_embeddings=position_embeddings,
             attention_mask=mask,
             past_key_values=None,
-            cache_position=torch.arange(seq_len, dtype=torch.long, device=talker.device),
+            cache_position=torch.arange(
+                seq_len, dtype=torch.long, device=talker.device
+            ),
         )
 
     fixture = {
@@ -141,8 +153,9 @@ def export_talker_decoder_layer0(model, out_dir: Path):
     cfg = model.config.talker_config
     seq_len = 3
     hidden = (
-        torch.arange(seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device)
-        .reshape(1, seq_len, cfg.hidden_size)
+        torch.arange(
+            seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device
+        ).reshape(1, seq_len, cfg.hidden_size)
         / 1024.0
     )
     position_ids = torch.arange(seq_len, dtype=torch.long, device=talker.device)
@@ -156,7 +169,9 @@ def export_talker_decoder_layer0(model, out_dir: Path):
             attention_mask=mask,
             position_ids=position_ids[0],
             past_key_values=None,
-            cache_position=torch.arange(seq_len, dtype=torch.long, device=talker.device),
+            cache_position=torch.arange(
+                seq_len, dtype=torch.long, device=talker.device
+            ),
             position_embeddings=position_embeddings,
         )[0]
 
@@ -180,8 +195,9 @@ def export_talker_model_prefill(model, out_dir: Path):
     cfg = model.config.talker_config
     seq_len = 3
     hidden = (
-        torch.arange(seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device)
-        .reshape(1, seq_len, cfg.hidden_size)
+        torch.arange(
+            seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device
+        ).reshape(1, seq_len, cfg.hidden_size)
         / 1024.0
     )
     attention_mask = torch.ones((1, seq_len), dtype=torch.long, device=talker.device)
@@ -210,11 +226,14 @@ def export_code_predictor_first_step(model, out_dir: Path):
     talker = model.talker
     cfg = model.config.talker_config
     talker_hidden = (
-        torch.arange(cfg.hidden_size, dtype=torch.float32, device=talker.device)
-        .reshape(1, 1, cfg.hidden_size)
+        torch.arange(
+            cfg.hidden_size, dtype=torch.float32, device=talker.device
+        ).reshape(1, 1, cfg.hidden_size)
         / 1024.0
     )
-    c0_token = torch.tensor([[cfg.codec_bos_id]], dtype=torch.long, device=talker.device)
+    c0_token = torch.tensor(
+        [[cfg.codec_bos_id]], dtype=torch.long, device=talker.device
+    )
     c0_embed = talker.get_input_embeddings()(c0_token)
     inputs_embeds = torch.cat([talker_hidden, c0_embed], dim=1)
 
@@ -245,11 +264,14 @@ def export_code_predictor_greedy(model, out_dir: Path):
     talker = model.talker
     cfg = model.config.talker_config
     talker_hidden = (
-        torch.arange(cfg.hidden_size, dtype=torch.float32, device=talker.device)
-        .reshape(1, 1, cfg.hidden_size)
+        torch.arange(
+            cfg.hidden_size, dtype=torch.float32, device=talker.device
+        ).reshape(1, 1, cfg.hidden_size)
         / 1024.0
     )
-    c0_token = torch.tensor([[cfg.codec_bos_id]], dtype=torch.long, device=talker.device)
+    c0_token = torch.tensor(
+        [[cfg.codec_bos_id]], dtype=torch.long, device=talker.device
+    )
     c0_embed = talker.get_input_embeddings()(c0_token)
     inputs_embeds = torch.cat([talker_hidden, c0_embed], dim=1)
 
@@ -280,13 +302,18 @@ def export_talker_single_frame(model, out_dir: Path):
     cfg = model.config.talker_config
     seq_len = 3
     inputs_embeds = (
-        torch.arange(seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device)
-        .reshape(1, seq_len, cfg.hidden_size)
+        torch.arange(
+            seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device
+        ).reshape(1, seq_len, cfg.hidden_size)
         / 1024.0
     )
     attention_mask = torch.ones((1, seq_len), dtype=torch.long, device=talker.device)
-    trailing_text_hidden = torch.zeros((1, 1, cfg.hidden_size), dtype=torch.float32, device=talker.device)
-    tts_pad_embed = torch.zeros((1, 1, cfg.hidden_size), dtype=torch.float32, device=talker.device)
+    trailing_text_hidden = torch.zeros(
+        (1, 1, cfg.hidden_size), dtype=torch.float32, device=talker.device
+    )
+    tts_pad_embed = torch.zeros(
+        (1, 1, cfg.hidden_size), dtype=torch.float32, device=talker.device
+    )
 
     with torch.no_grad():
         model_out = talker.model(
@@ -333,13 +360,18 @@ def export_talker_two_frame(model, out_dir: Path):
     cfg = model.config.talker_config
     seq_len = 3
     inputs_embeds = (
-        torch.arange(seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device)
-        .reshape(1, seq_len, cfg.hidden_size)
+        torch.arange(
+            seq_len * cfg.hidden_size, dtype=torch.float32, device=talker.device
+        ).reshape(1, seq_len, cfg.hidden_size)
         / 1024.0
     )
     attention_mask = torch.ones((1, seq_len), dtype=torch.long, device=talker.device)
-    trailing_text_hidden = torch.zeros((1, 2, cfg.hidden_size), dtype=torch.float32, device=talker.device)
-    tts_pad_embed = torch.zeros((1, 1, cfg.hidden_size), dtype=torch.float32, device=talker.device)
+    trailing_text_hidden = torch.zeros(
+        (1, 2, cfg.hidden_size), dtype=torch.float32, device=talker.device
+    )
+    tts_pad_embed = torch.zeros(
+        (1, 1, cfg.hidden_size), dtype=torch.float32, device=talker.device
+    )
     frames = []
 
     with torch.no_grad():
@@ -360,7 +392,9 @@ def export_talker_two_frame(model, out_dir: Path):
                 tts_pad_embed=tts_pad_embed,
                 generation_step=output.generation_step,
                 use_cache=True,
-                cache_position=torch.tensor([seq_len + step], dtype=torch.long, device=talker.device),
+                cache_position=torch.tensor(
+                    [seq_len + step], dtype=torch.long, device=talker.device
+                ),
             )
             frames.append(output.hidden_states[1])
             next_c0 = output.logits[:, -1, :].argmax(dim=-1, keepdim=True)
@@ -399,23 +433,27 @@ def export_talker_prompt_input_builder(wrapper, out_dir: Path):
         tts_bos_embed, tts_eos_embed, tts_pad_embed = talker.text_projection(
             talker.get_text_embeddings()(
                 torch.tensor(
-                    [[
-                        model.config.tts_bos_token_id,
-                        model.config.tts_eos_token_id,
-                        model.config.tts_pad_token_id,
-                    ]],
+                    [
+                        [
+                            model.config.tts_bos_token_id,
+                            model.config.tts_eos_token_id,
+                            model.config.tts_pad_token_id,
+                        ]
+                    ],
                     device=talker.device,
                     dtype=input_id.dtype,
                 )
             )
         ).chunk(3, dim=1)
 
-        codec_prefill = [[
-            cfg.codec_think_id,
-            cfg.codec_think_bos_id,
-            language_id,
-            cfg.codec_think_eos_id,
-        ]]
+        codec_prefill = [
+            [
+                cfg.codec_think_id,
+                cfg.codec_think_bos_id,
+                language_id,
+                cfg.codec_think_eos_id,
+            ]
+        ]
         codec_input_embedding_0 = talker.get_input_embeddings()(
             torch.tensor(codec_prefill, device=talker.device, dtype=input_id.dtype)
         )
@@ -426,16 +464,23 @@ def export_talker_prompt_input_builder(wrapper, out_dir: Path):
                 dtype=input_id.dtype,
             )
         )
-        codec_input_embedding = torch.cat([codec_input_embedding_0, codec_input_embedding_1], dim=1)
+        codec_input_embedding = torch.cat(
+            [codec_input_embedding_0, codec_input_embedding_1], dim=1
+        )
 
-        role_embed = talker.text_projection(talker.get_text_embeddings()(input_id[:, :3]))
-        codec_input = torch.cat(
-            [
-                tts_pad_embed.expand(-1, codec_input_embedding.shape[1] - 2, -1),
-                tts_bos_embed,
-            ],
-            dim=1,
-        ) + codec_input_embedding[:, :-1]
+        role_embed = talker.text_projection(
+            talker.get_text_embeddings()(input_id[:, :3])
+        )
+        codec_input = (
+            torch.cat(
+                [
+                    tts_pad_embed.expand(-1, codec_input_embedding.shape[1] - 2, -1),
+                    tts_bos_embed,
+                ],
+                dim=1,
+            )
+            + codec_input_embedding[:, :-1]
+        )
         inputs_embeds = torch.cat([role_embed, codec_input], dim=1)
         first_text = (
             talker.text_projection(talker.get_text_embeddings()(input_id[:, 3:4]))
@@ -449,7 +494,9 @@ def export_talker_prompt_input_builder(wrapper, out_dir: Path):
             ],
             dim=1,
         )
-        attention_mask = torch.ones((1, inputs_embeds.shape[1]), dtype=torch.long, device=talker.device)
+        attention_mask = torch.ones(
+            (1, inputs_embeds.shape[1]), dtype=torch.long, device=talker.device
+        )
 
     fixture = {
         "name": "talker_prompt_input_builder",
@@ -473,6 +520,174 @@ def export_talker_prompt_input_builder(wrapper, out_dir: Path):
     print(f"wrote {out_path}")
 
 
+def export_talker_prompt_generation(wrapper, out_dir: Path, num_frames: int = 3):
+    """End-to-end prompt-driven codec generation using real tokenizer + template.
+
+    Mirrors the in-model forward/generation loop:
+      1. prefill with inputs_embeds (seq_len > 1)
+      2. for each step:
+         - run code predictor on past_hidden + c0_embed → c1_15
+         - sum 16 codec embeddings + add trailing_text_hidden[gen_step] or tts_pad_embed
+         - re-run talker.model with past_key_values to get next hidden
+         - argmax codec_head for c0
+    """
+    model = wrapper.model
+    talker = model.talker
+    cfg = model.config.talker_config
+    text = "你好"
+    language = "Chinese"
+    input_text = wrapper._build_assistant_text(text)
+    input_id = wrapper._tokenize_texts([input_text])[0]
+    language_id = cfg.codec_language_id[language.lower()]
+
+    with torch.no_grad():
+        # --- Build prefill inputs (same as input_builder fixture) ---
+        tts_bos_embed, tts_eos_embed, tts_pad_embed = talker.text_projection(
+            talker.get_text_embeddings()(
+                torch.tensor(
+                    [
+                        [
+                            model.config.tts_bos_token_id,
+                            model.config.tts_eos_token_id,
+                            model.config.tts_pad_token_id,
+                        ]
+                    ],
+                    device=talker.device,
+                    dtype=input_id.dtype,
+                )
+            )
+        ).chunk(3, dim=1)
+
+        codec_prefill = [
+            [
+                cfg.codec_think_id,
+                cfg.codec_think_bos_id,
+                language_id,
+                cfg.codec_think_eos_id,
+            ]
+        ]
+        codec_input_embedding_0 = talker.get_input_embeddings()(
+            torch.tensor(codec_prefill, device=talker.device, dtype=input_id.dtype)
+        )
+        codec_input_embedding_1 = talker.get_input_embeddings()(
+            torch.tensor(
+                [[cfg.codec_pad_id, cfg.codec_bos_id]],
+                device=talker.device,
+                dtype=input_id.dtype,
+            )
+        )
+        codec_input_embedding = torch.cat(
+            [codec_input_embedding_0, codec_input_embedding_1], dim=1
+        )
+
+        role_embed = talker.text_projection(
+            talker.get_text_embeddings()(input_id[:, :3])
+        )
+        codec_input = (
+            torch.cat(
+                [
+                    tts_pad_embed.expand(-1, codec_input_embedding.shape[1] - 2, -1),
+                    tts_bos_embed,
+                ],
+                dim=1,
+            )
+            + codec_input_embedding[:, :-1]
+        )
+        inputs_embeds = torch.cat([role_embed, codec_input], dim=1)
+        first_text = (
+            talker.text_projection(talker.get_text_embeddings()(input_id[:, 3:4]))
+            + codec_input_embedding[:, -1:]
+        )
+        inputs_embeds = torch.cat([inputs_embeds, first_text], dim=1)
+        trailing_text_hidden = torch.cat(
+            [
+                talker.text_projection(talker.get_text_embeddings()(input_id[:, 4:-5])),
+                tts_eos_embed,
+            ],
+            dim=1,
+        )
+        attention_mask = torch.ones(
+            (1, inputs_embeds.shape[1]), dtype=torch.long, device=talker.device
+        )
+
+        # --- Prefill through talker forward (no code predictor yet) ---
+        out = talker(
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            trailing_text_hidden=trailing_text_hidden,
+            tts_pad_embed=tts_pad_embed,
+            use_cache=True,
+        )
+        past_hidden = out.past_hidden  # [1, 1, hidden]
+        past_key_values = out.past_key_values
+        generation_step = out.generation_step  # = 0 after prefill
+
+        frames = []
+        per_frame_c0 = []
+        per_frame_c1_15 = []
+
+        for _ in range(num_frames):
+            # --- Predict codebook 0 from past_hidden (which IS last_hidden after prefill) ---
+            c0_logits = talker.codec_head(past_hidden).squeeze(1)  # [1, vocab]
+            c0_token = c0_logits.argmax(dim=-1, keepdim=True)  # [1, 1]
+
+            per_frame_c0.append(c0_token.detach().cpu().reshape(-1).tolist()[0])
+
+            # --- Re-run talker with c0_token as input_ids, past_hidden for code predictor conditioning ---
+            out = talker(
+                input_ids=c0_token,
+                past_key_values=past_key_values,
+                past_hidden=past_hidden,
+                trailing_text_hidden=trailing_text_hidden,
+                tts_pad_embed=tts_pad_embed,
+                generation_step=generation_step,
+                use_cache=True,
+                cache_position=torch.tensor(
+                    [inputs_embeds.shape[1] + generation_step],
+                    dtype=torch.long,
+                    device=talker.device,
+                ),
+            )
+
+            # `out.hidden_states` is (layer_outputs, codec_ids) tuple; codec_ids is the full [c0, c1, ..., c15] for this step
+            _, codec_ids = out.hidden_states
+            c1_15 = codec_ids[..., 1:]
+            per_frame_c1_15.append(c1_15.detach().cpu().reshape(-1).tolist())
+            frames.append(codec_ids.detach().cpu().reshape(-1).tolist())
+
+            past_key_values = out.past_key_values
+            past_hidden = out.past_hidden
+            generation_step = out.generation_step
+
+    full_codes_tensor = torch.tensor(frames, dtype=torch.long)
+    fixture = {
+        "name": "talker_prompt_generation",
+        "model": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+        "text": text,
+        "language": language,
+        "input_text": input_text,
+        "input_ids": input_id.cpu().reshape(-1).tolist(),
+        "num_frames": num_frames,
+        "inputs_embeds_shape": list(inputs_embeds.shape),
+        "inputs_embeds": flatten(inputs_embeds),
+        "attention_mask_shape": list(attention_mask.shape),
+        "attention_mask": attention_mask.cpu().reshape(-1).tolist(),
+        "trailing_text_hidden_shape": list(trailing_text_hidden.shape),
+        "trailing_text_hidden": flatten(trailing_text_hidden),
+        "tts_pad_embed_shape": list(tts_pad_embed.shape),
+        "tts_pad_embed": flatten(tts_pad_embed),
+        "generated_shape": list(full_codes_tensor.shape),
+        "generated": full_codes_tensor.cpu()
+        .reshape(-1, full_codes_tensor.shape[-1])
+        .tolist(),
+        "c0_tokens": per_frame_c0,
+        "c1_15_tokens": per_frame_c1_15,
+    }
+    out_path = out_dir / "talker_prompt_generation.json"
+    out_path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
+    print(f"wrote {out_path} (frames={num_frames})")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -484,6 +699,12 @@ def main():
         "--out-dir",
         default="tests/fixtures",
         help="Directory for JSON fixture output",
+    )
+    parser.add_argument(
+        "--num-frames",
+        type=int,
+        default=3,
+        help="Number of codec frames to generate for prompt-driven fixture",
     )
     args = parser.parse_args()
 
@@ -502,6 +723,7 @@ def main():
     export_talker_single_frame(model, out_dir)
     export_talker_two_frame(model, out_dir)
     export_talker_prompt_input_builder(wrapper, out_dir)
+    export_talker_prompt_generation(wrapper, out_dir, num_frames=args.num_frames)
 
 
 if __name__ == "__main__":
