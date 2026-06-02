@@ -7,7 +7,7 @@ use candle_core::{Device, Result, Tensor};
 
 use super::config::CodePredictorConfig;
 use super::decoder_layer::StandardDecoderLayer;
-use super::primitives::{RMSNorm, create_causal_mask, embedding_lookup, linear};
+use super::primitives::{create_causal_mask, embedding_lookup, linear, RMSNorm};
 
 /// 子碼本預測器
 #[derive(Debug, Clone)]

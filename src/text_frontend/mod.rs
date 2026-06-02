@@ -38,6 +38,9 @@ mod token_parser;
 #[cfg(feature = "candle-llm")]
 pub mod candle_backend;
 
+#[cfg(feature = "candle-llm")]
+pub use candle_backend::CandleLLM;
+
 pub use python_bridge::PythonBridge;
 pub use token_parser::TokenParser;
 
