@@ -117,6 +117,28 @@ impl TokenStream {
     pub fn duration_sec(&self) -> f64 {
         self.frames.len() as f64 / 12.5 // 12Hz frame rate for 12Hz mode
     }
+
+    /// Serialize frames to the binary token format consumed by `TokenParser`.
+    ///
+    /// Format: little-endian `u32` frame count followed by `frames * 16` `u16`
+    /// codec tokens. This keeps text-front-end output reusable by fully native
+    /// Rust decode runs via the CLI `--tokens` path.
+    pub fn to_binary(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(4 + self.frames.len() * 16 * 2);
+        data.extend_from_slice(&(self.frames.len() as u32).to_le_bytes());
+        for frame in &self.frames {
+            for token in frame {
+                data.extend_from_slice(&token.to_le_bytes());
+            }
+        }
+        data
+    }
+
+    /// Write frames to a binary token file compatible with `TokenParser`.
+    pub fn write_binary(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        std::fs::write(path, self.to_binary())?;
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------

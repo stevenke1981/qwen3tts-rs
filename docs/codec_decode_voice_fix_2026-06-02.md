@@ -108,6 +108,17 @@ examples/synthesize.rs
 
 - 離線合成改用 `decoder.decode_frames(&stream.frames)`。
 - 不再逐幀呼叫 `decode_chunk()`。
+- 新增 `--save-tokens <path>`：
+  - 先用已驗證可正常生成的文字前端產生 token。
+  - 保存 token 後，之後可用 `--tokens <path>` 跳過 LLM/Python，直接走 Rust/Candle codec decode。
+
+### `src/text_frontend/mod.rs`
+
+- `TokenStream` 新增 `to_binary()` 與 `write_binary()`。
+- 產生的語義 token 現在可保存成標準二進位格式：
+  - header: `num_frames: u32`
+  - payload: `num_frames * 16` 個 little-endian `u16`
+- 這讓已驗證正常的文字前端輸出可以被後續 Rust 原生 decode 重跑使用，不必每次重新呼叫 Python。
 
 ### `src/text_frontend/token_parser.rs`
 
@@ -158,6 +169,8 @@ cargo check --examples
 cargo test
 cargo run --example synthesize -- --tokens weights\test_tokens.bin --output output-fixed.wav
 cargo run --example synthesize -- --text "你好，這是一段中文語音測試。" --language auto --output output-zh-auto-fixed.wav
+cargo run --example synthesize -- --text "你好，這是一段中文語音測試。" --language auto --save-tokens tokens-zh-auto.bin --output output-zh-auto-fixed.wav
+cargo run --example synthesize -- --tokens tokens-zh-auto.bin --output output-zh-native-rerun.wav
 ```
 
 ## 驗證結果
@@ -197,11 +210,39 @@ peak=0.467513
 rms=0.047704
 ```
 
+Rust 原生 token decode 重跑：
+
+```text
+tokens-zh-auto.bin
+frames=37
+
+output-zh-auto-save.wav
+sample_rate=24000
+channels=1
+duration=2.96s
+frames=71040
+peak=0.200165
+rms=0.041599
+sha256=B06E80BD87F6065E5756D39711F51CB1C2DBB380D01D96F1FEB304BB47221C21
+
+output-zh-native-rerun.wav
+sample_rate=24000
+channels=1
+duration=2.96s
+frames=71040
+peak=0.200165
+rms=0.041599
+sha256=B06E80BD87F6065E5756D39711F51CB1C2DBB380D01D96F1FEB304BB47221C21
+```
+
 ## 產物
 
 - `.codebase-memory/graph.db.zst`
 - `output-fixed.wav`
 - `output-zh-auto-fixed.wav`
+- `tokens-zh-auto.bin`
+- `output-zh-auto-save.wav`
+- `output-zh-native-rerun.wav`
 
 ## 結論
 

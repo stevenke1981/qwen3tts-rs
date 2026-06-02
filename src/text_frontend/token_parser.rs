@@ -191,6 +191,21 @@ mod tests {
     }
 
     #[test]
+    fn test_token_stream_binary_roundtrip() {
+        let parser = TokenParser::new(24000);
+        let mut original = TokenStream::new(24000);
+        original.frames.push([7; 16]);
+        original.frames.push([42; 16]);
+
+        let parsed = parser
+            .parse_bytes(&original.to_binary(), &SynthesisOptions::default())
+            .unwrap();
+
+        assert_eq!(parsed.num_frames(), 2);
+        assert_eq!(parsed.frames, original.frames);
+    }
+
+    #[test]
     fn test_parse_raw_u16_frames() {
         let parser = TokenParser::new(24000);
         let mut data = Vec::new();

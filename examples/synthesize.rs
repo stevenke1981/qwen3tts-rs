@@ -23,6 +23,10 @@
 //!
 //! # 指定輸出檔案
 //! cargo run --example synthesize -- --text "測試" --output test.wav
+//!
+//! # 保存語義 Token，之後可跳過 Python 前端、用 Rust 原生 decode 重跑
+//! cargo run --example synthesize -- --text "你好" --save-tokens tokens.bin
+//! cargo run --example synthesize -- --tokens tokens.bin --output native.wav
 //! ```
 
 use std::path::Path;
@@ -39,6 +43,7 @@ fn main() {
     let mut language = "auto".to_string();
     let mut speaker: Option<String> = None;
     let mut tokens_path: Option<String> = None; // 可選：直接從二進位檔載入 Token
+    let mut save_tokens_path: Option<String> = None; // 可選：保存 Token 供 Rust 原生 decode 重跑
 
     let mut i = 1;
     while i < args.len() {
@@ -97,6 +102,15 @@ fn main() {
                     return;
                 }
             }
+            "--save-tokens" => {
+                if i + 1 < args.len() {
+                    save_tokens_path = Some(args[i + 1].clone());
+                    i += 2;
+                } else {
+                    eprintln!("--save-tokens 需要參數");
+                    return;
+                }
+            }
             "--help" | "-h" => {
                 print_usage();
                 return;
@@ -123,6 +137,9 @@ fn main() {
     println!("模型    : {model_id}");
     println!("語言    : {language}");
     println!("輸出    : {output_path}");
+    if let Some(tp) = &save_tokens_path {
+        println!("保存Token: {tp}");
+    }
     println!();
 
     // ----- 步驟 1: 載入 Tokenizer 解碼器權重 -----
@@ -175,6 +192,10 @@ fn main() {
         eprintln!("錯誤: 未產生任何 Token");
         std::process::exit(1);
     }
+    if let Some(tp) = &save_tokens_path {
+        stream.write_binary(tp).expect("保存 Token 檔失敗");
+        println!("      → 已保存 Token: {tp}");
+    }
     println!(
         "      → {num_frames} 幀 ({:.1} 秒語音)",
         stream.duration_sec()
@@ -223,6 +244,8 @@ fn print_usage() {
 選項:
   --text <文字>      要合成的文字（與 --tokens 二選一）
   --tokens <檔案>    從二進位 Token 檔載入（跳過 LLM 階段，可與 --text 互斥）
+  --save-tokens <檔案>
+                    保存 Token 二進位檔，之後可用 --tokens 走 Rust 原生 decode
   --model <ID>       HuggingFace 模型 ID（預設: Qwen/Qwen3-TTS-12Hz-0.6B-Base）
   --language / -l    語言（預設: auto）
   --speaker / -s     說話者名稱（可選）
