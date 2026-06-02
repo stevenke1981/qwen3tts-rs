@@ -61,6 +61,20 @@ impl TokenParser {
         Ok(stream)
     }
 
+    /// 從原始位元組串流解析（靜態方法，不需實例）
+    ///
+    /// 位元組格式（little-endian）：
+    /// ```text
+    /// [num_frames: u32]
+    /// [frame_0_token_0: u16] [frame_0_token_1: u16] ... [frame_0_token_15: u16]
+    /// [frame_1_token_0: u16] ...
+    /// ```
+    ///
+    /// 使用預設 24000 Hz 取樣率。
+    pub fn parse_binary(data: &[u8]) -> Result<TokenStream> {
+        TokenParser::new(24000).parse_bytes(data, &SynthesisOptions::default())
+    }
+
     /// 從原始位元組串流解析
     ///
     /// 位元組格式（little-endian）：

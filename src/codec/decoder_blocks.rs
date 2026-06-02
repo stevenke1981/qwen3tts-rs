@@ -14,11 +14,11 @@ pub fn snake_beta(x: &Tensor, alpha: &Tensor, beta: &Tensor) -> Result<Tensor> {
 }
 
 pub struct ConvNeXtBlock {
-    gamma: Tensor,
-    dwconv: Conv1d,
-    norm: candle_nn::LayerNorm,
-    pwconv1: Linear,
-    pwconv2: Linear,
+    pub gamma: Tensor,
+    pub dwconv: Conv1d,
+    pub norm: candle_nn::LayerNorm,
+    pub pwconv1: Linear,
+    pub pwconv2: Linear,
 }
 
 impl ConvNeXtBlock {
@@ -63,8 +63,8 @@ impl ConvNeXtBlock {
 }
 
 pub struct UpsampleBlock {
-    ct: ConvTranspose1d,
-    cn: ConvNeXtBlock,
+    pub ct: ConvTranspose1d,
+    pub cn: ConvNeXtBlock,
 }
 
 impl UpsampleBlock {

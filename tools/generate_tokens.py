@@ -3,23 +3,19 @@
 Qwen3-TTS Token Generator — Python bridge for Rust text_frontend.
 
 Usage:
-    python generate_tokens.py --text "Hello world" > tokens.bin
-    python generate_tokens.py --text "你好" --model "Qwen/Qwen3-TTS-12Hz-0.6B-Base" > tokens.bin
+    python tools/generate_tokens.py --text "Hello world" > tokens.bin
 
-Output (binary, little-endian):
-    [num_frames: u32]
-    [frame0_token0: u16] ... [frame0_token15: u16]
-    [frame1_token0: u16] ... [frame1_token15: u16]
-    ...
-
-Each frame = 16 codebook tokens (one per quantizer layer, 12Hz mode).
+Output (binary, little-endian stdout):
+    [num_frames: u32] [frame0_16xu16] [frame1_16xu16] ...
 """
 
 import argparse
-import sys
+import contextlib
+import io
 import struct
+import sys
 import warnings
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 import torch
@@ -27,71 +23,72 @@ import torch
 warnings.filterwarnings("ignore", message=".*flash-attn is not installed.*")
 
 
-def load_model(model_id: str, device: str = "auto"):
-    """Load Qwen3-TTS model and tokenizer."""
-    from qwen_tts.core.models.modeling_qwen3_tts import (
-        Qwen3TTSForConditionalGeneration,
-    )
-    from qwen_tts.core.models.processing_qwen3_tts import Qwen3TTSProcessor
+def load_model(model_id: str):
+    """Load Qwen3-TTS model via the high-level API."""
+    from qwen_tts import Qwen3TTSModel
 
-    if device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    print(f"[bridge] Loading model {model_id} on {device}...", file=sys.stderr)
-
-    processor = Qwen3TTSProcessor.from_pretrained(
-        "Qwen/Qwen3-TTS-Tokenizer-12Hz",
-        trust_remote_code=True,
-    )
-    model = Qwen3TTSForConditionalGeneration.from_pretrained(
+    print(f"[bridge] Loading {model_id}...", file=sys.stderr)
+    model = Qwen3TTSModel.from_pretrained(
         model_id,
+        device_map="cpu",
+        dtype=torch.float32,
         trust_remote_code=True,
-        torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-    ).to(device)
-    model.eval()
-
-    print(
-        f"[bridge] Model loaded ({sum(p.numel() for p in model.parameters()) / 1e6:.1f}M params)",
-        file=sys.stderr,
     )
-    return model, processor, device
+    model.model.eval()
+    n = sum(p.numel() for p in model.model.parameters()) / 1e6
+    print(f"[bridge] Loaded ({n:.0f}M params)", file=sys.stderr)
+    return model
 
 
 def generate_codes(
     model,
-    processor,
     text: str,
-    device: str,
     language: str = "auto",
-    temperature: float = 0.9,
-    top_k: int = 50,
-    top_p: float = 1.0,
-    max_new_tokens: int = 4096,
-) -> List[np.ndarray]:
+    temperature=0.9,
+    top_k=50,
+    top_p=1.0,
+    max_new_tokens=4096,
+):
     """
-    Generate codec tokens from text using the talker.
+    Generate codec tokens from plain text.
 
-    Returns list of [seq_len, 16] uint16 arrays (one per batch item).
+    Builds the chat-format input and calls model.generate().
+    Returns list of [seq_len, 16] uint16 arrays.
     """
-    # Process text input
-    inputs = processor(
-        text=[text],
-        language=[language],
-        return_tensors="pt",
-        padding=True,
-    )
-    input_ids = [ids.to(device) for ids in inputs["input_ids"]]
-    instruct_ids = [
-        ids.to(device) if ids is not None else None for ids in inputs["instruct_ids"]
-    ]
-    languages = inputs["language"]
+    mm = model.model
+    tokenizer = model.processor.tokenizer
+    device = next(mm.parameters()).device
 
-    # Generate
+    # ── Build chat-format input ──────────────────────────────────────
+    # Format: <|im_start|>assistant\nTEXT<|im_end|>\n<|im_start|>assistant\n
+    im_start = tokenizer("<|im_start|>", return_tensors="pt")["input_ids"][0].to(device)
+    im_end = tokenizer("<|im_end|>", return_tensors="pt")["input_ids"][0].to(device)
+    asst = tokenizer("assistant\n", return_tensors="pt")["input_ids"][0].to(device)
+    nl = tokenizer("\n", return_tensors="pt")["input_ids"][0].to(device)
+
+    text_ids = tokenizer(text, return_tensors="pt")["input_ids"][0].to(device)
+    full_ids = torch.cat([im_start, asst, text_ids, im_end, nl, im_start, asst])
+    input_ids = [full_ids.unsqueeze(0)]
+
+    # Map language string → ID
+    lang_map = getattr(mm.config.talker_config, "codec_language_id", {})
+    lang_lower = language.lower()
+    if lang_lower == "auto":
+        lang_actual = "english"
+    elif lang_lower in lang_map:
+        lang_actual = lang_lower
+    else:
+        # Try to find case-insensitive match
+        matches = [k for k in lang_map if k.lower() == lang_lower]
+        lang_actual = matches[0] if matches else "english"
+
+    print(f"[bridge] language={lang_actual}", file=sys.stderr)
+
+    # ── Generate ─────────────────────────────────────────────────────
     with torch.no_grad():
-        talker_codes_list, _ = model.generate(
+        codes_list, _ = mm.generate(
             input_ids=input_ids,
-            instruct_ids=instruct_ids,
-            languages=languages,
+            languages=[lang_actual],
             speakers=[None],
             do_sample=True,
             temperature=temperature,
@@ -101,82 +98,64 @@ def generate_codes(
             repetition_penalty=1.05,
         )
 
-    # Convert to numpy uint16
     result = []
-    for codes in talker_codes_list:
-        codes_np = codes.cpu().numpy().astype(np.uint16)  # [seq_len, 16]
-        result.append(codes_np)
-
+    for codes in codes_list:
+        result.append(codes.cpu().numpy().astype(np.uint16))
     return result
 
 
-def write_codes_binary(codes_list: List[np.ndarray], output_stream):
-    """Write token frames as binary to output_stream."""
+def write_codes_binary(codes_list, stream):
+    """Write token frames as binary to an output stream."""
     for codes in codes_list:
         num_frames = codes.shape[0]
-        # Header: number of frames
-        output_stream.buffer.write(struct.pack("<I", num_frames))
-        # Frames: each frame is 16 × u16 (32 bytes)
+        stream.buffer.write(struct.pack("<I", num_frames))
         for frame in codes:
             for token in frame:
-                output_stream.buffer.write(struct.pack("<H", int(token)))
+                stream.buffer.write(struct.pack("<H", int(token)))
 
 
 def main():
     parser = argparse.ArgumentParser(description="Qwen3-TTS token generator")
-    parser.add_argument(
-        "--text", type=str, default=None, help="Input text to synthesize"
-    )
+    parser.add_argument("--text", type=str, default=None, help="Input text")
     parser.add_argument(
         "--text-file", type=str, default=None, help="Read text from file"
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default="Qwen/Qwen3-TTS-12Hz-0.6B-Base",
-        help="Model ID (default: Qwen/Qwen3-TTS-12Hz-0.6B-Base)",
+        "--model", type=str, default="Qwen/Qwen3-TTS-12Hz-0.6B-Base", help="Model ID"
     )
-    parser.add_argument("--language", type=str, default="auto", help="Language")
-    parser.add_argument(
-        "--temperature", type=float, default=0.9, help="Sampling temperature"
-    )
-    parser.add_argument("--top-k", type=int, default=50, help="Top-k sampling")
-    parser.add_argument("--top-p", type=float, default=1.0, help="Top-p sampling")
-    parser.add_argument(
-        "--max-new-tokens", type=int, default=4096, help="Max new tokens"
-    )
-    parser.add_argument(
-        "--device", type=str, default="auto", help="Device (auto/cuda/cpu)"
-    )
+    parser.add_argument("--language", type=str, default="auto")
+    parser.add_argument("--temperature", type=float, default=0.9)
+    parser.add_argument("--top-k", type=int, default=50)
+    parser.add_argument("--top-p", type=float, default=1.0)
+    parser.add_argument("--max-new-tokens", type=int, default=4096)
 
     args = parser.parse_args()
 
-    # Get text input
+    # Get text
     if args.text:
         text = args.text
     elif args.text_file:
         with open(args.text_file, "r", encoding="utf-8") as f:
             text = f.read().strip()
     else:
-        # Read from stdin
         text = sys.stdin.read().strip()
 
     if not text:
         print("[bridge] Error: no input text", file=sys.stderr)
         sys.exit(1)
 
-    # Load model
-    model, processor, device = load_model(args.model, args.device)
+    # Load model (first call downloads ~1GB)
+    # Redirect stdout to stderr to prevent library warnings/prints corrupting binary output
+    true_stdout = sys.stdout
+    sys.stdout = sys.stderr
+
+    loaded = load_model(args.model)
 
     # Generate codes
-    print(
-        f"[bridge] Generating tokens for text ({len(text)} chars)...", file=sys.stderr
-    )
+    print(f"[bridge] Generating tokens ({len(text)} chars)...", file=sys.stderr)
     codes_list = generate_codes(
-        model=model,
-        processor=processor,
-        text=text,
-        device=device,
+        loaded,
+        text,
         language=args.language,
         temperature=args.temperature,
         top_k=args.top_k,
@@ -184,14 +163,12 @@ def main():
         max_new_tokens=args.max_new_tokens,
     )
 
-    num_frames = codes_list[0].shape[0]
-    print(
-        f"[bridge] Generated {num_frames} frames, saving to stdout...", file=sys.stderr
-    )
+    n = codes_list[0].shape[0]
+    print(f"[bridge] Generated {n} frames ~ {n / 12.5:.1f}s audio", file=sys.stderr)
 
-    # Write binary output to stdout
+    # Restore true stdout and write binary
+    sys.stdout = true_stdout
     write_codes_binary(codes_list, sys.stdout)
-
     print(f"[bridge] Done.", file=sys.stderr)
 
 

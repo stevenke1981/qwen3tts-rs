@@ -38,6 +38,7 @@ fn main() {
     let mut output_path = "output.wav".to_string();
     let mut language = "auto".to_string();
     let mut speaker: Option<String> = None;
+    let mut tokens_path: Option<String> = None; // 可選：直接從二進位檔載入 Token
 
     let mut i = 1;
     while i < args.len() {
@@ -87,6 +88,15 @@ fn main() {
                     return;
                 }
             }
+            "--tokens" => {
+                if i + 1 < args.len() {
+                    tokens_path = Some(args[i + 1].clone());
+                    i += 2;
+                } else {
+                    eprintln!("--tokens 需要參數");
+                    return;
+                }
+            }
             "--help" | "-h" => {
                 print_usage();
                 return;
@@ -99,8 +109,9 @@ fn main() {
         }
     }
 
-    if text.is_empty() {
-        eprintln!("請使用 --text 指定要合成的文字");
+    // 如果提供了 --tokens，則不須 --text
+    if text.is_empty() && tokens_path.is_none() {
+        eprintln!("請使用 --text 指定要合成的文字（或用 --tokens 指定 Token 檔）");
         print_usage();
         std::process::exit(1);
     }
@@ -130,34 +141,40 @@ fn main() {
     let mut decoder = Decoder12Hz::from_safetensors(config, weight_dir, &device)
         .expect("載入 Tokenizer 權重失敗");
 
-    // ----- 步驟 2: 透過 LLM 產生語義 Token -----
-    println!("[2/3] 載入 LLM ({model_id}) 並生成 Token…");
-    println!("      （首次載入需下載權重，約 1-5 分鐘）");
+    // ----- 步驟 2: 獲取 Token（透過 LLM 或從檔案載入）-----
+    let stream = if let Some(tp) = tokens_path {
+        println!("[2/3] 從二進位檔載入 Token ({tp})…");
+        let data = std::fs::read(&tp).expect("讀取 Token 檔失敗");
+        qwen3tts::text_frontend::TokenParser::parse_binary(&data).expect("解析 Token 檔失敗")
+    } else {
+        println!("[2/3] 載入 LLM ({model_id}) 並生成 Token…");
+        println!("      （首次載入需下載權重，約 1-5 分鐘）");
 
-    let bridge = PythonBridge::new(&model_id)
-        .expect("建立 PythonBridge 失敗")
-        .with_python("python");
+        let bridge = PythonBridge::new(&model_id)
+            .expect("建立 PythonBridge 失敗")
+            .with_python("python");
 
-    let options = SynthesisOptions {
-        language,
-        speaker,
-        temperature: 0.9,
-        top_k: 50,
-        top_p: 1.0,
-        max_new_tokens: 4096,
+        let options = SynthesisOptions {
+            language,
+            speaker,
+            temperature: 0.9,
+            top_k: 50,
+            top_p: 1.0,
+            max_new_tokens: 4096,
+        };
+
+        bridge
+            .synthesize(&text, &options)
+            .expect("LLM Token 生成失敗")
     };
-
-    let stream = bridge
-        .synthesize(&text, &options)
-        .expect("LLM Token 生成失敗");
 
     let num_frames = stream.num_frames();
     if num_frames == 0 {
-        eprintln!("錯誤: LLM 未產生任何 Token");
+        eprintln!("錯誤: 未產生任何 Token");
         std::process::exit(1);
     }
     println!(
-        "      → 產生 {num_frames} 幀 ({:.1} 秒語音)",
+        "      → {num_frames} 幀 ({:.1} 秒語音)",
         stream.duration_sec()
     );
 
@@ -211,7 +228,8 @@ fn print_usage() {
         "用法: cargo run --example synthesize -- --text \"合成文字\" [選項]
 
 選項:
-  --text <文字>      要合成的文字（必要）
+  --text <文字>      要合成的文字（與 --tokens 二選一）
+  --tokens <檔案>    從二進位 Token 檔載入（跳過 LLM 階段，可與 --text 互斥）
   --model <ID>       HuggingFace 模型 ID（預設: Qwen/Qwen3-TTS-12Hz-0.6B-Base）
   --language / -l    語言（預設: auto）
   --speaker / -s     說話者名稱（可選）
