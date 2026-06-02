@@ -1,0 +1,54 @@
+[package]
+name = "qwen3tts-rs"
+version = "0.1.0"
+edition = "2024"
+description = "Qwen3-TTS Codec Decode module - pure Rust/Candle rewrite"
+license = "MIT"
+repository = "https://github.com/steven/qwen3tts-rs"
+
+[features]
+default = ["cpu"]
+cuda = ["candle-core/cuda"]
+metal = ["candle-core/metal"]
+cpu = []
+
+[dependencies]
+# Candle ML framework
+candle-core = "0.10"
+candle-nn = "0.10"
+
+# Parallelism
+rayon = "1"
+
+# Async runtime (I/O boundary only)
+tokio = { version = "1", features = ["rt", "sync"] }
+
+# Weight serialization
+safetensors = "0.7"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+thiserror = "2"
+
+# Audio output
+hound = "3"
+
+# Logging
+log = "0.4"
+
+[dev-dependencies]
+env_logger = "0.11"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+opt-level = 3
+
+[lib]
+name = "qwen3tts"
+path = "src/lib.rs"
