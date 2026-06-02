@@ -13,6 +13,7 @@
 
 pub mod codec;
 pub mod quantization;
+pub mod talker;
 pub mod text_frontend;
 pub mod tokenizer;
 pub mod vocoder;
