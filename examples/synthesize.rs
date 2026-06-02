@@ -1,61 +1,188 @@
+//! # Qwen3-TTS 文字轉語音範例
+//!
+//! 展示完整的文字 → 語音管線：
+//!
+//! 1. TextFrontend (PythonBridge): 文字 → 多碼本 Token
+//! 2. Decoder12Hz: Token → PCM 音訊
+//! 3. hound: PCM → WAV 檔案
+//!
+//! ## 使用方式
+//!
+//! ```bash
+//! # 需要先下載 Tokenizer 權重
+//! # huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz --local-dir weights/tokenizer
+//!
+//! # 基本用法（使用 0.6B Base 模型）
+//! cargo run --example synthesize -- --text "你好，今天天氣真好。"
+//!
+//! # 指定說話者與語言
+//! cargo run --example synthesize -- --text "Hello world" --language en --speaker default
+//!
+//! # 使用 1.7B CustomVoice 模型（需 GPU）
+//! cargo run --example synthesize -- --text "你好" --model "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+//!
+//! # 指定輸出檔案
+//! cargo run --example synthesize -- --text "測試" --output test.wav
+//! ```
+
 use std::path::Path;
 
+use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend};
 use qwen3tts::{Decoder12Hz, DecoderConfig, TtsDecoder};
 
 fn main() {
+    // ----- 解析命令列參數 -----
+    let args: Vec<String> = std::env::args().collect();
+    let mut text = String::new();
+    let mut model_id = "Qwen/Qwen3-TTS-12Hz-0.6B-Base".to_string();
+    let mut output_path = "output.wav".to_string();
+    let mut language = "auto".to_string();
+    let mut speaker: Option<String> = None;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--text" => {
+                if i + 1 < args.len() {
+                    text = args[i + 1].clone();
+                    i += 2;
+                } else {
+                    eprintln!("--text 需要參數");
+                    return;
+                }
+            }
+            "--model" => {
+                if i + 1 < args.len() {
+                    model_id = args[i + 1].clone();
+                    i += 2;
+                } else {
+                    eprintln!("--model 需要參數");
+                    return;
+                }
+            }
+            "--output" | "-o" => {
+                if i + 1 < args.len() {
+                    output_path = args[i + 1].clone();
+                    i += 2;
+                } else {
+                    eprintln!("--output 需要參數");
+                    return;
+                }
+            }
+            "--language" | "-l" => {
+                if i + 1 < args.len() {
+                    language = args[i + 1].clone();
+                    i += 2;
+                } else {
+                    eprintln!("--language 需要參數");
+                    return;
+                }
+            }
+            "--speaker" | "-s" => {
+                if i + 1 < args.len() {
+                    speaker = Some(args[i + 1].clone());
+                    i += 2;
+                } else {
+                    eprintln!("--speaker 需要參數");
+                    return;
+                }
+            }
+            "--help" | "-h" => {
+                print_usage();
+                return;
+            }
+            _ => {
+                eprintln!("未知參數: {}", args[i]);
+                print_usage();
+                std::process::exit(1);
+            }
+        }
+    }
+
+    if text.is_empty() {
+        eprintln!("請使用 --text 指定要合成的文字");
+        print_usage();
+        std::process::exit(1);
+    }
+
+    println!("╔══════════════════════════════════════╗");
+    println!("║    Qwen3-TTS Rust 文字轉語音        ║");
+    println!("╚══════════════════════════════════════╝");
+    println!("文字    : {text}");
+    println!("模型    : {model_id}");
+    println!("語言    : {language}");
+    println!("輸出    : {output_path}");
+    println!();
+
+    // ----- 步驟 1: 載入 Tokenizer 解碼器權重 -----
     let weight_dir = Path::new("weights/tokenizer");
     if !weight_dir.join("codebook.safetensors").exists() {
-        eprintln!("weights/tokenizer/ 不存在，請先下載權重");
+        eprintln!("錯誤: {weight_dir:?} 不存在。");
+        eprintln!("請先下載 Tokenizer 權重:");
+        eprintln!("  huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz --local-dir weights/tokenizer");
         std::process::exit(1);
     }
 
     let device = candle_core::Device::Cpu;
     let config = DecoderConfig::realtime();
-    let mut decoder =
-        Decoder12Hz::from_safetensors(config, weight_dir, &device).expect("載入權重失敗");
 
-    let output_path = "output.wav";
+    println!("[1/3] 載入 Tokenizer 解碼器…");
+    let mut decoder = Decoder12Hz::from_safetensors(config, weight_dir, &device)
+        .expect("載入 Tokenizer 權重失敗");
+
+    // ----- 步驟 2: 透過 LLM 產生語義 Token -----
+    println!("[2/3] 載入 LLM ({model_id}) 並生成 Token…");
+    println!("      （首次載入需下載權重，約 1-5 分鐘）");
+
+    let bridge = PythonBridge::new(&model_id)
+        .expect("建立 PythonBridge 失敗")
+        .with_python("python");
+
+    let options = SynthesisOptions {
+        language,
+        speaker,
+        temperature: 0.9,
+        top_k: 50,
+        top_p: 1.0,
+        max_new_tokens: 4096,
+    };
+
+    let stream = bridge
+        .synthesize(&text, &options)
+        .expect("LLM Token 生成失敗");
+
+    let num_frames = stream.num_frames();
+    if num_frames == 0 {
+        eprintln!("錯誤: LLM 未產生任何 Token");
+        std::process::exit(1);
+    }
+    println!(
+        "      → 產生 {num_frames} 幀 ({:.1} 秒語音)",
+        stream.duration_sec()
+    );
+
+    // ----- 步驟 3: 解碼 Token → PCM 音訊 -----
+    println!("[3/3] 解碼 Token → 音訊…");
     let sample_rate = 24000u32;
-    let num_frames = 50;
-
-    println!("正在解碼 {num_frames} 幀 (12Hz, 24kHz)…");
     let mut all_samples: Vec<f32> = Vec::with_capacity(num_frames * 1920);
 
-    for i in 0..num_frames {
-        let tokens: Vec<u16> = vec![
-            (i as u16 * 42 + 1) % 2048,
-            (i as u16 * 73 + 2) % 2048,
-            (i as u16 * 13 + 3) % 2048,
-            (i as u16 * 99 + 4) % 2048,
-            (i as u16 * 55 + 5) % 2048,
-            (i as u16 * 31 + 6) % 2048,
-            (i as u16 * 87 + 7) % 2048,
-            (i as u16 * 44 + 8) % 2048,
-            (i as u16 * 66 + 9) % 2048,
-            (i as u16 * 22 + 10) % 2048,
-            (i as u16 * 11 + 11) % 2048,
-            (i as u16 * 77 + 12) % 2048,
-            (i as u16 * 88 + 13) % 2048,
-            (i as u16 * 33 + 14) % 2048,
-            (i as u16 * 50 + 15) % 2048,
-            (i as u16 * 29 + 16) % 2048,
-        ];
+    for (i, frame) in stream.frames.iter().enumerate() {
+        let pcm = decoder.decode_chunk(frame).expect("解碼幀失敗");
+        all_samples.extend_from_slice(&pcm);
 
-        let frame = decoder.decode_chunk(&tokens).expect("解碼幀失敗");
-        all_samples.extend_from_slice(&frame);
-
-        if i % 10 == 0 {
-            println!("  幀 {}/{}", i + 1, num_frames);
+        if (i + 1) % (num_frames.max(1) / 10 + 1) == 0 || i == num_frames - 1 {
+            println!("      解碼 {}/{}", i + 1, num_frames);
         }
     }
 
     let duration_sec = all_samples.len() as f64 / sample_rate as f64;
     println!(
-        "\n產出 {:.2} 秒音頻 ({} 個樣本)",
+        "      產出 {:.2} 秒音頻 ({} 個樣本)",
         duration_sec,
         all_samples.len()
     );
 
+    // ----- 步驟 4: 寫入 WAV 檔案 -----
     let spec = hound::WavSpec {
         channels: 1,
         sample_rate,
@@ -63,7 +190,7 @@ fn main() {
         sample_format: hound::SampleFormat::Int,
     };
 
-    let mut writer = hound::WavWriter::create(output_path, spec).expect("無法建立 WAV 檔案");
+    let mut writer = hound::WavWriter::create(&output_path, spec).expect("無法建立 WAV 檔案");
 
     for &sample in &all_samples {
         let clamped = sample.clamp(-1.0, 1.0);
@@ -72,8 +199,33 @@ fn main() {
     }
 
     writer.finalize().expect("關閉 WAV 檔案失敗");
+    println!();
     println!(
-        "✅ 已儲存: {output_path} ({:.1} MB)",
+        "✅ 完成! 已儲存: {output_path} ({:.1} MB)",
         all_samples.len() as f64 * 2.0 / 1_048_576.0
+    );
+}
+
+fn print_usage() {
+    eprintln!(
+        "用法: cargo run --example synthesize -- --text \"合成文字\" [選項]
+
+選項:
+  --text <文字>      要合成的文字（必要）
+  --model <ID>       HuggingFace 模型 ID（預設: Qwen/Qwen3-TTS-12Hz-0.6B-Base）
+  --language / -l    語言（預設: auto）
+  --speaker / -s     說話者名稱（可選）
+  --output / -o      輸出 WAV 路徑（預設: output.wav）
+  --help / -h        顯示此說明
+
+使用 0.6B 模型（無 GPU，約 1.2GB RAM）:
+  Qwen/Qwen3-TTS-12Hz-0.6B-Base
+  Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
+
+使用 1.7B 模型（建議 GPU，約 4GB VRAM）:
+  Qwen/Qwen3-TTS-12Hz-1.7B-Base
+  Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+  Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+"
     );
 }

@@ -40,7 +40,82 @@ pub trait TtsDecoder: Send + Sync {
 }
 ```
 
-### 3.5 权重量化规格
+### 3.4 文本前端 LLM 接口
+
+#### 3.4.1 TextFrontend Trait
+```rust
+/// 文本前端的抽象接口：文字 → 多碼本語義 Token
+#[async_trait]
+pub trait TextFrontend: Send + Sync {
+    /// 將文字轉換為解碼器可消費的多碼本 Token 序列
+    async fn synthesize(
+        &self,
+        text: &str,
+        options: &SynthesisOptions,
+    ) -> Result<TokenStream>;
+}
+```
+
+#### 3.4.2 TokenStream
+```rust
+pub struct TokenStream {
+    /// 多碼本 token 序列，每幀 16 個 u16
+    pub frames: Vec<[u16; 16]>,
+    /// 取樣率 (Hz)
+    pub sample_rate: u32,
+}
+```
+
+#### 3.4.3 支援後端
+
+| 後端 | 方式 | 狀態 | 依賴 |
+| :--- | :--- | :--- | :--- |
+| PythonBridge | 子行程調用 qwen-tts Python 套件 | ✅ 可用 | Python + qwen-tts + PyTorch |
+| CandleNative | 純 Rust/Candle + GGUF 權重 | 🔜 規劃中 | candle-llama, GGUF |
+
+最大簡化：LLM 原生回傳 `[seq_len, num_codebooks]` 張量（全部16碼本），無需 MTP 二次推論。
+
+### 3.5 文字前處理管線
+
+```
+輸入文字
+  │
+  ▼
+┌─────────────────────────────────────────────┐
+│  Qwen 分詞器 (tokenizers-rs)                 │
+│   - BPE / tiktoken 格式                     │
+│   - 特殊 Token: <|audio_bos|>, <|sep|>...  │
+└─────────────────┬───────────────────────────┘
+                  │ input_ids
+                  ▼
+┌─────────────────────────────────────────────┐
+│  文本前端 LLM 後端                           │
+│  (PythonBridge / CandleNative)              │
+│                                             │
+│  1. 建構 talker input embeddings            │
+│  2. LLM autoregressive decode               │
+│  3. 輸出 [seq_len, num_codebooks] tensor    │
+└─────────────────┬───────────────────────────┘
+                  │ talker_codes (16×u16 per frame)
+                  ▼
+┌─────────────────────────────────────────────┐
+│  TokenParser                                │
+│   - 移除 EOS/padding tokens                │
+│   - 按 frame 分割成 [u16; 16]              │
+└─────────────────┬───────────────────────────┘
+                  │ frames
+                  ▼
+┌─────────────────────────────────────────────┐
+│  TtsDecoder::decode_chunk                   │
+│   - 12Hz / 25Hz 解碼器                     │
+│   - 輸出 PCM f32 片段                      │
+└─────────────────┬───────────────────────────┘
+                  │ PCM samples
+                  ▼
+              output.wav
+```
+
+### 3.6 权重量化规格
 
 | 组件 | 推荐格式 | 量化策略 | 理由 |
 | :--- | :--- | :--- | :--- |

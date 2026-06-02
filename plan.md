@@ -1,5 +1,17 @@
 # Qwen3-TTS Rust Rewrite Implementation Plan
 
+## Phase 0.5: 文本前端 LLM 整合 (Week 1-2)
+**目標**: 建立文字→語義 Token 的 Rust 整合管線，實現端到端 TTS
+- [ ] 定義 `TextFrontend` trait、`TokenStream`、`SynthesisOptions` 等型別
+- [ ] 實作 `TokenParser`：將 LLM 輸出解析為 16×u16 每幀的格式
+- [ ] 實作 `PythonBridge` 後端：透過子行程調用 qwen-tts Python 套件
+  - Python 腳本接收文字，呼叫 `model.generate()` 取得 `talker_codes`
+  - 以二進位 stdout 輸出，Rust 端以 `read_exact` 高效讀取
+- [ ] 實作 `CandleNative` 後端骨架（stub，未來 GGUF 推理）
+- [ ] 重寫 `examples/synthesize.rs`：支援文字輸入 → 語音輸出
+- [ ] 整合測試：文字 → 解碼器 → WAV 端到端驗證
+- [ ] **里程碑**: `cargo run --example synthesize -- --text "你好世界"` 可聽懂
+
 ## Phase 0: 前置验证与基础设施 (Week 1)
 **目标**: 确认技术可行性，搭建开发基线
 - [ ] 导出 Qwen3-TTS 完整计算图，逐一核对 Candle 算子支持情况
