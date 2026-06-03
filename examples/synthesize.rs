@@ -74,6 +74,11 @@ fn locate_model_snapshot(model_id: &str) -> Option<PathBuf> {
             return Some(p);
         }
     }
+    locate_hf_model_snapshot(model_id)
+}
+
+#[cfg(feature = "candle-llm")]
+fn locate_hf_model_snapshot(model_id: &str) -> Option<PathBuf> {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .ok()
@@ -90,6 +95,54 @@ fn locate_model_snapshot(model_id: &str) -> Option<PathBuf> {
             return Some(entry.path());
         }
     }
+    None
+}
+
+#[cfg(feature = "candle-llm")]
+fn find_tokenizer_json_for_model(model_id: &str, model_dir: &Path) -> Option<PathBuf> {
+    let local = model_dir.join("tokenizer.json");
+    if local.exists() {
+        return Some(local);
+    }
+
+    let snapshots = model_dir.join("snapshots");
+    if snapshots.is_dir() {
+        for entry in std::fs::read_dir(snapshots).ok()?.flatten() {
+            let path = entry.path().join("tokenizer.json");
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    for fallback in ["models/tokenizer_1.7b.json", "models/tokenizer.json"] {
+        let path = PathBuf::from(fallback);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    let base_ids: &[&str] = if model_id.contains("0.6B") {
+        &[
+            "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+            "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+        ]
+    } else {
+        &[
+            "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+            "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+        ]
+    };
+
+    for base_id in base_ids {
+        if let Some(base_dir) = locate_hf_model_snapshot(base_id) {
+            let path = base_dir.join("tokenizer.json");
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
     None
 }
 
@@ -112,6 +165,7 @@ fn main() {
     let mut output_path = "output.wav".to_string();
     let mut language = "auto".to_string();
     let mut speaker: Option<String> = None;
+    let mut instruct: Option<String> = None;
     let mut tokens_path: Option<String> = None;
     let mut save_tokens_path: Option<String> = None;
     let mut text_only = false; // 只跑到 LLM 階段，產生 Token 後直接結束
@@ -146,6 +200,11 @@ fn main() {
             "--speaker" | "-s" => {
                 require_arg(&args, i, "--speaker");
                 speaker = Some(args[i + 1].clone());
+                i += 2;
+            }
+            "--instruct" => {
+                require_arg(&args, i, "--instruct");
+                instruct = Some(args[i + 1].clone());
                 i += 2;
             }
             "--tokens" => {
@@ -246,6 +305,9 @@ fn main() {
     println!("後端    : {:?}", backend);
     println!("語言    : {language}");
     println!("輸出    : {output_path}");
+    if let Some(ins) = &instruct {
+        println!("指令    : {ins}");
+    }
     if let Some(tp) = &save_tokens_path {
         println!("保存Token: {tp}");
     }
@@ -269,6 +331,7 @@ fn main() {
                 let options = SynthesisOptions {
                     language,
                     speaker,
+                    instruct,
                     temperature: 0.9,
                     top_k: 50,
                     top_p: 1.0,
@@ -300,18 +363,13 @@ fn main() {
                     eprintln!("錯誤: {sf_path:?} 不存在");
                     std::process::exit(1);
                 }
-                let candidate1 = dir.join("tokenizer.json");
-                let candidate2 = PathBuf::from("models/tokenizer.json");
-                let tok_path = if candidate1.exists() {
-                    candidate1
-                } else if candidate2.exists() {
-                    candidate2
+                let tok_path = if let Some(path) = find_tokenizer_json_for_model(&model_id, &dir) {
+                    path
                 } else {
                     eprintln!(
                         "錯誤: 找不到 tokenizer.json。\n\
-                         請先產生：\n  \
-                         python tools/build_tokenizer.py --model-dir {dir:?}\n\
-                         或複製到 models/tokenizer.json"
+                         請先用 convert_tokenizer.exe / tools/build_tokenizer.py 產生，\n\
+                         或把 Base 模型的 tokenizer.json 複製到 models/tokenizer.json。"
                     );
                     std::process::exit(1);
                 };
@@ -326,6 +384,7 @@ fn main() {
                 let options = SynthesisOptions {
                     language,
                     speaker,
+                    instruct,
                     temperature: 0.9,
                     top_k: 50,
                     top_p: 1.0,
@@ -351,6 +410,7 @@ fn main() {
         "      → {num_frames} 幀 ({:.1} 秒語音)",
         stream.duration_sec()
     );
+    warn_if_truncated(&text, max_new_tokens, num_frames);
 
     // --text-only: 產生 Token 後直接結束，跳過解碼器（debug / 煙霧測試用）
     if text_only {
@@ -450,6 +510,22 @@ fn runtime_device() -> candle_core::Device {
     }
 }
 
+fn warn_if_truncated(text: &str, max_new_tokens: u32, num_frames: usize) {
+    let zh_chars = text
+        .chars()
+        .filter(|&ch| ('\u{4e00}'..='\u{9fff}').contains(&ch))
+        .count();
+    let recommended = zh_chars.saturating_mul(3).max(16);
+    if zh_chars > 0
+        && max_new_tokens as usize <= num_frames
+        && (max_new_tokens as usize) < recommended
+    {
+        eprintln!(
+            "提示: --max-new-tokens={max_new_tokens} 可能截斷長中文；建議至少約中文字數 x 3，也就是 {recommended}。"
+        );
+    }
+}
+
 fn print_usage() {
     let backend_default = if cfg!(feature = "candle-llm") {
         "candle"
@@ -469,6 +545,7 @@ fn print_usage() {
   --backend / -b     文字前端後端：python | candle（預設: {backend_default}）
   --language / -l    語言（預設: auto）
   --speaker / -s     說話者名稱（可選）
+  --instruct         VoiceDesign/CustomVoice 音色或語氣指令
   --output / -o      輸出 WAV 路徑（預設: output.wav）
   --max-new-tokens N 最大生成 Token 數（預設: 4096）
   --text-only        只跑到 LLM 階段產生 Token，不解碼成音訊
@@ -486,6 +563,13 @@ fn print_usage() {
   cargo run --example synthesize --features candle-llm -- \\
       --text \"你好\" --backend candle \\
       --model-dir ~/.cache/huggingface/hub/models--Qwen--Qwen3-TTS-12Hz-0.6B-Base/snapshots/<sha>
+
+  # VoiceDesign 音色描述（建議使用 1.7B-VoiceDesign）
+  cargo run --example synthesize --features \"candle-llm cuda\" -- \\
+      --text \"你好，今天想和你聊聊天\" --backend candle \\
+      --model-dir <Qwen3-TTS-12Hz-1.7B-VoiceDesign-snapshot> \\
+      --language chinese \\
+      --instruct \"年輕女性，台灣口語，溫柔親切，語速自然\"
 
 模型清單:
   0.6B（無 GPU，約 1.2GB RAM）:

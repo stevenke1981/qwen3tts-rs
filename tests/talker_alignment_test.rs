@@ -731,7 +731,7 @@ fn talker_prompt_input_builder_matches_pytorch_fixture() {
 
     let builder = InputBuilder::new(&talker, &device);
     let (inputs_embeds, attention_mask, trailing_text_hidden, tts_pad_embed) = builder
-        .build(&fixture.input_ids, "Chinese", None)
+        .build(&fixture.input_ids, None, "Chinese", None)
         .expect("build prompt inputs");
 
     assert_eq!(inputs_embeds.dims(), fixture.inputs_embeds_shape.as_slice());

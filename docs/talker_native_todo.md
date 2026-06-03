@@ -24,6 +24,13 @@
     - line 1: synth `7.31s`, decode `1.09s`, RMS `1837.7`, peak `7067`
     - line 2: synth `7.29s`, decode `1.05s`, RMS `1067.3`, peak `5620`
     - total wall time: `23.65s`
+- 2026-06-03 VoiceDesign/native CLI update:
+  - Added `SynthesisOptions::instruct` and CLI `--instruct` for single and batch synthesis.
+  - Candle native path now tokenizes instruct as a separate `<|im_start|>user\n...<|im_end|>\n` prompt and prepends its text embedding before the normal TTS prompt, matching the upstream VoiceDesign/CustomVoice contract.
+  - Python bridge fallback now forwards `--instruct` to `tools/generate_tokens.py`.
+  - Single and batch CLIs now fallback to Base model `tokenizer.json` from local HuggingFace cache when a VoiceDesign snapshot does not include one.
+  - Single CLI warns when generated frame count reaches a too-low `--max-new-tokens` for long Chinese text.
+  - Release guides now document Base voice-control limits, `--speaker` limitations, `--instruct`, batch `.tokens`, and the Chinese length heuristic.
 
 ## TODO
 
@@ -139,3 +146,13 @@
    - Add latency benchmarks for first token and frame generation.
    - Status: load-once batch runner added; next bottleneck is per-frame talker/code-predictor generation and repeated allocation inside generation.
    - Next step: add timing around talker prefill, main codec head, code predictor sub-codebooks, and codec decode to identify the first hot path for optimization.
+
+9. VoiceDesign follow-up validation.
+   - Run a real 1.7B-VoiceDesign sample with `--instruct` on CUDA and compare style controllability against upstream PyTorch.
+   - Add a PyTorch fixture for instruct prompt embedding once an official VoiceDesign checkpoint is available locally.
+   - Check whether CustomVoice 1.7B requires the same instruct path for tone-only control.
+
+10. Remaining release polish.
+   - Consider a shared tokenizer cache to avoid repeated first-run conversion in new release directories.
+   - Decide whether CUDA release zips should exclude Python scripts to reduce package size.
+   - Keep batch token export as `--save-tokens-dir`; add `--tokens` batch replay only if a concrete workflow needs it.

@@ -59,6 +59,11 @@ pub struct SynthesisOptions {
     /// 說話者 (None = 預設)
     pub speaker: Option<String>,
 
+    /// 自然語言音色/語氣控制指令。
+    ///
+    /// VoiceDesign 模型需要此欄位；1.7B CustomVoice 也可用它做語氣控制。
+    pub instruct: Option<String>,
+
     /// LLM 取樣溫度
     pub temperature: f64,
 
@@ -77,6 +82,7 @@ impl Default for SynthesisOptions {
         Self {
             language: "auto".into(),
             speaker: None,
+            instruct: None,
             temperature: 0.9,
             top_k: 50,
             top_p: 1.0,

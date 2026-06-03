@@ -168,6 +168,15 @@ impl CandleLLM {
             .map_err(|e| Error::Config(format!("Tokenizer encode error: {e}")))?;
         Ok(encoding.get_ids().to_vec())
     }
+
+    fn build_instruct_ids(&self, instruct: &str) -> Result<Vec<u32>> {
+        let prompt = format!("<|im_start|>user\n{instruct}<|im_end|>\n");
+        let encoding = self
+            .tokenizer
+            .encode(prompt.as_str(), false)
+            .map_err(|e| Error::Config(format!("Tokenizer encode error: {e}")))?;
+        Ok(encoding.get_ids().to_vec())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -182,17 +191,30 @@ impl TextFrontend for CandleLLM {
 
         // ── 1. 文字 → token 序列 ──
         let prompt_ids = self.build_prompt_ids(text)?;
+        let instruct_ids = options
+            .instruct
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| self.build_instruct_ids(s))
+            .transpose()?;
         log::debug!(
-            "CandleLLM::synthesize text={:?} prompt_len={} tokens={:?}",
+            "CandleLLM::synthesize text={:?} prompt_len={} instruct_len={} tokens={:?}",
             text,
             prompt_ids.len(),
+            instruct_ids.as_ref().map_or(0, Vec::len),
             prompt_ids
         );
 
         // ── 2. 構建 talker 輸入 ──
         let builder = InputBuilder::new(&self.talker, &self.device);
         let (inputs_embeds, attention_mask, trailing_text_hidden, tts_pad_embed) = builder
-            .build(&prompt_ids, &options.language, options.speaker.as_deref())
+            .build(
+                &prompt_ids,
+                instruct_ids.as_deref(),
+                &options.language,
+                options.speaker.as_deref(),
+            )
             .map_err(map_candle_err)?;
 
         // ── 3. 自迴歸生成 codec tokens ──
@@ -213,6 +235,7 @@ impl TextFrontend for CandleLLM {
             text.hash(&mut hasher);
             options.language.hash(&mut hasher);
             options.speaker.hash(&mut hasher);
+            options.instruct.hash(&mut hasher);
             let mut sampler = Sampler::new(hasher.finish());
             let sampling = TalkerSamplingOptions {
                 temperature: options.temperature,
@@ -288,12 +311,53 @@ fn find_tokenizer_json(model_dir: &Path) -> Option<PathBuf> {
         }
     }
     // 嘗試在 ../models/tokenizer.json 找（開發模式）
-    let dev = model_dir
-        .parent()
-        .map(|p| p.join("models").join("tokenizer.json"))
-        .filter(|p| p.exists());
-    if dev.is_some() {
-        return dev;
+    for fallback in [
+        model_dir
+            .parent()
+            .map(|p| p.join("models/tokenizer_1.7b.json")),
+        model_dir.parent().map(|p| p.join("models/tokenizer.json")),
+        Some(PathBuf::from("models/tokenizer_1.7b.json")),
+        Some(PathBuf::from("models/tokenizer.json")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if fallback.exists() {
+            return Some(fallback);
+        }
+    }
+
+    for base_id in [
+        "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+        "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    ] {
+        if let Some(base_dir) = locate_hf_model_snapshot(base_id) {
+            let path = base_dir.join("tokenizer.json");
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn locate_hf_model_snapshot(model_id: &str) -> Option<PathBuf> {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .ok()
+        .map(PathBuf::from)?;
+    let snapshots = home
+        .join(".cache")
+        .join("huggingface")
+        .join("hub")
+        .join(format!("models--{}", model_id.replace('/', "--")))
+        .join("snapshots");
+    let entries = std::fs::read_dir(snapshots).ok()?;
+    for entry in entries.flatten() {
+        let candidate = entry.path().join("tokenizer.json");
+        if candidate.exists() {
+            return Some(entry.path());
+        }
     }
     None
 }

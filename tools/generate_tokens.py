@@ -45,6 +45,7 @@ def generate_codes(
     text: str,
     language: str = "auto",
     speaker: Optional[str] = None,
+    instruct: Optional[str] = None,
     temperature=0.9,
     top_k=50,
     top_p=1.0,
@@ -65,11 +66,18 @@ def generate_codes(
     im_start = tokenizer("<|im_start|>", return_tensors="pt")["input_ids"][0].to(device)
     im_end = tokenizer("<|im_end|>", return_tensors="pt")["input_ids"][0].to(device)
     asst = tokenizer("assistant\n", return_tensors="pt")["input_ids"][0].to(device)
+    user = tokenizer("user\n", return_tensors="pt")["input_ids"][0].to(device)
     nl = tokenizer("\n", return_tensors="pt")["input_ids"][0].to(device)
 
     text_ids = tokenizer(text, return_tensors="pt")["input_ids"][0].to(device)
     full_ids = torch.cat([im_start, asst, text_ids, im_end, nl, im_start, asst])
     input_ids = [full_ids.unsqueeze(0)]
+
+    instruct_ids = None
+    if instruct:
+        instruct_text_ids = tokenizer(instruct, return_tensors="pt")["input_ids"][0].to(device)
+        instruct_full_ids = torch.cat([im_start, user, instruct_text_ids, im_end, nl])
+        instruct_ids = [instruct_full_ids.unsqueeze(0)]
 
     # Map language string → ID
     lang_map = getattr(mm.config.talker_config, "codec_language_id", {})
@@ -88,11 +96,14 @@ def generate_codes(
     print(f"[bridge] language={lang_actual}", file=sys.stderr)
     if speaker_actual:
         print(f"[bridge] speaker={speaker_actual}", file=sys.stderr)
+    if instruct:
+        print(f"[bridge] instruct={instruct}", file=sys.stderr)
 
     # ── Generate ─────────────────────────────────────────────────────
     with torch.no_grad():
         codes_list, _ = mm.generate(
             input_ids=input_ids,
+            instruct_ids=instruct_ids,
             languages=[lang_actual],
             speakers=[speaker_actual],
             do_sample=True,
@@ -149,6 +160,7 @@ def main():
     )
     parser.add_argument("--language", type=str, default="auto")
     parser.add_argument("--speaker", type=str, default=None)
+    parser.add_argument("--instruct", type=str, default=None)
     parser.add_argument("--temperature", type=float, default=0.9)
     parser.add_argument("--top-k", type=int, default=50)
     parser.add_argument("--top-p", type=float, default=1.0)
@@ -183,6 +195,7 @@ def main():
         text,
         language=args.language,
         speaker=args.speaker,
+        instruct=args.instruct,
         temperature=args.temperature,
         top_k=args.top_k,
         top_p=args.top_p,

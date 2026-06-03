@@ -24,6 +24,8 @@ model.safetensors
 tokenizer.json
 ```
 
+若使用 `1.7B-VoiceDesign` snapshot 且該目錄缺少 `tokenizer.json`，app 會自動嘗試使用本機 HuggingFace cache 裡的 Base 模型 tokenizer。你也可以手動把 Base 模型的 `tokenizer.json` 放到 `models\tokenizer.json`。
+
 2. 12Hz tokenizer decoder 權重。
 
 `v0.1.3` 開始，若 app 找不到已轉換的 Rust 權重，會優先自動執行 release 包內的 Rust converter：
@@ -117,6 +119,30 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
 output.wav
 ```
 
+## VoiceDesign 音色指令
+
+`1.7B-VoiceDesign` 可用 `--instruct` 以自然語言描述音色與語氣：
+
+```powershell
+$model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.7B-VoiceDesign\snapshots\<sha>"
+.\synthesize.exe `
+  --text "歡迎使用 Qwen3-TTS Rust 原生版本" `
+  --backend candle `
+  --language chinese `
+  --model-dir $model `
+  --instruct "年輕女性，台灣口語，溫柔親切，語速自然" `
+  --output voicedesign.wav `
+  --max-new-tokens 64
+```
+
+Base 模型不支援穩定音色控制；若需要指定音色，請使用 VoiceDesign 搭配 `--instruct`。`--speaker` 只有在模型權重本身提供 speaker id 對應時才有實際效果，Base/VoiceDesign 常見 snapshot 的 speaker map 通常是空的。
+
+長中文句子若 `--max-new-tokens` 太低會被截斷。簡單估算可用：
+
+```text
+max-new-tokens ≈ 中文字元數 × 3
+```
+
 ## 批次合成
 
 批次模式會先載入一次模型，再連續生成多句，避免每句都重新讀取 1.7B 權重。
@@ -129,6 +155,7 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --prefix qwen1p7b `
   --language chinese `
   --max-new-tokens 16 `
+  --instruct "年輕女性，台灣口語，溫柔親切" `
   --text "今天天氣真好" `
   --text "你好，測試第二句"
 ```
@@ -161,8 +188,9 @@ batch-output\qwen1p7b_0002.wav
 | --- | --- |
 | `--model-dir` | Qwen3-TTS 模型 snapshot 目錄 |
 | `--language` | 語言，中文建議使用 `chinese` |
-| `--speaker` | 說話者條件，可省略 |
-| `--max-new-tokens` | 最大生成 frame 數，短句可先用 `16` 測試 |
+| `--speaker` | 說話者條件；若模型沒有 speaker id map，通常無作用 |
+| `--instruct` | VoiceDesign/CustomVoice 音色或語氣指令 |
+| `--max-new-tokens` | 最大生成 frame 數，短句可先用 `16` 測試；長中文可用中文字數 × 3 估算 |
 | `--temperature` | 取樣溫度，預設 `0.9` |
 | `--top-k` | top-k 取樣，預設 `50` |
 | `--top-p` | top-p 取樣，預設 `1.0` |
@@ -193,6 +221,8 @@ with wave.open(name, "rb") as w:
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
 - 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。
+- 批次模式可用 `--save-tokens-dir <dir>` 同步輸出每句 `.tokens` 檔。
+- `--instruct` 已走 VoiceDesign/CustomVoice 的獨立 user prompt embedding，不會混入待朗讀文字。
 - 大型模型權重與 tokenizer decoder 權重未包含在 zip 內。
 - `v0.1.1` 修正 release app 只用目前工作目錄找 `weights/tokenizer` 的問題；現在也會檢查 exe 所在目錄。
 - `v0.1.2` 開始，若找不到 Rust tokenizer decoder 權重，app 會自動嘗試執行 bundled `tools/convert_weights.py tokenizer`。

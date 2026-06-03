@@ -22,6 +22,7 @@ struct Args {
     texts_file: Option<PathBuf>,
     language: String,
     speaker: Option<String>,
+    instruct: Option<String>,
     max_new_tokens: u32,
     temperature: f64,
     top_k: u32,
@@ -39,6 +40,7 @@ impl Default for Args {
             texts_file: None,
             language: "auto".to_string(),
             speaker: None,
+            instruct: None,
             max_new_tokens: 128,
             temperature: 0.9,
             top_k: 50,
@@ -95,6 +97,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let options = SynthesisOptions {
         language: args.language.clone(),
         speaker: args.speaker.clone(),
+        instruct: args.instruct.clone(),
         temperature: args.temperature,
         top_k: args.top_k,
         top_p: args.top_p,
@@ -172,6 +175,10 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
                 args.speaker = Some(require_arg(&raw, i, "--speaker")?);
                 i += 2;
             }
+            "--instruct" => {
+                args.instruct = Some(require_arg(&raw, i, "--instruct")?);
+                i += 2;
+            }
             "--max-new-tokens" => {
                 args.max_new_tokens = require_arg(&raw, i, "--max-new-tokens")?.parse()?;
                 i += 2;
@@ -240,13 +247,54 @@ fn find_tokenizer_json(model_dir: &Path) -> Result<PathBuf, Box<dyn Error>> {
     if local.exists() {
         return Ok(local);
     }
+    let snapshots = model_dir.join("snapshots");
+    if snapshots.is_dir() {
+        for entry in fs::read_dir(snapshots)?.flatten() {
+            let path = entry.path().join("tokenizer.json");
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+    }
     for fallback in ["models/tokenizer_1.7b.json", "models/tokenizer.json"] {
         let path = PathBuf::from(fallback);
         if path.exists() {
             return Ok(path);
         }
     }
-    Err("missing tokenizer.json; pass a model dir with tokenizer.json or create models/tokenizer.json".into())
+    for base_id in [
+        "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+        "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    ] {
+        if let Some(base_dir) = locate_hf_model_snapshot(base_id) {
+            let path = base_dir.join("tokenizer.json");
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+    }
+    Err("missing tokenizer.json; pass a model dir with tokenizer.json, create models/tokenizer.json, or keep a Base model snapshot in the HuggingFace cache".into())
+}
+
+fn locate_hf_model_snapshot(model_id: &str) -> Option<PathBuf> {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .ok()
+        .map(PathBuf::from)?;
+    let snapshots = home
+        .join(".cache")
+        .join("huggingface")
+        .join("hub")
+        .join(format!("models--{}", model_id.replace('/', "--")))
+        .join("snapshots");
+    let entries = fs::read_dir(snapshots).ok()?;
+    for entry in entries.flatten() {
+        let candidate = entry.path().join("tokenizer.json");
+        if candidate.exists() {
+            return Some(entry.path());
+        }
+    }
+    None
 }
 
 fn make_output_path(output_dir: &Path, prefix: &str, index: usize) -> PathBuf {
@@ -280,6 +328,7 @@ fn print_usage() {
            --prefix <name>          Output file prefix (default: clip)\n\
            --language <name>        Language (default: auto)\n\
            --speaker <name>         Speaker condition\n\
+           --instruct <text>        VoiceDesign/CustomVoice style instruction\n\
            --max-new-tokens <n>     Max generated frames (default: 128)\n\
            --temperature <f>        Sampling temperature (default: 0.9)\n\
            --top-k <n>              Top-k sampling (default: 50)\n\

@@ -31,6 +31,7 @@ impl<'a> InputBuilder<'a> {
     pub fn build(
         &self,
         text_token_ids: &[u32],
+        instruct_token_ids: Option<&[u32]>,
         language: &str,
         speaker: Option<&str>,
     ) -> Result<(
@@ -125,8 +126,18 @@ impl<'a> InputBuilder<'a> {
             (with_bos + codec_prefix)?
         };
 
-        // ── Full input: role + codec_input ──
-        let mut input_embeds = Tensor::cat(&[role_emb, codec_input], 1)?;
+        // ── Full input: optional instruct prompt + role + codec_input ──
+        let mut input_embeds = if let Some(ids) = instruct_token_ids {
+            if ids.is_empty() {
+                Tensor::cat(&[role_emb, codec_input], 1)?
+            } else {
+                let instruct_tensor = Tensor::from_slice(ids, (1, ids.len()), &self.device)?;
+                let instruct_emb = self.talker.embed_text(&instruct_tensor)?;
+                Tensor::cat(&[instruct_emb, role_emb, codec_input], 1)?
+            }
+        } else {
+            Tensor::cat(&[role_emb, codec_input], 1)?
+        };
 
         // 文字部分
         // text_emb + codec_last
