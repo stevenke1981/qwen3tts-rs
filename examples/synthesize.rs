@@ -92,6 +92,17 @@ fn locate_model_snapshot(model_id: &str) -> Option<PathBuf> {
     None
 }
 
+#[cfg(feature = "candle-llm")]
+fn display_model_id(model_id: &str, model_dir: &Path) -> String {
+    for component in model_dir.components().rev() {
+        let name = component.as_os_str().to_string_lossy();
+        if let Some(cache_name) = name.strip_prefix("models--") {
+            return cache_name.replace("--", "/");
+        }
+    }
+    model_id.to_string()
+}
+
 fn main() {
     // ----- 解析命令列參數 -----
     let args: Vec<String> = std::env::args().collect();
@@ -308,9 +319,10 @@ fn main() {
                     std::process::exit(1);
                 };
 
-                println!("[2/3] 載入 Candle LLM ({model_id}) 並生成 Token…");
+                let display_model = display_model_id(&model_id, &dir);
+                println!("[2/3] 載入 Candle LLM ({display_model}) 並生成 Token…");
                 println!("      model dir : {dir:?}");
-                println!("      （首次載入需 ~2-3 分鐘，包含 0.6B 權重 BF16→F32）");
+                println!("      （首次載入時間依模型大小與裝置而定，包含權重 BF16→F32）");
 
                 let backend = CandleLLM::from_files(&sf_path, &tok_path, &device)
                     .expect("載入 CandleLLM 失敗");
