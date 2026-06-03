@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.1 Windows x64`
+Target version: `qwen3tts-rs v0.1.2 Windows x64`
 
 This release package contains pure Rust/Candle executables:
 
@@ -25,7 +25,29 @@ model.safetensors
 tokenizer.json
 ```
 
-2. The 12Hz tokenizer decoder weights in one of these locations:
+2. The 12Hz tokenizer decoder weights.
+
+Starting from `v0.1.2`, if the app cannot find converted Rust weights, it
+automatically attempts to run the bundled converter:
+
+```text
+tools\convert_weights.py
+```
+
+The converter downloads/reads HuggingFace `Qwen/Qwen3-TTS-Tokenizer-12Hz` and
+writes converted Rust weights into the release directory:
+
+```text
+weights\tokenizer\
+```
+
+Automatic conversion requires Python and these Python packages:
+
+```powershell
+pip install torch safetensors huggingface_hub numpy
+```
+
+If you already have converted weights, place them in one of these locations:
 
 ```text
 <current PowerShell directory>\weights\tokenizer\
@@ -40,9 +62,18 @@ the exe:
 weights\tokenizer\
 ```
 
-At minimum, this directory must include `codebook.safetensors` and the
-additional safetensors files needed by the decoder. If the weights are missing,
-the app prints the full paths it checked.
+At minimum, this directory must include:
+
+```text
+codebook.safetensors
+lightweight.safetensors
+pre_transformer.safetensors
+upsample.safetensors
+decoder_blocks.safetensors
+```
+
+If the weights are missing or conversion fails, the app prints the full paths it
+checked.
 
 ## Single Utterance
 
@@ -137,3 +168,5 @@ If `rms=0` and `peak=0`, the WAV is silent.
 - Large model weights and tokenizer decoder weights are not bundled in the zip.
 - `v0.1.1` fixes the release app only checking `weights/tokenizer` relative to
   the current working directory. It now also checks the executable directory.
+- Starting from `v0.1.2`, if Rust tokenizer decoder weights are missing, the app
+  automatically attempts to run bundled `tools/convert_weights.py tokenizer`.

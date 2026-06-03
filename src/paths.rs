@@ -1,8 +1,17 @@
 //! Runtime path helpers for CLI examples and release builds.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use crate::{Error, Result};
+
+const TOKENIZER_WEIGHT_FILES: &[&str] = &[
+    "codebook.safetensors",
+    "lightweight.safetensors",
+    "pre_transformer.safetensors",
+    "upsample.safetensors",
+    "decoder_blocks.safetensors",
+];
 
 /// Returns tokenizer decoder weight directory candidates in search order.
 ///
@@ -23,26 +32,144 @@ pub fn resolve_tokenizer_weight_dir_from(cwd: &Path, exe_path: Option<&Path>) ->
     candidates
 }
 
-/// Finds an existing tokenizer decoder weight directory.
+/// Finds an existing tokenizer decoder weight directory without conversion.
 pub fn find_existing_tokenizer_weight_dir() -> Result<PathBuf> {
     let cwd = std::env::current_dir()?;
     let exe = std::env::current_exe().ok();
     let candidates = resolve_tokenizer_weight_dir_from(&cwd, exe.as_deref());
 
     for candidate in &candidates {
-        if candidate.join("codebook.safetensors").exists() {
+        if is_complete_tokenizer_weight_dir(candidate) {
             return Ok(candidate.clone());
         }
     }
 
+    Err(missing_weights_error(&candidates))
+}
+
+/// Finds tokenizer decoder weights, automatically converting from HuggingFace
+/// format with the bundled Python converter when needed.
+pub fn ensure_tokenizer_weight_dir() -> Result<PathBuf> {
+    if let Ok(path) = find_existing_tokenizer_weight_dir() {
+        return Ok(path);
+    }
+
+    let cwd = std::env::current_dir()?;
+    let exe = std::env::current_exe().ok();
+    let candidates = resolve_tokenizer_weight_dir_from(&cwd, exe.as_deref());
+    let converter = find_converter_script_from(&cwd, exe.as_deref()).ok_or_else(|| {
+        Error::Config(format!(
+            "{}\n\nNo bundled converter was found. Expected tools/convert_weights.py next to the app or in the current repository.",
+            missing_weights_error(&candidates)
+        ))
+    })?;
+    let output = converter
+        .parent()
+        .and_then(Path::parent)
+        .map(|base| base.join("weights").join("tokenizer"))
+        .unwrap_or_else(|| candidates[0].clone());
+
+    run_tokenizer_converter(&converter, &output)?;
+    if is_complete_tokenizer_weight_dir(&output) {
+        return Ok(output);
+    }
+
+    Err(Error::Config(format!(
+        "Tokenizer conversion finished but required Rust weights are still incomplete in {}",
+        output.display()
+    )))
+}
+
+/// Returns converter script candidates in search order.
+pub fn resolve_converter_script_from(cwd: &Path, exe_path: Option<&Path>) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    push_unique(
+        &mut candidates,
+        cwd.join("tools").join("convert_weights.py"),
+    );
+
+    if let Some(exe_path) = exe_path {
+        if let Some(exe_dir) = exe_path.parent() {
+            push_unique(
+                &mut candidates,
+                exe_dir.join("tools").join("convert_weights.py"),
+            );
+        }
+    }
+
+    candidates
+}
+
+fn find_converter_script_from(cwd: &Path, exe_path: Option<&Path>) -> Option<PathBuf> {
+    resolve_converter_script_from(cwd, exe_path)
+        .into_iter()
+        .find(|path| path.exists())
+}
+
+fn run_tokenizer_converter(converter: &Path, output: &Path) -> Result<()> {
+    eprintln!(
+        "Tokenizer decoder weights not found; attempting automatic conversion with {}",
+        converter.display()
+    );
+    eprintln!("Tokenizer converter output: {}", output.display());
+
+    for python in ["python", "py"] {
+        let mut cmd = Command::new(python);
+        if python == "py" {
+            cmd.arg("-3");
+        }
+        let status = cmd
+            .arg(converter)
+            .arg("tokenizer")
+            .arg("--output")
+            .arg(output)
+            .status();
+        match status {
+            Ok(status) if status.success() => return Ok(()),
+            Ok(status) => {
+                eprintln!("Converter via {python} exited with {status}");
+            }
+            Err(err) => {
+                eprintln!("Could not launch {python}: {err}");
+            }
+        }
+    }
+
+    Err(Error::Config(
+        "Automatic tokenizer conversion failed. Install Python with torch, safetensors, huggingface_hub, and numpy, or run tools/convert_weights.py tokenizer manually.".into(),
+    ))
+}
+
+fn is_complete_tokenizer_weight_dir(path: &Path) -> bool {
+    TOKENIZER_WEIGHT_FILES
+        .iter()
+        .all(|file| path.join(file).exists())
+}
+
+fn missing_weights_error(candidates: &[PathBuf]) -> Error {
     let checked = candidates
         .iter()
-        .map(|p| format!("  - {}", p.display()))
+        .map(|p| {
+            let missing = missing_tokenizer_files(p);
+            if missing.is_empty() {
+                format!("  - {}", p.display())
+            } else {
+                format!("  - {} (missing: {})", p.display(), missing.join(", "))
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n");
-    Err(Error::Config(format!(
-        "Tokenizer decoder weights not found. Expected codebook.safetensors in one of:\n{checked}"
-    )))
+    Error::Config(format!(
+        "Tokenizer decoder weights not found. Expected converted Rust safetensors in one of:\n{checked}"
+    ))
+}
+
+fn missing_tokenizer_files(path: &Path) -> Vec<&'static str> {
+    TOKENIZER_WEIGHT_FILES
+        .iter()
+        .copied()
+        .filter(|file| !path.join(file).exists())
+        .collect()
 }
 
 fn push_unique(candidates: &mut Vec<PathBuf>, path: PathBuf) {
@@ -53,7 +180,10 @@ fn push_unique(candidates: &mut Vec<PathBuf>, path: PathBuf) {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_tokenizer_weight_dir_from;
+    use super::{
+        is_complete_tokenizer_weight_dir, resolve_converter_script_from,
+        resolve_tokenizer_weight_dir_from,
+    };
     use std::path::Path;
 
     #[test]
@@ -75,5 +205,38 @@ mod tests {
         );
 
         assert_eq!(candidates, vec![Path::new("C:/app/weights/tokenizer")]);
+    }
+
+    #[test]
+    fn resolves_converter_script_next_to_cwd_and_exe() {
+        let candidates = resolve_converter_script_from(
+            Path::new("C:/run"),
+            Some(Path::new("C:/app/synthesize.exe")),
+        );
+
+        assert_eq!(candidates[0], Path::new("C:/run/tools/convert_weights.py"));
+        assert_eq!(candidates[1], Path::new("C:/app/tools/convert_weights.py"));
+    }
+
+    #[test]
+    fn complete_tokenizer_weight_dir_requires_all_decoder_files() {
+        let base = std::env::temp_dir().join(format!("qwen3tts-path-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::write(base.join("codebook.safetensors"), []).unwrap();
+
+        assert!(!is_complete_tokenizer_weight_dir(&base));
+
+        for file in [
+            "lightweight.safetensors",
+            "pre_transformer.safetensors",
+            "upsample.safetensors",
+            "decoder_blocks.safetensors",
+        ] {
+            std::fs::write(base.join(file), []).unwrap();
+        }
+        assert!(is_complete_tokenizer_weight_dir(&base));
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

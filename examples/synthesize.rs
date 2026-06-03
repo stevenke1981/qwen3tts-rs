@@ -37,7 +37,7 @@ use std::path::Path;
 #[cfg(feature = "candle-llm")]
 use std::path::PathBuf;
 
-use qwen3tts::paths::find_existing_tokenizer_weight_dir;
+use qwen3tts::paths::ensure_tokenizer_weight_dir;
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend, TokenStream};
 use qwen3tts::{Decoder12Hz, DecoderConfig};
 
@@ -252,14 +252,12 @@ fn main() {
     println!();
 
     // ----- 步驟 1: 載入 Tokenizer 解碼器權重 -----
-    let weight_dir = match find_existing_tokenizer_weight_dir() {
+    let weight_dir = match ensure_tokenizer_weight_dir() {
         Ok(path) => path,
         Err(err) => {
             eprintln!("錯誤: {err}");
-            eprintln!("請先下載 Tokenizer 權重:");
-            eprintln!(
-            "  huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz --local-dir weights/tokenizer"
-        );
+            eprintln!("可手動轉換 Tokenizer 權重:");
+            eprintln!("  python tools/convert_weights.py tokenizer --output weights/tokenizer");
             std::process::exit(1);
         }
     };

@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.1",
+    [string]$Version = "0.1.2",
     [switch]$SkipBuild
 )
 
@@ -35,6 +35,7 @@ if (Test-Path $ZipPath) {
 }
 
 New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $PackageDir "tools") | Out-Null
 
 $exampleDir = Join-Path $RepoRoot "target\release\examples"
 $files = @(
@@ -42,7 +43,8 @@ $files = @(
     @{ Source = Join-Path $exampleDir "synthesize_batch.exe"; Target = "synthesize_batch.exe" },
     @{ Source = Join-Path $RepoRoot "docs\release_usage_zh.md"; Target = "README.zh-TW.md" },
     @{ Source = Join-Path $RepoRoot "docs\release_usage_en.md"; Target = "README.en-US.md" },
-    @{ Source = Join-Path $RepoRoot "docs\agent_voice_failure_playbook.md"; Target = "AGENT_VOICE_FAILURE_PLAYBOOK.md" }
+    @{ Source = Join-Path $RepoRoot "docs\agent_voice_failure_playbook.md"; Target = "AGENT_VOICE_FAILURE_PLAYBOOK.md" },
+    @{ Source = Join-Path $RepoRoot "tools\convert_weights.py"; Target = "tools\convert_weights.py" }
 )
 
 foreach ($file in $files) {
@@ -61,8 +63,11 @@ Included:
 - README.zh-TW.md
 - README.en-US.md
 - AGENT_VOICE_FAILURE_PLAYBOOK.md
+- tools/convert_weights.py
 
-Weights are not bundled. See README files before running.
+Large weights are not bundled. If converted tokenizer decoder weights are
+missing, the app can attempt to run tools/convert_weights.py automatically.
+See README files before running.
 "@ | Set-Content -LiteralPath (Join-Path $PackageDir "VERSION.txt") -Encoding UTF8
 
 $hashes = Get-ChildItem -LiteralPath $PackageDir -File |

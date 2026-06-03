@@ -9,7 +9,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use qwen3tts::paths::find_existing_tokenizer_weight_dir;
+use qwen3tts::paths::ensure_tokenizer_weight_dir;
 use qwen3tts::text_frontend::{CandleLLM, SynthesisOptions, TextFrontend};
 use qwen3tts::{Decoder12Hz, DecoderConfig};
 
@@ -73,7 +73,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
     let tokenizer_json = find_tokenizer_json(&args.model_dir)?;
 
-    let weight_dir = find_existing_tokenizer_weight_dir()?;
+    let weight_dir = ensure_tokenizer_weight_dir()?;
 
     let device = candle_core::Device::Cpu;
     println!("loading tokenizer decoder once...");
