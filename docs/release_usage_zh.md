@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.6 Windows x64 / Windows x64 CUDA`
+適用版本：`qwen3tts-rs v0.1.8 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
@@ -52,7 +52,20 @@ Qwen/Qwen3-TTS-Tokenizer-12Hz
 tools\convert_weights.py
 ```
 
-轉換輸出會放到 release 目錄下：
+自動轉換輸出會優先快取到使用者目錄，避免每個新 release 目錄重複轉換超過 1GB 權重：
+
+```text
+%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz\
+```
+
+也可以用環境變數覆蓋：
+
+```powershell
+$env:QWEN3TTS_TOKENIZER_CACHE_DIR = "D:\qwen3tts-cache"
+$env:QWEN3TTS_TOKENIZER_WEIGHT_DIR = "D:\qwen3tts-cache\tokenizer-12hz"
+```
+
+手動轉換輸出仍可放到 release 目錄下：
 
 ```text
 weights\tokenizer\
@@ -62,8 +75,8 @@ weights\tokenizer\
 
 ## CPU 與 CUDA 版本
 
-- `qwen3tts-rs-v0.1.6-windows-x64.zip`：CPU/Candle build。
-- `qwen3tts-rs-v0.1.6-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+- `qwen3tts-rs-v0.1.8-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.8-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
 
 建置 CUDA 版 release：
 
@@ -78,6 +91,7 @@ weights\tokenizer\
 ```text
 <目前 PowerShell 所在目錄>\weights\tokenizer\
 <synthesize.exe 所在目錄>\weights\tokenizer\
+%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz\
 ```
 
 release app 會依照上面的順序檢查。若你從其他目錄呼叫 exe，建議直接把 `weights\tokenizer` 放在 exe 同一層，例如：
@@ -167,10 +181,10 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
 
 Base 模型不支援穩定音色控制；若需要指定音色，請使用 VoiceDesign 搭配 `--instruct`。`--speaker` 只有在模型權重本身提供 speaker id 對應時才有實際效果，Base/VoiceDesign 常見 snapshot 的 speaker map 通常是空的。
 
-長中文句子若 `--max-new-tokens` 太低會被截斷。簡單估算可用：
+長中文句子若 `--max-new-tokens` 太低會被截斷。保守估算可用：
 
 ```text
-max-new-tokens ≈ 中文字元數 × 3
+max-new-tokens ≈ 中文字元數 × 4
 ```
 
 ## 批次合成
@@ -189,6 +203,15 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --seed 20260603 `
   --text "今天天氣真好" `
   --text "你好，測試第二句"
+```
+
+若已下載預設 0.6B Base 到 HuggingFace cache，batch 可以省略 `--model-dir`：
+
+```powershell
+.\synthesize_batch.exe `
+  --text "今天天氣真好" `
+  --output-dir batch-output `
+  --language chinese
 ```
 
 輸出檔名只使用數字索引，例如：
@@ -214,20 +237,36 @@ batch-output\qwen1p7b_0002.wav
   --no-save-tokens
 ```
 
+逐句切換音色與 seed 時，重複傳入 `--instruct-file` 與 `--seed`，數量需等於句數：
+
+```powershell
+.\synthesize_batch.exe `
+  --model-dir $model `
+  --text "第一句" `
+  --text "第二句" `
+  --instruct-file .\voice_a.txt `
+  --instruct-file .\voice_b.txt `
+  --seed 101 `
+  --seed 202 `
+  --output-dir batch-output
+```
+
 ## 常用參數
 
 | 參數 | 說明 |
 | --- | --- |
 | `--model-dir` | Qwen3-TTS 模型 snapshot 目錄 |
+| `--model` | batch 模式可指定 HuggingFace model id；省略 `--model-dir` 時會自動找本機 HF cache |
 | `--language` | 語言，中文建議使用 `chinese` |
 | `--speaker` | 說話者條件；若模型沒有 speaker id map，通常無作用 |
 | `--instruct` | VoiceDesign/CustomVoice 音色或語氣指令 |
-| `--instruct-file` | 從 UTF-8 文字檔讀取音色或語氣指令 |
-| `--seed` | 固定取樣 seed，讓相同文字/條件更容易重現 |
-| `--max-new-tokens` | 最大生成 frame 數，短句可先用 `16` 測試；長中文可用中文字數 × 3 估算 |
+| `--instruct-file` | 從 UTF-8 文字檔讀取音色或語氣指令；batch 可重複傳入做到逐句切換 |
+| `--seed` | 固定取樣 seed；batch 可重複傳入做到逐句 seed |
+| `--max-new-tokens` | 最大生成 frame 數，短句可先用 `16` 測試；長中文可用中文字數 × 4 估算 |
 | `--temperature` | 取樣溫度，預設 `0.9` |
 | `--top-k` | top-k 取樣，預設 `50` |
 | `--top-p` | top-p 取樣，預設 `1.0` |
+| `--speed` | 語速倍率，預設 `1.0` |
 | `--save-tokens-dir` | batch 模式同步輸出每句 `.tokens` 檔 |
 | `--no-save-tokens` | batch 模式關閉 token 檔輸出 |
 
@@ -256,6 +295,8 @@ with wave.open(name, "rb") as w:
 - `v0.1.4` 提供 CPU 與 CUDA 兩種 release；CUDA binary 會優先使用 `CUDA:0`。
 - `v0.1.5` 新增 VoiceDesign/CustomVoice `--instruct`，並在 VoiceDesign snapshot 缺少 `tokenizer.json` 時自動 fallback 使用 Base tokenizer。
 - `v0.1.6` 新增 `--instruct-file`、`--seed`、batch `--no-save-tokens`，並讓 batch 對長中文提示 `--max-new-tokens` 建議。
+- `v0.1.7` 新增 `--speed` 與 `--version`，並修正中文截斷建議。
+- `v0.1.8` 新增 batch 逐句 `--instruct-file`/`--seed`、batch 0.6B 模型自動尋找，以及 tokenizer decoder 全域快取。
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
 - 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。

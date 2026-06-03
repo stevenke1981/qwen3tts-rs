@@ -135,7 +135,8 @@ impl Decoder12Hz {
                 interpolated.push(frame_embeddings[0].clone());
             } else {
                 for j in 0..new_num_frames {
-                    let pos = (j as f64) * ((num_frames - 1) as f64) / ((new_num_frames - 1) as f64);
+                    let pos =
+                        (j as f64) * ((num_frames - 1) as f64) / ((new_num_frames - 1) as f64);
                     let left = pos.floor() as usize;
                     let right = pos.ceil() as usize;
                     let weight = pos - left as f64;
@@ -143,7 +144,10 @@ impl Decoder12Hz {
                     let right_embed = &frame_embeddings[right];
                     let mut mixed = Vec::with_capacity(left_embed.len());
                     for idx in 0..left_embed.len() {
-                        mixed.push(left_embed[idx] * (1.0 - weight as f32) + right_embed[idx] * (weight as f32));
+                        mixed.push(
+                            left_embed[idx] * (1.0 - weight as f32)
+                                + right_embed[idx] * (weight as f32),
+                        );
                     }
                     interpolated.push(mixed);
                 }

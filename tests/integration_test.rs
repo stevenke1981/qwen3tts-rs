@@ -153,15 +153,24 @@ fn test_decode_frames_speed_adjustment() {
 
     let device = candle_core::Device::Cpu;
     let frames: Vec<[u16; 16]> = vec![
-        [1221, 1052, 1114, 1364, 1468, 1760, 974, 1318, 746, 391, 161, 1013, 663, 837, 216, 1929],
-        [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600],
-        [42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42],
-        [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160],
+        [
+            1221, 1052, 1114, 1364, 1468, 1760, 974, 1318, 746, 391, 161, 1013, 663, 837, 216, 1929,
+        ],
+        [
+            100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600,
+        ],
+        [
+            42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+        ],
+        [
+            10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160,
+        ],
     ];
 
     // Speed 1.0 (Normal)
     let config_normal = DecoderConfig::realtime();
-    let mut decoder_normal = Decoder12Hz::from_safetensors(config_normal, weight_dir, &device).unwrap();
+    let mut decoder_normal =
+        Decoder12Hz::from_safetensors(config_normal, weight_dir, &device).unwrap();
     let output_normal = decoder_normal.decode_frames(&frames).unwrap();
 
     // Speed 2.0 (Double Speed - half the frames/samples)

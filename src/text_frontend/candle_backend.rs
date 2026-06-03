@@ -276,7 +276,10 @@ impl TextFrontend for CandleLLM {
             .collect();
 
         let generated_frames = codes.len();
-        log::info!("CandleLLM::synthesize generated {} frames", generated_frames);
+        log::info!(
+            "CandleLLM::synthesize generated {} frames",
+            generated_frames
+        );
 
         if generated_frames >= max_new_tokens {
             let zh_chars = text

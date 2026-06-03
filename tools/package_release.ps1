@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.6",
+    [string]$Version = "0.1.8",
     [switch]$Cuda,
     [string]$CudaComputeCap = "86",
     [string]$CudaToolkitRoot = "",

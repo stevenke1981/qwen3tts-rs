@@ -15,7 +15,8 @@ use qwen3tts::{Decoder12Hz, DecoderConfig};
 
 #[derive(Debug, Clone)]
 struct Args {
-    model_dir: PathBuf,
+    model_id: String,
+    model_dir: Option<PathBuf>,
     output_dir: PathBuf,
     prefix: String,
     texts: Vec<String>,
@@ -23,8 +24,9 @@ struct Args {
     language: String,
     speaker: Option<String>,
     instruct: Option<String>,
-    instruct_file: Option<PathBuf>,
-    seed: Option<u64>,
+    instruct_files: Vec<PathBuf>,
+    instruct_values: Vec<String>,
+    seeds: Vec<u64>,
     max_new_tokens: u32,
     temperature: f64,
     top_k: u32,
@@ -37,7 +39,8 @@ struct Args {
 impl Default for Args {
     fn default() -> Self {
         Self {
-            model_dir: PathBuf::new(),
+            model_id: "Qwen/Qwen3-TTS-12Hz-0.6B-Base".to_string(),
+            model_dir: None,
             output_dir: PathBuf::from("batch-output"),
             prefix: "clip".to_string(),
             texts: Vec::new(),
@@ -45,8 +48,9 @@ impl Default for Args {
             language: "auto".to_string(),
             speaker: None,
             instruct: None,
-            instruct_file: None,
-            seed: None,
+            instruct_files: Vec::new(),
+            instruct_values: Vec::new(),
+            seeds: Vec::new(),
             max_new_tokens: 4096,
             temperature: 0.9,
             top_k: 50,
@@ -71,6 +75,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     if texts.is_empty() {
         return Err("no text lines provided".into());
     }
+    validate_per_line_options(&args, texts.len())?;
 
     fs::create_dir_all(&args.output_dir)?;
     if args.save_tokens {
@@ -79,11 +84,12 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let model_safetensors = args.model_dir.join("model.safetensors");
+    let model_dir = resolve_model_dir(&args)?;
+    let model_safetensors = model_dir.join("model.safetensors");
     if !model_safetensors.exists() {
         return Err(format!("missing {}", model_safetensors.display()).into());
     }
-    let tokenizer_json = find_tokenizer_json(&args.model_dir)?;
+    let tokenizer_json = find_tokenizer_json(&model_dir)?;
 
     let weight_dir = ensure_tokenizer_weight_dir()?;
 
@@ -99,22 +105,12 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut decoder = Decoder12Hz::from_safetensors(decoder_config, &weight_dir, &device)?;
 
     println!("loading Candle model once...");
-    println!("  model dir: {}", args.model_dir.display());
+    println!("  model: {}", args.model_id);
+    println!("  model dir: {}", model_dir.display());
     println!("  tokenizer: {}", tokenizer_json.display());
     let load_start = Instant::now();
     let frontend = CandleLLM::from_files(&model_safetensors, &tokenizer_json, &device)?;
     println!("  load time: {:.2}s", load_start.elapsed().as_secs_f64());
-
-    let options = SynthesisOptions {
-        language: args.language.clone(),
-        speaker: args.speaker.clone(),
-        instruct: args.instruct.clone(),
-        seed: args.seed,
-        temperature: args.temperature,
-        top_k: args.top_k,
-        top_p: args.top_p,
-        max_new_tokens: args.max_new_tokens,
-    };
 
     for (idx, text) in texts.iter().enumerate() {
         let item_start = Instant::now();
@@ -122,6 +118,23 @@ fn run() -> Result<(), Box<dyn Error>> {
         let wav_path = make_output_path(&args.output_dir, &args.prefix, one_based);
         println!("[{one_based}/{}] {}", texts.len(), text);
         warn_if_max_new_tokens_low(text, args.max_new_tokens);
+
+        let options = SynthesisOptions {
+            language: args.language.clone(),
+            speaker: args.speaker.clone(),
+            instruct: select_instruct(&args, idx).cloned(),
+            seed: select_seed(&args, idx),
+            temperature: args.temperature,
+            top_k: args.top_k,
+            top_p: args.top_p,
+            max_new_tokens: args.max_new_tokens,
+        };
+        if let Some(instruct) = &options.instruct {
+            println!("  instruct: {}", abbreviate(instruct, 80));
+        }
+        if let Some(seed) = options.seed {
+            println!("  seed: {seed}");
+        }
 
         let synth_start = Instant::now();
         let stream = frontend.synthesize(text, &options)?;
@@ -165,7 +178,11 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
     while i < raw.len() {
         match raw[i].as_str() {
             "--model-dir" => {
-                args.model_dir = PathBuf::from(require_arg(&raw, i, "--model-dir")?);
+                args.model_dir = Some(PathBuf::from(require_arg(&raw, i, "--model-dir")?));
+                i += 2;
+            }
+            "--model" => {
+                args.model_id = require_arg(&raw, i, "--model")?;
                 i += 2;
             }
             "--output-dir" => {
@@ -197,11 +214,12 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
                 i += 2;
             }
             "--instruct-file" => {
-                args.instruct_file = Some(PathBuf::from(require_arg(&raw, i, "--instruct-file")?));
+                args.instruct_files
+                    .push(PathBuf::from(require_arg(&raw, i, "--instruct-file")?));
                 i += 2;
             }
             "--seed" => {
-                args.seed = Some(require_arg(&raw, i, "--seed")?.parse()?);
+                args.seeds.push(require_arg(&raw, i, "--seed")?.parse()?);
                 i += 2;
             }
             "--max-new-tokens" => {
@@ -248,23 +266,87 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
         }
     }
 
-    if args.model_dir.as_os_str().is_empty() {
-        return Err("--model-dir is required".into());
-    }
-    if args.instruct.is_some() && args.instruct_file.is_some() {
+    if args.instruct.is_some() && !args.instruct_files.is_empty() {
         return Err("--instruct and --instruct-file are mutually exclusive".into());
     }
-    if let Some(path) = args.instruct_file.take() {
-        let value = fs::read_to_string(&path)?.trim().to_string();
-        if value.is_empty() {
-            return Err(format!("--instruct-file is empty: {}", path.display()).into());
+    if !args.instruct_files.is_empty() {
+        for path in &args.instruct_files {
+            let value = fs::read_to_string(path)?.trim().to_string();
+            if value.is_empty() {
+                return Err(format!("--instruct-file is empty: {}", path.display()).into());
+            }
+            args.instruct_values.push(value);
         }
-        args.instruct = Some(value);
     }
     if !args.save_tokens {
         args.save_tokens_dir = None;
     }
     Ok(args)
+}
+
+fn resolve_model_dir(args: &Args) -> Result<PathBuf, Box<dyn Error>> {
+    if let Some(model_dir) = &args.model_dir {
+        return Ok(model_dir.clone());
+    }
+    locate_hf_model_snapshot(&args.model_id, "model.safetensors").ok_or_else(|| {
+        format!(
+            "missing --model-dir and no local HuggingFace snapshot found for {}",
+            args.model_id
+        )
+        .into()
+    })
+}
+
+fn validate_per_line_options(args: &Args, text_count: usize) -> Result<(), Box<dyn Error>> {
+    if args.instruct_values.len() > 1 && args.instruct_values.len() != text_count {
+        return Err(format!(
+            "--instruct-file was provided {} times but there are {text_count} text lines; pass one file for all lines or one per line",
+            args.instruct_values.len()
+        )
+        .into());
+    }
+    if args.seeds.len() > 1 && args.seeds.len() != text_count {
+        return Err(format!(
+            "--seed was provided {} times but there are {text_count} text lines; pass one seed for all lines or one per line",
+            args.seeds.len()
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn select_instruct<'a>(args: &'a Args, idx: usize) -> Option<&'a String> {
+    if let Some(global) = &args.instruct {
+        return Some(global);
+    }
+    if args.instruct_values.is_empty() {
+        return None;
+    }
+    args.instruct_values
+        .get(if args.instruct_values.len() == 1 {
+            0
+        } else {
+            idx
+        })
+}
+
+fn select_seed(args: &Args, idx: usize) -> Option<u64> {
+    if args.seeds.is_empty() {
+        return None;
+    }
+    args.seeds
+        .get(if args.seeds.len() == 1 { 0 } else { idx })
+        .copied()
+}
+
+fn abbreviate(text: &str, max_chars: usize) -> String {
+    let mut chars = text.chars();
+    let abbreviated: String = chars.by_ref().take(max_chars).collect();
+    if chars.next().is_some() {
+        format!("{abbreviated}...")
+    } else {
+        abbreviated
+    }
 }
 
 fn require_arg(raw: &[String], i: usize, flag: &str) -> Result<String, Box<dyn Error>> {
@@ -319,7 +401,7 @@ fn find_tokenizer_json(model_dir: &Path) -> Result<PathBuf, Box<dyn Error>> {
         "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
         "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
     ] {
-        if let Some(base_dir) = locate_hf_model_snapshot(base_id) {
+        if let Some(base_dir) = locate_hf_model_snapshot(base_id, "tokenizer.json") {
             let path = base_dir.join("tokenizer.json");
             if path.exists() {
                 return Ok(path);
@@ -329,7 +411,7 @@ fn find_tokenizer_json(model_dir: &Path) -> Result<PathBuf, Box<dyn Error>> {
     Err("missing tokenizer.json; pass a model dir with tokenizer.json, create models/tokenizer.json, or keep a Base model snapshot in the HuggingFace cache".into())
 }
 
-fn locate_hf_model_snapshot(model_id: &str) -> Option<PathBuf> {
+fn locate_hf_model_snapshot(model_id: &str, required_file: &str) -> Option<PathBuf> {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .ok()
@@ -342,7 +424,7 @@ fn locate_hf_model_snapshot(model_id: &str) -> Option<PathBuf> {
         .join("snapshots");
     let entries = fs::read_dir(snapshots).ok()?;
     for entry in entries.flatten() {
-        let candidate = entry.path().join("tokenizer.json");
+        let candidate = entry.path().join(required_file);
         if candidate.exists() {
             return Some(entry.path());
         }
@@ -410,16 +492,18 @@ fn write_wav(path: &Path, samples: &[f32], sample_rate: u32) -> Result<(), Box<d
 
 fn print_usage() {
     eprintln!(
-        "Usage: synthesize_batch --model-dir <snapshot> [--text <text> ...] [--texts lines.txt]\n\
+        "Usage: synthesize_batch [--model-dir <snapshot>] [--text <text> ...] [--texts lines.txt]\n\
          Options:\n\
+           --model <id>             HuggingFace model id (default: Qwen/Qwen3-TTS-12Hz-0.6B-Base)\n\
+           --model-dir <snapshot>   Local model snapshot directory; auto-searches HF cache if omitted\n\
            --output-dir <dir>       Output WAV directory (default: batch-output)\n\
            --prefix <name>          Output file prefix (default: clip)\n\
            --language <name>        Language (default: auto)\n\
            --speaker <name>         Speaker condition\n\
            --instruct <text>        VoiceDesign/CustomVoice style instruction\n\
-           --instruct-file <path>   Read VoiceDesign/CustomVoice instruction from UTF-8 text file\n\
-           --seed <n>               Fixed sampling seed\n\
-           --max-new-tokens <n>     Max generated frames (default: 128)\n\
+           --instruct-file <path>   Read instruction from UTF-8 text file; repeat once per line to switch voices\n\
+           --seed <n>               Fixed sampling seed; repeat once per line to vary seeds\n\
+           --max-new-tokens <n>     Max generated frames (default: 4096)\n\
            --temperature <f>        Sampling temperature (default: 0.9)\n\
            --top-k <n>              Top-k sampling (default: 50)\n\
            --top-p <f>              Top-p sampling (default: 1.0)\n\
@@ -454,7 +538,10 @@ fn runtime_device() -> candle_core::Device {
 
 #[cfg(test)]
 mod tests {
-    use super::{make_output_path, parse_args, parse_text_lines, recommended_max_new_tokens};
+    use super::{
+        make_output_path, parse_args, parse_text_lines, recommended_max_new_tokens,
+        select_instruct, select_seed, validate_per_line_options,
+    };
     use std::path::Path;
 
     #[test]
@@ -481,9 +568,63 @@ mod tests {
             "--no-save-tokens".into(),
         ])
         .unwrap();
-        assert_eq!(args.seed, Some(42));
+        assert_eq!(args.seeds, vec![42]);
+        assert_eq!(select_seed(&args, 5), Some(42));
         assert!(!args.save_tokens);
         assert!(args.save_tokens_dir.is_none());
+    }
+
+    #[test]
+    fn repeated_seed_can_match_each_line() {
+        let args = parse_args(vec![
+            "--model-dir".into(),
+            "model".into(),
+            "--seed".into(),
+            "11".into(),
+            "--seed".into(),
+            "22".into(),
+        ])
+        .unwrap();
+        validate_per_line_options(&args, 2).unwrap();
+        assert_eq!(select_seed(&args, 0), Some(11));
+        assert_eq!(select_seed(&args, 1), Some(22));
+        assert!(validate_per_line_options(&args, 3).is_err());
+    }
+
+    #[test]
+    fn repeated_instruct_file_can_match_each_line() {
+        let base = std::env::temp_dir().join(format!(
+            "qwen3tts-batch-instruct-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let a = base.join("voice_a.txt");
+        let b = base.join("voice_b.txt");
+        std::fs::write(&a, "voice A").unwrap();
+        std::fs::write(&b, "voice B").unwrap();
+
+        let args = parse_args(vec![
+            "--model-dir".into(),
+            "model".into(),
+            "--instruct-file".into(),
+            a.display().to_string(),
+            "--instruct-file".into(),
+            b.display().to_string(),
+        ])
+        .unwrap();
+        validate_per_line_options(&args, 2).unwrap();
+        assert_eq!(
+            select_instruct(&args, 0).map(String::as_str),
+            Some("voice A")
+        );
+        assert_eq!(
+            select_instruct(&args, 1).map(String::as_str),
+            Some("voice B")
+        );
+        assert!(validate_per_line_options(&args, 3).is_err());
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

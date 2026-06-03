@@ -29,6 +29,14 @@ pub fn resolve_tokenizer_weight_dir_from(cwd: &Path, exe_path: Option<&Path>) ->
         }
     }
 
+    if let Ok(path) = std::env::var("QWEN3TTS_TOKENIZER_WEIGHT_DIR") {
+        push_unique(&mut candidates, PathBuf::from(path));
+    }
+
+    if let Some(cache_dir) = default_tokenizer_cache_dir() {
+        push_unique(&mut candidates, cache_dir);
+    }
+
     candidates
 }
 
@@ -63,7 +71,8 @@ pub fn ensure_tokenizer_weight_dir() -> Result<PathBuf> {
             missing_weights_error(&candidates)
         ))
     })?;
-    let output = converter.base_dir.join("weights").join("tokenizer");
+    let output = default_tokenizer_cache_dir()
+        .unwrap_or_else(|| converter.base_dir.join("weights").join("tokenizer"));
 
     run_tokenizer_converter(&converter, &output)?;
     if is_complete_tokenizer_weight_dir(&output) {
@@ -247,6 +256,28 @@ fn push_unique(candidates: &mut Vec<PathBuf>, path: PathBuf) {
     }
 }
 
+fn default_tokenizer_cache_dir() -> Option<PathBuf> {
+    if let Ok(path) = std::env::var("QWEN3TTS_TOKENIZER_CACHE_DIR") {
+        return Some(PathBuf::from(path).join("tokenizer-12hz"));
+    }
+    if let Ok(path) = std::env::var("LOCALAPPDATA") {
+        return Some(
+            PathBuf::from(path)
+                .join("qwen3tts-rs")
+                .join("tokenizer-12hz"),
+        );
+    }
+    std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .ok()
+        .map(PathBuf::from)
+        .map(|home| {
+            home.join(".cache")
+                .join("qwen3tts-rs")
+                .join("tokenizer-12hz")
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -273,7 +304,14 @@ mod tests {
             Some(Path::new("C:/app/synthesize.exe")),
         );
 
-        assert_eq!(candidates, vec![Path::new("C:/app/weights/tokenizer")]);
+        assert_eq!(candidates[0], Path::new("C:/app/weights/tokenizer"));
+        assert_eq!(
+            candidates
+                .iter()
+                .filter(|p| *p == Path::new("C:/app/weights/tokenizer"))
+                .count(),
+            1
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.6 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.8 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
@@ -59,7 +59,21 @@ converter:
 tools\convert_weights.py
 ```
 
-Converted weights are written into the release directory:
+Automatic conversion now prefers a user-level cache, so a new release directory
+does not need to reconvert more than 1GB of tokenizer decoder weights:
+
+```text
+%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz\
+```
+
+You can override the cache or weight directory with environment variables:
+
+```powershell
+$env:QWEN3TTS_TOKENIZER_CACHE_DIR = "D:\qwen3tts-cache"
+$env:QWEN3TTS_TOKENIZER_WEIGHT_DIR = "D:\qwen3tts-cache\tokenizer-12hz"
+```
+
+Manual conversion can still write into the release directory:
 
 ```text
 weights\tokenizer\
@@ -70,8 +84,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.6-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.6-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.8-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.8-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -88,6 +102,7 @@ If you already have converted weights, place them in one of these locations:
 ```text
 <current PowerShell directory>\weights\tokenizer\
 <directory containing synthesize.exe>\weights\tokenizer\
+%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz\
 ```
 
 The release app checks those paths in that order. If you run the exe from a
@@ -185,11 +200,11 @@ Base models do not provide stable voice control. Use VoiceDesign plus
 the model weights provide a speaker id map; common Base/VoiceDesign snapshots
 usually have an empty speaker map.
 
-If long Chinese text is truncated, increase `--max-new-tokens`. A practical
+If long Chinese text is truncated, increase `--max-new-tokens`. A conservative
 starting point is:
 
 ```text
-max-new-tokens ~= Chinese character count x 3
+max-new-tokens ~= Chinese character count x 4
 ```
 
 ## Batch Synthesis
@@ -211,6 +226,16 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --text "你好，測試第二句"
 ```
 
+If the default 0.6B Base snapshot is already in the HuggingFace cache, batch
+mode can omit `--model-dir`:
+
+```powershell
+.\synthesize_batch.exe `
+  --text "今天天氣真好" `
+  --output-dir batch-output `
+  --language chinese
+```
+
 You can also use a text file:
 
 ```powershell
@@ -227,6 +252,21 @@ You can also use a text file:
   --no-save-tokens
 ```
 
+For per-line voice and seed control, repeat `--instruct-file` and `--seed`.
+The repeated counts must match the number of text lines:
+
+```powershell
+.\synthesize_batch.exe `
+  --model-dir $model `
+  --text "First line" `
+  --text "Second line" `
+  --instruct-file .\voice_a.txt `
+  --instruct-file .\voice_b.txt `
+  --seed 101 `
+  --seed 202 `
+  --output-dir batch-output
+```
+
 Batch output file names use only the numeric index:
 
 ```text
@@ -239,15 +279,17 @@ batch-output\qwen1p7b_0002.wav
 | Option | Description |
 | --- | --- |
 | `--model-dir` | Qwen3-TTS model snapshot directory |
+| `--model` | Batch mode HuggingFace model id; used for local HF cache auto-search when `--model-dir` is omitted |
 | `--language` | Language condition. Use `chinese` for Chinese prompts |
 | `--speaker` | Optional speaker condition; usually no effect when the model has no speaker id map |
 | `--instruct` | VoiceDesign/CustomVoice voice or style instruction |
-| `--instruct-file` | Read voice or style instruction from a UTF-8 text file |
-| `--seed` | Fixed sampling seed for more reproducible output under the same text and conditions |
-| `--max-new-tokens` | Maximum generated frame count. Use `16` for short smoke tests; for long Chinese text, start with character count x 3 |
+| `--instruct-file` | Read voice or style instruction from a UTF-8 text file; in batch mode repeat it once per line to switch voices |
+| `--seed` | Fixed sampling seed; in batch mode repeat it once per line to vary seeds |
+| `--max-new-tokens` | Maximum generated frame count. Use `16` for short smoke tests; for long Chinese text, start with character count x 4 |
 | `--temperature` | Sampling temperature, default `0.9` |
 | `--top-k` | Top-k sampling, default `50` |
 | `--top-p` | Top-p sampling, default `1.0` |
+| `--speed` | Speech speed factor, default `1.0` |
 | `--save-tokens-dir` | Batch mode token-file output directory |
 | `--no-save-tokens` | Disable batch token-file output |
 
@@ -280,6 +322,10 @@ If `rms=0` and `peak=0`, the WAV is silent.
   `tokenizer.json`.
 - `v0.1.6` adds `--instruct-file`, `--seed`, batch `--no-save-tokens`, and
   batch warnings for long Chinese text with low `--max-new-tokens`.
+- `v0.1.7` adds `--speed` and `--version`, and fixes Chinese truncation
+  guidance.
+- `v0.1.8` adds per-line batch `--instruct-file`/`--seed`, batch 0.6B model
+  auto-search, and a global tokenizer decoder cache.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.

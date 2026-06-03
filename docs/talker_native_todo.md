@@ -37,6 +37,12 @@
   - Added batch `--no-save-tokens` as an explicit token-output off switch.
   - Batch now warns when Chinese text is likely to need a larger `--max-new-tokens`.
   - Release guides now show 0.6B Base usage for lower hardware requirements.
+- 2026-06-03 v0.1.8 batch/cache update:
+  - Batch now supports repeated `--instruct-file`, using one file globally or one file per text line.
+  - Batch now supports repeated `--seed`, using one seed globally or one seed per text line.
+  - Batch can auto-search the local HuggingFace cache for the default 0.6B Base model when `--model-dir` is omitted.
+  - Tokenizer decoder auto-conversion now writes to a user-level cache by default, avoiding repeated >1GB conversion for each new release directory.
+  - Remaining larger item: true model quantization (Q4/Q8) still requires calibration and numeric validation.
 
 ## TODO
 
@@ -159,6 +165,7 @@
    - Check whether CustomVoice 1.7B requires the same instruct path for tone-only control.
 
 10. Remaining release polish.
-   - Consider a shared tokenizer cache to avoid repeated first-run conversion in new release directories.
+   - Shared tokenizer cache implemented in v0.1.8.
    - Decide whether CUDA release zips should exclude Python scripts to reduce package size.
    - Keep batch token export as `--save-tokens-dir`; add `--tokens` batch replay only if a concrete workflow needs it.
+   - Model quantization (Q4/Q8) remains a larger follow-up because codec/vocoder quality needs calibrated safetensors quantization, not LLM-style GGUF quantization.
