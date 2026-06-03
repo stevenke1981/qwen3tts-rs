@@ -32,6 +32,7 @@ use crate::talker::sampling::{Sampler, SamplingOptions as TalkerSamplingOptions}
 use crate::talker::{
     InputBuilder, TalkerConfig, TalkerForConditionalGeneration, TalkerWeightLoader,
 };
+use crate::text_frontend::speaker_presets;
 use crate::text_frontend::token_parser::TokenParser;
 use crate::text_frontend::{SynthesisOptions, TextFrontend, TokenStream};
 use crate::{Error, Result};
@@ -191,8 +192,13 @@ impl TextFrontend for CandleLLM {
 
         // ── 1. 文字 → token 序列 ──
         let prompt_ids = self.build_prompt_ids(text)?;
-        let instruct_ids = options
-            .instruct
+        let requested_speaker = options.speaker.as_deref();
+        let effective_speaker = requested_speaker
+            .and_then(speaker_presets::canonical_name)
+            .or(requested_speaker);
+        let effective_instruct =
+            speaker_presets::effective_instruct(options.instruct.clone(), effective_speaker);
+        let instruct_ids = effective_instruct
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
@@ -213,7 +219,7 @@ impl TextFrontend for CandleLLM {
                 &prompt_ids,
                 instruct_ids.as_deref(),
                 &options.language,
-                options.speaker.as_deref(),
+                effective_speaker,
             )
             .map_err(map_candle_err)?;
 
@@ -235,8 +241,8 @@ impl TextFrontend for CandleLLM {
                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
                 text.hash(&mut hasher);
                 options.language.hash(&mut hasher);
-                options.speaker.hash(&mut hasher);
-                options.instruct.hash(&mut hasher);
+                effective_speaker.hash(&mut hasher);
+                effective_instruct.hash(&mut hasher);
                 hasher.finish()
             });
             let mut sampler = Sampler::new(seed);

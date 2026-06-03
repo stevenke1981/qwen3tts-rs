@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.8 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.9 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
@@ -84,8 +84,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.8-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.8-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.9-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.9-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -196,9 +196,65 @@ You can keep reusable voice settings in a UTF-8 text file:
 ```
 
 Base models do not provide stable voice control. Use VoiceDesign plus
-`--instruct` when you need a specific voice. `--speaker` only has an effect when
-the model weights provide a speaker id map; common Base/VoiceDesign snapshots
-usually have an empty speaker map.
+`--instruct`, or the built-in speaker presets below, when you need a specific
+voice. `--speaker` uses a real speaker id when CustomVoice weights provide a
+speaker map. If the loaded model has no speaker map, known speaker names are
+translated into a VoiceDesign `--instruct` fallback.
+
+## Built-In Speaker Presets
+
+Starting in `v0.1.9`, the CLI understands the 9 official Qwen CustomVoice
+speaker names. List them with:
+
+```powershell
+.\synthesize.exe --list-speakers
+.\synthesize_batch.exe --list-speakers
+```
+
+| Speaker | Description | Recommended language |
+| --- | --- | --- |
+| `Vivian` | Bright young female voice | Chinese |
+| `Serena` | Warm, gentle young female voice | Chinese |
+| `Uncle_Fu` | Mature male voice with a mellow timbre | Chinese |
+| `Dylan` | Youthful Beijing male voice | Chinese (Beijing) |
+| `Eric` | Lively Chengdu male voice | Chinese (Sichuan) |
+| `Ryan` | Dynamic male voice with rhythmic delivery | English |
+| `Aiden` | Sunny American male voice | English |
+| `Ono_Anna` | Playful Japanese female voice | Japanese |
+| `Sohee` | Warm Korean female voice | Korean |
+
+CustomVoice models use these names as real speaker ids:
+
+```powershell
+$model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice\snapshots\<sha>"
+.\synthesize.exe `
+  --text "Hello from the native Rust Qwen3-TTS build" `
+  --backend candle `
+  --language english `
+  --model-dir $model `
+  --speaker Ryan `
+  --output ryan.wav `
+  --max-new-tokens 64
+```
+
+For VoiceDesign or Base models without a speaker map, the same flag injects the
+matching instruction preset. You can combine `--speaker` with `--instruct` or
+`--instruct-file`: the speaker preset gives the broad voice, and your instruction
+adds style or delivery details.
+
+```powershell
+$model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.7B-VoiceDesign\snapshots\<sha>"
+.\synthesize.exe `
+  --text "Welcome to the native Rust Qwen3-TTS build" `
+  --backend candle `
+  --language english `
+  --model-dir $model `
+  --speaker Vivian `
+  --instruct "warm and friendly, natural speaking pace" `
+  --seed 20260604 `
+  --output vivian_voicedesign.wav `
+  --max-new-tokens 80
+```
 
 If long Chinese text is truncated, increase `--max-new-tokens`. A conservative
 starting point is:
@@ -281,7 +337,8 @@ batch-output\qwen1p7b_0002.wav
 | `--model-dir` | Qwen3-TTS model snapshot directory |
 | `--model` | Batch mode HuggingFace model id; used for local HF cache auto-search when `--model-dir` is omitted |
 | `--language` | Language condition. Use `chinese` for Chinese prompts |
-| `--speaker` | Optional speaker condition; usually no effect when the model has no speaker id map |
+| `--speaker` | Speaker condition; supports built-in presets such as `Vivian`, `Uncle_Fu`, and `Dylan`. CustomVoice uses real speaker ids; other models use instruct fallback |
+| `--list-speakers` | Show built-in speaker presets |
 | `--instruct` | VoiceDesign/CustomVoice voice or style instruction |
 | `--instruct-file` | Read voice or style instruction from a UTF-8 text file; in batch mode repeat it once per line to switch voices |
 | `--seed` | Fixed sampling seed; in batch mode repeat it once per line to vary seeds |
@@ -326,6 +383,9 @@ If `rms=0` and `peak=0`, the WAV is silent.
   guidance.
 - `v0.1.8` adds per-line batch `--instruct-file`/`--seed`, batch 0.6B model
   auto-search, and a global tokenizer decoder cache.
+- `v0.1.9` adds the 9 built-in CustomVoice speaker presets, `--list-speakers`,
+  and automatic instruct fallback for Base/VoiceDesign models without a speaker
+  map.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.

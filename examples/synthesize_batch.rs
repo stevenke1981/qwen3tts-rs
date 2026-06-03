@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
+use qwen3tts::text_frontend::speaker_presets;
 use qwen3tts::text_frontend::{CandleLLM, SynthesisOptions, TextFrontend};
 use qwen3tts::{Decoder12Hz, DecoderConfig};
 
@@ -131,6 +132,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         };
         if let Some(instruct) = &options.instruct {
             println!("  instruct: {}", abbreviate(instruct, 80));
+        }
+        if let Some(speaker) = &options.speaker {
+            println!("  speaker: {speaker}");
         }
         if let Some(seed) = options.seed {
             println!("  seed: {seed}");
@@ -256,6 +260,10 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
             }
             "--version" | "-V" => {
                 println!("qwen3tts-rs {}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
+            "--list-speakers" => {
+                print_speakers();
                 std::process::exit(0);
             }
             "--help" | "-h" => {
@@ -499,7 +507,8 @@ fn print_usage() {
            --output-dir <dir>       Output WAV directory (default: batch-output)\n\
            --prefix <name>          Output file prefix (default: clip)\n\
            --language <name>        Language (default: auto)\n\
-           --speaker <name>         Speaker condition\n\
+           --speaker <name>         Speaker condition or built-in preset: Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna, Sohee\n\
+           --list-speakers          Show built-in speaker presets\n\
            --instruct <text>        VoiceDesign/CustomVoice style instruction\n\
            --instruct-file <path>   Read instruction from UTF-8 text file; repeat once per line to switch voices\n\
            --seed <n>               Fixed sampling seed; repeat once per line to vary seeds\n\
@@ -512,6 +521,20 @@ fn print_usage() {
            --no-save-tokens         Disable token file output even if a wrapper passes --save-tokens-dir\n\
            --version / -V           Show version info"
     );
+}
+
+fn print_speakers() {
+    println!("Built-in Qwen CustomVoice speaker presets:");
+    for name in speaker_presets::speaker_names() {
+        let preset = speaker_presets::lookup(name).expect("known speaker preset");
+        println!(
+            "  {:<10} {:<18} {}",
+            preset.name, preset.native_language, preset.description
+        );
+    }
+    println!();
+    println!("CustomVoice models use these as real speaker ids.");
+    println!("Base/VoiceDesign models use the same names as instruct presets.");
 }
 
 fn runtime_device() -> candle_core::Device {

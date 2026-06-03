@@ -43,6 +43,11 @@
   - Batch can auto-search the local HuggingFace cache for the default 0.6B Base model when `--model-dir` is omitted.
   - Tokenizer decoder auto-conversion now writes to a user-level cache by default, avoiding repeated >1GB conversion for each new release directory.
   - Remaining larger item: true model quantization (Q4/Q8) still requires calibration and numeric validation.
+- 2026-06-04 v0.1.9 speaker preset update:
+  - Added the 9 official Qwen CustomVoice speaker names: `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`, `Eric`, `Ryan`, `Aiden`, `Ono_Anna`, and `Sohee`.
+  - `--speaker` is still passed through as a real speaker id for CustomVoice models with `spk_id`.
+  - Base/VoiceDesign snapshots with empty speaker maps now translate known speaker names into a natural-language instruct fallback.
+  - Added `--list-speakers` to single and batch CLIs.
 
 ## TODO
 
@@ -163,6 +168,7 @@
    - Run a real 1.7B-VoiceDesign sample with `--instruct` on CUDA and compare style controllability against upstream PyTorch.
    - Add a PyTorch fixture for instruct prompt embedding once an official VoiceDesign checkpoint is available locally.
    - Check whether CustomVoice 1.7B requires the same instruct path for tone-only control.
+   - Validate each built-in speaker preset against upstream CustomVoice audio once a CustomVoice snapshot is available locally.
 
 10. Remaining release polish.
    - Shared tokenizer cache implemented in v0.1.8.

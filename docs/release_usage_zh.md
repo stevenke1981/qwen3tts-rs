@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.8 Windows x64 / Windows x64 CUDA`
+適用版本：`qwen3tts-rs v0.1.9 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
@@ -75,8 +75,8 @@ weights\tokenizer\
 
 ## CPU 與 CUDA 版本
 
-- `qwen3tts-rs-v0.1.8-windows-x64.zip`：CPU/Candle build。
-- `qwen3tts-rs-v0.1.8-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+- `qwen3tts-rs-v0.1.9-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.9-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
 
 建置 CUDA 版 release：
 
@@ -179,7 +179,58 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --max-new-tokens 64
 ```
 
-Base 模型不支援穩定音色控制；若需要指定音色，請使用 VoiceDesign 搭配 `--instruct`。`--speaker` 只有在模型權重本身提供 speaker id 對應時才有實際效果，Base/VoiceDesign 常見 snapshot 的 speaker map 通常是空的。
+Base 模型不支援穩定音色控制；若需要指定音色，請使用 VoiceDesign 搭配 `--instruct` 或下面的內建 speaker preset。`--speaker` 在 CustomVoice 權重提供 speaker id map 時會使用真實 speaker；若模型沒有 speaker map，app 會把已知 speaker 名稱轉成 VoiceDesign `--instruct` fallback。
+
+## 內建 speaker preset
+
+`v0.1.9` 起支援 Qwen CustomVoice 官方 9 個 speaker 名稱。可先列出清單：
+
+```powershell
+.\synthesize.exe --list-speakers
+.\synthesize_batch.exe --list-speakers
+```
+
+| Speaker | 說明 | 建議語言 |
+| --- | --- | --- |
+| `Vivian` | 明亮的年輕女性聲線 | Chinese |
+| `Serena` | 溫暖、柔和的年輕女性聲線 | Chinese |
+| `Uncle_Fu` | 成熟男性，音色醇厚 | Chinese |
+| `Dylan` | 年輕北京男性聲線 | Chinese (Beijing) |
+| `Eric` | 活潑成都男性聲線 | Chinese (Sichuan) |
+| `Ryan` | 節奏感較強的男性聲線 | English |
+| `Aiden` | 陽光美式男性聲線 | English |
+| `Ono_Anna` | 活潑日文女性聲線 | Japanese |
+| `Sohee` | 溫暖韓文女性聲線 | Korean |
+
+CustomVoice 模型會把這些名稱當作真實 speaker id：
+
+```powershell
+$model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice\snapshots\<sha>"
+.\synthesize.exe `
+  --text "你好，今天想和你聊聊天" `
+  --backend candle `
+  --language chinese `
+  --model-dir $model `
+  --speaker Vivian `
+  --output vivian.wav `
+  --max-new-tokens 64
+```
+
+VoiceDesign 或 Base 模型沒有 speaker map 時，相同指令會自動加入對應的 instruct preset；也可以與 `--instruct` / `--instruct-file` 疊加，讓 preset 控制大方向、文字指令控制語氣：
+
+```powershell
+$model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.7B-VoiceDesign\snapshots\<sha>"
+.\synthesize.exe `
+  --text "歡迎使用 Qwen3-TTS Rust 原生版本" `
+  --backend candle `
+  --language chinese `
+  --model-dir $model `
+  --speaker Uncle_Fu `
+  --instruct "語氣親切，像在錄製教學旁白" `
+  --seed 20260604 `
+  --output uncle_fu_voicedesign.wav `
+  --max-new-tokens 80
+```
 
 長中文句子若 `--max-new-tokens` 太低會被截斷。保守估算可用：
 
@@ -258,7 +309,8 @@ batch-output\qwen1p7b_0002.wav
 | `--model-dir` | Qwen3-TTS 模型 snapshot 目錄 |
 | `--model` | batch 模式可指定 HuggingFace model id；省略 `--model-dir` 時會自動找本機 HF cache |
 | `--language` | 語言，中文建議使用 `chinese` |
-| `--speaker` | 說話者條件；若模型沒有 speaker id map，通常無作用 |
+| `--speaker` | 說話者條件；支援內建 `Vivian`、`Uncle_Fu`、`Dylan` 等 preset，CustomVoice 走真實 speaker id，其他模型轉成 instruct fallback |
+| `--list-speakers` | 顯示內建 speaker preset 清單 |
 | `--instruct` | VoiceDesign/CustomVoice 音色或語氣指令 |
 | `--instruct-file` | 從 UTF-8 文字檔讀取音色或語氣指令；batch 可重複傳入做到逐句切換 |
 | `--seed` | 固定取樣 seed；batch 可重複傳入做到逐句 seed |
@@ -297,6 +349,7 @@ with wave.open(name, "rb") as w:
 - `v0.1.6` 新增 `--instruct-file`、`--seed`、batch `--no-save-tokens`，並讓 batch 對長中文提示 `--max-new-tokens` 建議。
 - `v0.1.7` 新增 `--speed` 與 `--version`，並修正中文截斷建議。
 - `v0.1.8` 新增 batch 逐句 `--instruct-file`/`--seed`、batch 0.6B 模型自動尋找，以及 tokenizer decoder 全域快取。
+- `v0.1.9` 新增 9 個內建 CustomVoice speaker presets、`--list-speakers`，並讓 Base/VoiceDesign 在無 speaker map 時自動轉成 instruct fallback。
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
 - 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。

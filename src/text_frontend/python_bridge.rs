@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::Result;
+use crate::text_frontend::speaker_presets;
 use crate::text_frontend::token_parser::TokenParser;
 use crate::text_frontend::{SynthesisOptions, TextFrontend, TokenStream};
 
@@ -84,6 +85,12 @@ impl PythonBridge {
     /// 執行 Python 子行程並回傳 Token 位元組
     fn run_python(&self, text: &str, options: &SynthesisOptions) -> Result<Vec<u8>> {
         let mut cmd = Command::new(&self.python_path);
+        let requested_speaker = options.speaker.as_deref();
+        let effective_speaker = requested_speaker
+            .and_then(speaker_presets::canonical_name)
+            .or(requested_speaker);
+        let effective_instruct =
+            speaker_presets::effective_instruct(options.instruct.clone(), effective_speaker);
 
         cmd.arg(&self.script_path)
             .arg("--text")
@@ -93,9 +100,9 @@ impl PythonBridge {
             .arg("--language")
             .arg(&options.language)
             .arg("--speaker")
-            .arg(options.speaker.as_deref().unwrap_or(""))
+            .arg(effective_speaker.unwrap_or(""))
             .arg("--instruct")
-            .arg(options.instruct.as_deref().unwrap_or(""))
+            .arg(effective_instruct.as_deref().unwrap_or(""))
             .arg("--temperature")
             .arg(options.temperature.to_string())
             .arg("--top-k")

@@ -33,6 +33,7 @@
 //! - **CandleLLM** (🔜 規劃中): 純 Rust/Candle + GGUF 權重
 
 mod python_bridge;
+pub mod speaker_presets;
 mod token_parser;
 
 #[cfg(feature = "candle-llm")]

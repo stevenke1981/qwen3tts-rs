@@ -37,6 +37,7 @@
 use std::path::{Path, PathBuf};
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
+use qwen3tts::text_frontend::speaker_presets;
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend, TokenStream};
 use qwen3tts::{Decoder12Hz, DecoderConfig};
 
@@ -297,6 +298,10 @@ fn main() {
                 println!("qwen3tts-rs {}", env!("CARGO_PKG_VERSION"));
                 return;
             }
+            "--list-speakers" => {
+                print_speakers();
+                return;
+            }
             "--help" | "-h" => {
                 print_usage();
                 return;
@@ -338,6 +343,15 @@ fn main() {
     println!("後端    : {:?}", backend);
     println!("語言    : {language}");
     println!("輸出    : {output_path}");
+    if let Some(spk) = &speaker {
+        println!("speaker : {spk}");
+        if let Some(preset) = speaker_presets::lookup(spk) {
+            println!(
+                "preset  : {} / {} / {}",
+                preset.name, preset.description, preset.native_language
+            );
+        }
+    }
     if speed != 1.0 {
         println!("語速    : {speed}x");
     }
@@ -621,6 +635,9 @@ fn print_usage() {
   --backend / -b     文字前端後端：python | candle（預設: {backend_default}）
   --language / -l    語言（預設: auto）
   --speaker / -s     說話者名稱（可選）
+                    內建: Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna, Sohee
+                    CustomVoice 有 speaker id 時走真實 speaker；其他模型轉成 instruct preset
+  --list-speakers    顯示內建 speaker preset 清單
   --instruct         VoiceDesign/CustomVoice 音色或語氣指令
   --instruct-file    從 UTF-8 文字檔讀取 VoiceDesign/CustomVoice 指令
   --seed N           固定取樣 seed，讓相同文字/條件更容易重現
@@ -651,6 +668,13 @@ fn print_usage() {
       --language chinese \\
       --instruct \"年輕女性，台灣口語，溫柔親切，語速自然\"
 
+  # 內建 speaker preset；VoiceDesign/Base 會自動轉成 instruct fallback
+  cargo run --example synthesize --features \"candle-llm cuda\" -- \\
+      --text \"你好，今天想和你聊聊天\" --backend candle \\
+      --model-dir <Qwen3-TTS-12Hz-1.7B-VoiceDesign-snapshot> \\
+      --language chinese \\
+      --speaker Vivian
+
   # 從檔案讀音色設定，並固定 seed
   cargo run --example synthesize --features \"candle-llm cuda\" -- \\
       --text \"你好\" --backend candle \\
@@ -670,4 +694,18 @@ fn print_usage() {
     Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 "
     );
+}
+
+fn print_speakers() {
+    println!("Built-in Qwen CustomVoice speaker presets:");
+    for name in speaker_presets::speaker_names() {
+        let preset = speaker_presets::lookup(name).expect("known speaker preset");
+        println!(
+            "  {:<10} {:<18} {}",
+            preset.name, preset.native_language, preset.description
+        );
+    }
+    println!();
+    println!("CustomVoice models use these as real speaker ids.");
+    println!("Base/VoiceDesign models use the same names as instruct presets.");
 }
