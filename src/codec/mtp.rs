@@ -5,8 +5,8 @@
 use candle_core::{Device, Module, Tensor};
 use candle_nn as nn;
 
-use crate::quantization::VarBuilder;
 use crate::Error;
+use crate::quantization::VarBuilder;
 
 /// MTP 解碼器輸出
 pub struct MtpOutput {

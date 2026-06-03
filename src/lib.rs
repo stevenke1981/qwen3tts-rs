@@ -196,6 +196,15 @@ impl DecoderConfig {
         }
     }
 
+    /// 建立可處理指定幀數的 12Hz 即時模式配置。
+    ///
+    /// 容量會保留至少預設值，短句仍沿用原本的 64 幀配置。
+    pub fn realtime_with_capacity(capacity: usize) -> Self {
+        let mut config = Self::realtime();
+        config.ring_buffer_capacity = config.ring_buffer_capacity.max(capacity);
+        config
+    }
+
     /// 建立 25Hz 高品質模式配置
     pub fn high_quality() -> Self {
         Self {
@@ -266,4 +275,27 @@ pub fn mean_squared_error(a: &candle_core::Tensor, b: &candle_core::Tensor) -> R
     let mse = diff.sqr()?.sum_all()?.to_scalar::<f64>()?;
     let numel = a.flatten_all()?.elem_count() as f64;
     Ok(mse / numel)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DecoderConfig, DecoderMode};
+
+    #[test]
+    fn realtime_with_capacity_expands_ring_buffer() {
+        let config = DecoderConfig::realtime_with_capacity(80);
+
+        assert_eq!(config.mode, DecoderMode::RealTime);
+        assert_eq!(config.ring_buffer_capacity, 80);
+    }
+
+    #[test]
+    fn realtime_with_capacity_keeps_default_for_short_requests() {
+        let config = DecoderConfig::realtime_with_capacity(8);
+
+        assert_eq!(
+            config.ring_buffer_capacity,
+            DecoderConfig::realtime().ring_buffer_capacity
+        );
+    }
 }

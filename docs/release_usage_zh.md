@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.3 Windows x64`
+適用版本：`qwen3tts-rs v0.1.4 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
@@ -57,6 +57,19 @@ weights\tokenizer\
 ```
 
 只有使用 Python fallback 時，才需要 Python 以及 `torch safetensors huggingface_hub numpy`。
+
+## CPU 與 CUDA 版本
+
+- `qwen3tts-rs-v0.1.4-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.4-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+
+建置 CUDA 版 release：
+
+```powershell
+.\tools\package_release.ps1 -Cuda
+```
+
+預設 `-CudaComputeCap 86` 對應 RTX 3070 Ti；其他 GPU 可自行指定 Candle 接受的整數格式，例如 `75`、`89`。
 
 若你已經有轉好的權重，也可以直接放在下列其中一個位置：
 
@@ -120,6 +133,13 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --text "你好，測試第二句"
 ```
 
+輸出檔名只使用數字索引，例如：
+
+```text
+batch-output\qwen1p7b_0001.wav
+batch-output\qwen1p7b_0002.wav
+```
+
 也可以使用文字檔：
 
 ```powershell
@@ -169,8 +189,10 @@ with wave.open(name, "rb") as w:
 ## 已知狀態
 
 - 1.7B native Candle 短句已可產生非靜音語音。
-- release 是 CPU/Candle build。第一次載入 1.7B 權重會花較久時間。
+- `v0.1.4` 提供 CPU 與 CUDA 兩種 release；CUDA binary 會優先使用 `CUDA:0`。
+- decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
+- 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。
 - 大型模型權重與 tokenizer decoder 權重未包含在 zip 內。
 - `v0.1.1` 修正 release app 只用目前工作目錄找 `weights/tokenizer` 的問題；現在也會檢查 exe 所在目錄。
 - `v0.1.2` 開始，若找不到 Rust tokenizer decoder 權重，app 會自動嘗試執行 bundled `tools/convert_weights.py tokenizer`。

@@ -137,10 +137,11 @@ impl Attention {
             .contiguous()?;
         let v = v
             .reshape((b, seq_len, self.num_kv_heads, self.head_dim))?
-            .permute((0, 2, 1, 3))?;
+            .permute((0, 2, 1, 3))?
+            .contiguous()?;
 
-        let q_rot = candle_nn::rotary_emb::rope(&q_r, &cos, &sin)?;
-        let k_rot = candle_nn::rotary_emb::rope(&k_r, &cos, &sin)?;
+        let q_rot = apply_rope_half(&q_r, &cos, &sin)?;
+        let k_rot = apply_rope_half(&k_r, &cos, &sin)?;
 
         let n_repeat = self.num_heads / self.num_kv_heads;
 
@@ -151,7 +152,8 @@ impl Attention {
         };
 
         let scale = (self.head_dim as f64).sqrt().recip();
-        let attn = (q_rot.matmul(&k_e.transpose(2, 3)?)? * scale)?;
+        let k_t = k_e.transpose(2, 3)?.contiguous()?;
+        let attn = (q_rot.matmul(&k_t)? * scale)?;
         let attn = apply_sliding_window_mask(&attn, seq_len, self.sliding_window)?;
         let attn = candle_nn::ops::softmax(&attn, 3)?;
         let attn = attn.matmul(&v_e)?;
@@ -170,6 +172,25 @@ fn repeat_kv(x: &Tensor, n: usize) -> Result<Tensor> {
     let (b, kv, s, d) = x.dims4()?;
     let x = x.unsqueeze(2)?.expand((b, kv, n, s, d))?;
     x.reshape((b, kv * n, s, d))
+}
+
+fn apply_rope_half(x: &Tensor, cos: &Tensor, sin: &Tensor) -> Result<Tensor> {
+    let head_dim = x.dim(3)?;
+    let half = head_dim / 2;
+    let x1 = x.narrow(3, 0, half)?;
+    let x2 = x.narrow(3, half, half)?;
+    let cos = cos.unsqueeze(0)?.unsqueeze(0)?;
+    let sin = sin.unsqueeze(0)?.unsqueeze(0)?;
+
+    let x1_cos = x1.broadcast_mul(&cos)?;
+    let x2_sin = x2.broadcast_mul(&sin)?;
+    let first = (&x1_cos - &x2_sin)?;
+
+    let x2_cos = x2.broadcast_mul(&cos)?;
+    let x1_sin = x1.broadcast_mul(&sin)?;
+    let second = (&x2_cos + &x1_sin)?;
+
+    Tensor::cat(&[&first, &second], 3)
 }
 
 fn precompute_rope(
@@ -337,13 +358,13 @@ impl PreTransformer {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        let x = x.transpose(1, 2)?;
+        let x = x.transpose(1, 2)?.contiguous()?;
         let mut h = self.input_proj.forward(&x)?;
         for layer in &self.layers {
             h = layer.forward(&h)?;
         }
         let h = self.norm.forward(&h)?;
         let h = self.output_proj.forward(&h)?;
-        h.transpose(1, 2)
+        h.transpose(1, 2)?.contiguous()
     }
 }

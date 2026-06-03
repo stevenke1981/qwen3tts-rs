@@ -7,7 +7,7 @@ use candle_core::{Device, Result, Tensor};
 
 use super::config::CodePredictorConfig;
 use super::decoder_layer::StandardDecoderLayer;
-use super::primitives::{create_causal_mask, embedding_lookup, linear, linear_with_bias, RMSNorm};
+use super::primitives::{RMSNorm, create_causal_mask, embedding_lookup, linear, linear_with_bias};
 use super::sampling::{Sampler, SamplingOptions};
 
 /// 子碼本預測器

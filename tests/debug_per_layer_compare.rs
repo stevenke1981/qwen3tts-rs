@@ -10,8 +10,8 @@ use std::path::Path;
 
 use candle_core::Module;
 use qwen3tts::{
-    codec::{CausalConv1d, CodebookLookup, DecoderBlock, PreTransformer},
     Decoder12Hz, DecoderConfig, TtsDecoder,
+    codec::{CausalConv1d, CodebookLookup, DecoderBlock, PreTransformer},
 };
 
 // ---------------------------------------------------------------------------
@@ -113,7 +113,9 @@ fn compare(label: &str, rust: &[f32], pytorch: &[f32]) {
     let ratio = amplitude_ratio(rust, pytorch);
     let rstr = range_str(rust);
     let pstr = range_str(pytorch);
-    println!("  {label:<30} | rust={rstr:<40} | pt={pstr:<40} | cos={cos:.8} | mse={mse:.10} | amp_ratio={ratio:.4}x | n={n}");
+    println!(
+        "  {label:<30} | rust={rstr:<40} | pt={pstr:<40} | cos={cos:.8} | mse={mse:.10} | amp_ratio={ratio:.4}x | n={n}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -631,7 +633,9 @@ fn debug_per_layer_compare() {
             .zip(pt_slice.iter())
             .map(|(a, b)| (*a as f64 - *b as f64).abs())
             .fold(0.0f64, f64::max);
-        println!("    ch={idx:4} cos={cos:.6} max_diff={max_abs_diff:.8}  rust={ch_slice:.6?}  pt={pt_slice:.6?}");
+        println!(
+            "    ch={idx:4} cos={cos:.6} max_diff={max_abs_diff:.8}  rust={ch_slice:.6?}  pt={pt_slice:.6?}"
+        );
     }
     let best: Vec<(usize, f64)> = {
         let mut w: Vec<_> = per_ch_cos.iter().copied().enumerate().collect();

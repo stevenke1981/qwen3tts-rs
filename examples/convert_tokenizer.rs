@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use qwen3tts::tokenizer_converter::{convert_tokenizer_weights, ConverterOptions};
+use qwen3tts::tokenizer_converter::{ConverterOptions, convert_tokenizer_weights};
 
 fn main() {
     if let Err(err) = run() {

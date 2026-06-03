@@ -251,36 +251,17 @@ fn main() {
     }
     println!();
 
-    // ----- 步驟 1: 載入 Tokenizer 解碼器權重 -----
-    let weight_dir = match ensure_tokenizer_weight_dir() {
-        Ok(path) => path,
-        Err(err) => {
-            eprintln!("錯誤: {err}");
-            eprintln!("可手動轉換 Tokenizer 權重:");
-            eprintln!("  convert_tokenizer.exe --output weights/tokenizer");
-            eprintln!("或使用 Python fallback:");
-            eprintln!("  python tools/convert_weights.py tokenizer --output weights/tokenizer");
-            std::process::exit(1);
-        }
-    };
-
-    let device = candle_core::Device::Cpu;
-    let config = DecoderConfig::realtime();
-
-    println!("[1/3] 載入 Tokenizer 解碼器…");
-    println!("      tokenizer weights: {}", weight_dir.display());
-    let mut decoder = Decoder12Hz::from_safetensors(config, &weight_dir, &device)
-        .expect("載入 Tokenizer 權重失敗");
+    let device = runtime_device();
 
     // ----- 步驟 2: 獲取 Token（透過 LLM 或從檔案載入）-----
     let stream: TokenStream = if let Some(tp) = tokens_path {
-        println!("[2/3] 從二進位檔載入 Token ({tp})…");
+        println!("[1/3] 從二進位檔載入 Token ({tp})…");
         let data = std::fs::read(&tp).expect("讀取 Token 檔失敗");
         qwen3tts::text_frontend::TokenParser::parse_binary(&data).expect("解析 Token 檔失敗")
     } else {
         match backend {
             BackendKind::Python => {
-                println!("[2/3] 載入 Python 橋接 LLM ({model_id}) 並生成 Token…");
+                println!("[1/3] 載入 Python 橋接 LLM ({model_id}) 並生成 Token…");
                 println!("      （首次載入需下載權重，約 1-5 分鐘）");
                 let bridge = PythonBridge::new(&model_id)
                     .expect("建立 PythonBridge 失敗")
@@ -336,7 +317,7 @@ fn main() {
                 };
 
                 let display_model = display_model_id(&model_id, &dir);
-                println!("[2/3] 載入 Candle LLM ({display_model}) 並生成 Token…");
+                println!("[1/3] 載入 Candle LLM ({display_model}) 並生成 Token…");
                 println!("      model dir : {dir:?}");
                 println!("      （首次載入時間依模型大小與裝置而定，包含權重 BF16→F32）");
 
@@ -381,6 +362,29 @@ fn main() {
         return;
     }
 
+    // ----- 步驟 2: 依實際幀數載入 Tokenizer 解碼器 -----
+    let weight_dir = match ensure_tokenizer_weight_dir() {
+        Ok(path) => path,
+        Err(err) => {
+            eprintln!("錯誤: {err}");
+            eprintln!("可手動轉換 Tokenizer 權重:");
+            eprintln!("  convert_tokenizer.exe --output weights/tokenizer");
+            eprintln!("或使用 Python fallback:");
+            eprintln!("  python tools/convert_weights.py tokenizer --output weights/tokenizer");
+            std::process::exit(1);
+        }
+    };
+    let config = DecoderConfig::realtime_with_capacity(num_frames);
+
+    println!("[2/3] 載入 Tokenizer 解碼器…");
+    println!("      tokenizer weights: {}", weight_dir.display());
+    println!(
+        "      decoder capacity: {} frames",
+        config.ring_buffer_capacity
+    );
+    let mut decoder = Decoder12Hz::from_safetensors(config, &weight_dir, &device)
+        .expect("載入 Tokenizer 權重失敗");
+
     // ----- 步驟 3: 解碼 Token → PCM 音訊 -----
     println!("[3/3] 解碼 Token → 音訊…");
     let sample_rate = 24000u32;
@@ -421,6 +425,28 @@ fn require_arg(args: &[String], i: usize, flag: &str) {
     if i + 1 >= args.len() {
         eprintln!("{flag} 需要參數");
         std::process::exit(1);
+    }
+}
+
+fn runtime_device() -> candle_core::Device {
+    #[cfg(feature = "cuda")]
+    {
+        match candle_core::Device::new_cuda(0) {
+            Ok(device) => {
+                println!("裝置    : CUDA:0");
+                device
+            }
+            Err(err) => {
+                eprintln!("警告: CUDA 初始化失敗 ({err}); 改用 CPU");
+                println!("裝置    : CPU");
+                candle_core::Device::Cpu
+            }
+        }
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        println!("裝置    : CPU");
+        candle_core::Device::Cpu
     }
 }
 

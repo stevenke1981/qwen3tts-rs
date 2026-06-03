@@ -8,7 +8,7 @@
 
 use candle_core::{Result, Tensor};
 
-use super::primitives::{apply_multimodal_rotary_pos_emb, linear, RMSNorm};
+use super::primitives::{RMSNorm, apply_multimodal_rotary_pos_emb, linear};
 
 /// Talker 注意力層
 #[derive(Debug, Clone)]

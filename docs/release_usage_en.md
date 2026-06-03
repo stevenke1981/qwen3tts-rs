@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.3 Windows x64`
+Target version: `qwen3tts-rs v0.1.4 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
@@ -62,6 +62,21 @@ weights\tokenizer\
 
 Python plus `torch safetensors huggingface_hub numpy` is only required when the
 Python fallback is used.
+
+## CPU And CUDA Packages
+
+- `qwen3tts-rs-v0.1.4-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.4-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+  first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
+
+Build the CUDA release package:
+
+```powershell
+.\tools\package_release.ps1 -Cuda
+```
+
+The default `-CudaComputeCap 86` targets RTX 3070 Ti. For other GPUs, pass the
+integer format Candle expects, such as `75` or `89`.
 
 If you already have converted weights, place them in one of these locations:
 
@@ -144,6 +159,13 @@ You can also use a text file:
   --language chinese
 ```
 
+Batch output file names use only the numeric index:
+
+```text
+batch-output\qwen1p7b_0001.wav
+batch-output\qwen1p7b_0002.wav
+```
+
 ## Common Options
 
 | Option | Description |
@@ -178,9 +200,13 @@ If `rms=0` and `peak=0`, the WAV is silent.
 ## Known Status
 
 - Native Candle 1.7B short Chinese prompts now produce non-silent audio.
-- This is a CPU/Candle release build. Loading 1.7B weights can take noticeable
-  time on startup.
+- `v0.1.4` provides both CPU and CUDA release packages. The CUDA binary prefers
+  `CUDA:0`.
+- Decoder capacity now expands from the actual frame count, or from batch
+  `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.
+- Batch mode writes fixed index-only names like `prefix_0001.wav`; it no longer
+  embeds the full text in the filename.
 - Large model weights and tokenizer decoder weights are not bundled in the zip.
 - `v0.1.1` fixes the release app only checking `weights/tokenizer` relative to
   the current working directory. It now also checks the executable directory.

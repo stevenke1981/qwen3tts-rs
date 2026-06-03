@@ -2,8 +2,8 @@
 //!
 //! 將 LLM 原始輸出（位元組串流或 `Vec<Vec<u16>>`）轉換為 `TokenStream`。
 
-use crate::text_frontend::{SynthesisOptions, TokenStream};
 use crate::Result;
+use crate::text_frontend::{SynthesisOptions, TokenStream};
 
 // ---------------------------------------------------------------------------
 // 常數

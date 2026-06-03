@@ -75,11 +75,15 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let weight_dir = ensure_tokenizer_weight_dir()?;
 
-    let device = candle_core::Device::Cpu;
+    let device = runtime_device();
+    let decoder_config = DecoderConfig::realtime_with_capacity(args.max_new_tokens as usize);
     println!("loading tokenizer decoder once...");
     println!("  tokenizer weights: {}", weight_dir.display());
-    let mut decoder =
-        Decoder12Hz::from_safetensors(DecoderConfig::realtime(), &weight_dir, &device)?;
+    println!(
+        "  decoder capacity: {} frames",
+        decoder_config.ring_buffer_capacity
+    );
+    let mut decoder = Decoder12Hz::from_safetensors(decoder_config, &weight_dir, &device)?;
 
     println!("loading Candle model once...");
     println!("  model dir: {}", args.model_dir.display());
@@ -100,7 +104,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     for (idx, text) in texts.iter().enumerate() {
         let item_start = Instant::now();
         let one_based = idx + 1;
-        let wav_path = make_output_path(&args.output_dir, &args.prefix, one_based, text);
+        let wav_path = make_output_path(&args.output_dir, &args.prefix, one_based);
         println!("[{one_based}/{}] {}", texts.len(), text);
 
         let synth_start = Instant::now();
@@ -112,7 +116,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
 
         if let Some(tokens_dir) = &args.save_tokens_dir {
-            let token_path = make_token_path(tokens_dir, &args.prefix, one_based, text);
+            let token_path = make_token_path(tokens_dir, &args.prefix, one_based);
             stream.write_binary(&token_path)?;
             println!("  tokens: {}", token_path.display());
         }
@@ -245,34 +249,12 @@ fn find_tokenizer_json(model_dir: &Path) -> Result<PathBuf, Box<dyn Error>> {
     Err("missing tokenizer.json; pass a model dir with tokenizer.json or create models/tokenizer.json".into())
 }
 
-fn make_output_path(output_dir: &Path, prefix: &str, index: usize, text: &str) -> PathBuf {
-    output_dir.join(format!("{prefix}_{index:04}_{}.wav", slug(text)))
+fn make_output_path(output_dir: &Path, prefix: &str, index: usize) -> PathBuf {
+    output_dir.join(format!("{prefix}_{index:04}.wav"))
 }
 
-fn make_token_path(output_dir: &Path, prefix: &str, index: usize, text: &str) -> PathBuf {
-    output_dir.join(format!("{prefix}_{index:04}_{}.tokens", slug(text)))
-}
-
-fn slug(text: &str) -> String {
-    let mut out = String::new();
-    let mut last_sep = false;
-    for ch in text.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_lowercase());
-            last_sep = false;
-        } else if !last_sep && !out.is_empty() {
-            out.push('-');
-            last_sep = true;
-        }
-    }
-    while out.ends_with('-') {
-        out.pop();
-    }
-    if out.is_empty() {
-        "text".to_string()
-    } else {
-        out.chars().take(48).collect()
-    }
+fn make_token_path(output_dir: &Path, prefix: &str, index: usize) -> PathBuf {
+    output_dir.join(format!("{prefix}_{index:04}.tokens"))
 }
 
 fn write_wav(path: &Path, samples: &[f32], sample_rate: u32) -> Result<(), Box<dyn Error>> {
@@ -306,6 +288,28 @@ fn print_usage() {
     );
 }
 
+fn runtime_device() -> candle_core::Device {
+    #[cfg(feature = "cuda")]
+    {
+        match candle_core::Device::new_cuda(0) {
+            Ok(device) => {
+                println!("device: CUDA:0");
+                device
+            }
+            Err(err) => {
+                eprintln!("warning: CUDA init failed ({err}); falling back to CPU");
+                println!("device: CPU");
+                candle_core::Device::Cpu
+            }
+        }
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        println!("device: CPU");
+        candle_core::Device::Cpu
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{make_output_path, parse_text_lines};
@@ -318,8 +322,8 @@ mod tests {
     }
 
     #[test]
-    fn make_output_path_uses_index_and_safe_slug() {
-        let path = make_output_path(Path::new("out"), "clip", 7, "你好 / hello?");
-        assert_eq!(path, Path::new("out").join("clip_0007_hello.wav"));
+    fn make_output_path_uses_index_only() {
+        let path = make_output_path(Path::new("out"), "clip", 7);
+        assert_eq!(path, Path::new("out").join("clip_0007.wav"));
     }
 }

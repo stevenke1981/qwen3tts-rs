@@ -137,7 +137,7 @@ fn sample_logits(
 
 #[cfg(test)]
 mod tests {
-    use super::{sample_logits, SamplingOptions};
+    use super::{SamplingOptions, sample_logits};
 
     #[test]
     fn greedy_returns_highest_finite_logit() {

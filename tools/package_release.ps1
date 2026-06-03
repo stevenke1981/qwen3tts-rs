@@ -1,5 +1,10 @@
 param(
-    [string]$Version = "0.1.3",
+    [string]$Version = "0.1.4",
+    [switch]$Cuda,
+    [string]$CudaComputeCap = "86",
+    [string]$CudaToolkitRoot = "",
+    [string]$VcVarsVersion = "14.29",
+    [string]$CudaForgeThreads = "1",
     [switch]$SkipBuild
 )
 
@@ -7,17 +12,127 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $DistRoot = Join-Path $RepoRoot "dist"
-$PackageName = "qwen3tts-rs-v$Version-windows-x64"
+$TargetName = if ($Cuda) { "windows-x64-cuda" } else { "windows-x64" }
+$FeatureList = if ($Cuda) { "candle-llm cuda" } else { "candle-llm" }
+$PackageName = "qwen3tts-rs-v$Version-$TargetName"
 $PackageDir = Join-Path $DistRoot $PackageName
 $ZipPath = Join-Path $DistRoot "$PackageName.zip"
 
-if (-not $SkipBuild) {
+function Get-VcVars64Path {
+    $preferred = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+    if (Test-Path $preferred) {
+        return $preferred
+    }
+
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswhere) {
+        $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if ($install) {
+            $candidate = Join-Path $install "VC\Auxiliary\Build\vcvars64.bat"
+            if (Test-Path $candidate) {
+                return $candidate
+            }
+        }
+    }
+
+    $roots = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio"),
+        (Join-Path ${env:ProgramFiles} "Microsoft Visual Studio")
+    )
+    foreach ($root in $roots) {
+        if (-not (Test-Path $root)) {
+            continue
+        }
+        $candidate = Get-ChildItem -LiteralPath $root -Recurse -Filter vcvars64.bat -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+        if ($candidate) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Get-CudaToolkitRoot {
+    if ($CudaToolkitRoot) {
+        if (-not (Test-Path (Join-Path $CudaToolkitRoot "bin\nvcc.exe"))) {
+            throw "CUDA toolkit root does not contain bin\nvcc.exe: $CudaToolkitRoot"
+        }
+        return $CudaToolkitRoot
+    }
+
+    $preferred = Join-Path ${env:ProgramFiles} "NVIDIA GPU Computing Toolkit\CUDA\v12.1"
+    if (Test-Path (Join-Path $preferred "bin\nvcc.exe")) {
+        return $preferred
+    }
+    if ($env:CUDA_PATH -and (Test-Path (Join-Path $env:CUDA_PATH "bin\nvcc.exe"))) {
+        return $env:CUDA_PATH
+    }
+    $nvcc = (Get-Command nvcc.exe -ErrorAction SilentlyContinue).Source
+    if ($nvcc) {
+        return (Resolve-Path (Join-Path (Split-Path $nvcc -Parent) "..")).Path
+    }
+    throw "CUDA toolkit not found. Pass -CudaToolkitRoot <path>."
+}
+
+function Get-ClPath {
+    $roots = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"),
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\18\BuildTools\VC\Tools\MSVC")
+    )
+    foreach ($root in $roots) {
+        if (-not (Test-Path $root)) {
+            continue
+        }
+        $patterns = if ($VcVarsVersion) { @("$VcVarsVersion*") } else { @("*") }
+        foreach ($pattern in $patterns) {
+            $candidate = Get-ChildItem -LiteralPath $root -Directory -Filter $pattern -ErrorAction SilentlyContinue |
+                Sort-Object Name -Descending |
+                ForEach-Object { Join-Path $_.FullName "bin\HostX64\x64\cl.exe" } |
+                Where-Object { Test-Path $_ } |
+                Select-Object -First 1
+            if ($candidate) {
+                return $candidate
+            }
+        }
+    }
+    return $null
+}
+
+function Invoke-ReleaseBuild {
     Push-Location $RepoRoot
     try {
-        cargo build --release --features candle-llm --example synthesize --example synthesize_batch --example convert_tokenizer
+        if ($Cuda) {
+            $vcvars = Get-VcVars64Path
+            if (-not $vcvars) {
+                throw "CUDA build requires MSVC Build Tools with vcvars64.bat in PATH or Visual Studio installation."
+            }
+            $cudaRoot = Get-CudaToolkitRoot
+            $nvcc = Join-Path $cudaRoot "bin\nvcc.exe"
+            $cl = Get-ClPath
+            if (-not $cl) {
+                throw "CUDA build requires cl.exe. Install MSVC Build Tools or pass a compatible -VcVarsVersion."
+            }
+            $clDir = Split-Path $cl -Parent
+            $vcvarsArgs = if ($VcVarsVersion) { " -vcvars_ver=$VcVarsVersion" } else { "" }
+            Write-Host "Using MSVC dev shell: $vcvars"
+            Write-Host "Using cl.exe: $cl"
+            Write-Host "Using CUDA toolkit: $cudaRoot"
+            Write-Host "CUDA_COMPUTE_CAP=$CudaComputeCap"
+            $buildCommand = "call `"$vcvars`"$vcvarsArgs && set CUDA_COMPUTE_CAP=$CudaComputeCap&& set CUDAFORGE_THREADS=$CudaForgeThreads&& set RAYON_NUM_THREADS=$CudaForgeThreads&& set CUDA_ROOT=$cudaRoot&& set CUDA_PATH=$cudaRoot&& set NVCC=$nvcc&& set NVCC_CCBIN=$cl&& set PATH=$clDir;$cudaRoot\bin;%PATH%&& cargo build --release --features `"$FeatureList`" --example synthesize --example synthesize_batch --example convert_tokenizer"
+            & cmd.exe /d /c $buildCommand
+            if ($LASTEXITCODE -ne 0) {
+                throw "cargo CUDA release build failed with exit code $LASTEXITCODE"
+            }
+        } else {
+            cargo build --release --features $FeatureList --example synthesize --example synthesize_batch --example convert_tokenizer
+        }
     } finally {
         Pop-Location
     }
+}
+
+if (-not $SkipBuild) {
+    Invoke-ReleaseBuild
 }
 
 New-Item -ItemType Directory -Force -Path $DistRoot | Out-Null
@@ -56,7 +171,7 @@ foreach ($file in $files) {
 }
 
 @"
-qwen3tts-rs v$Version Windows x64
+qwen3tts-rs v$Version $TargetName
 
 Included:
 - synthesize.exe
@@ -69,6 +184,9 @@ Included:
 
 Large weights are not bundled. If converted tokenizer decoder weights are
 missing, the app can attempt to run convert_tokenizer.exe automatically.
+CUDA enabled: $([bool]$Cuda)
+CUDA compute capability: $(if ($Cuda) { $CudaComputeCap } else { "n/a" })
+CUDA toolkit: $(if ($Cuda) { Get-CudaToolkitRoot } else { "n/a" })
 See README files before running.
 "@ | Set-Content -LiteralPath (Join-Path $PackageDir "VERSION.txt") -Encoding UTF8
 

@@ -16,7 +16,7 @@ use super::code_predictor::CodePredictor;
 use super::config::TalkerConfig;
 use super::model::TalkerModel;
 use super::primitives::{
-    create_causal_mask, embedding_lookup, linear, linear_with_bias, MultimodalRotaryEmbedding,
+    MultimodalRotaryEmbedding, create_causal_mask, embedding_lookup, linear, linear_with_bias,
 };
 use super::sampling::{Sampler, SamplingOptions};
 

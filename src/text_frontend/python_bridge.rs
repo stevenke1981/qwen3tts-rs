@@ -13,9 +13,9 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+use crate::Result;
 use crate::text_frontend::token_parser::TokenParser;
 use crate::text_frontend::{SynthesisOptions, TextFrontend, TokenStream};
-use crate::Result;
 
 // ---------------------------------------------------------------------------
 // PythonBridge
