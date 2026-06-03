@@ -37,6 +37,7 @@ use std::path::Path;
 #[cfg(feature = "candle-llm")]
 use std::path::PathBuf;
 
+use qwen3tts::paths::find_existing_tokenizer_weight_dir;
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend, TokenStream};
 use qwen3tts::{Decoder12Hz, DecoderConfig};
 
@@ -251,21 +252,24 @@ fn main() {
     println!();
 
     // ----- 步驟 1: 載入 Tokenizer 解碼器權重 -----
-    let weight_dir = Path::new("weights/tokenizer");
-    if !weight_dir.join("codebook.safetensors").exists() {
-        eprintln!("錯誤: {weight_dir:?} 不存在。");
-        eprintln!("請先下載 Tokenizer 權重:");
-        eprintln!(
+    let weight_dir = match find_existing_tokenizer_weight_dir() {
+        Ok(path) => path,
+        Err(err) => {
+            eprintln!("錯誤: {err}");
+            eprintln!("請先下載 Tokenizer 權重:");
+            eprintln!(
             "  huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz --local-dir weights/tokenizer"
         );
-        std::process::exit(1);
-    }
+            std::process::exit(1);
+        }
+    };
 
     let device = candle_core::Device::Cpu;
     let config = DecoderConfig::realtime();
 
     println!("[1/3] 載入 Tokenizer 解碼器…");
-    let mut decoder = Decoder12Hz::from_safetensors(config, weight_dir, &device)
+    println!("      tokenizer weights: {}", weight_dir.display());
+    let mut decoder = Decoder12Hz::from_safetensors(config, &weight_dir, &device)
         .expect("載入 Tokenizer 權重失敗");
 
     // ----- 步驟 2: 獲取 Token（透過 LLM 或從檔案載入）-----

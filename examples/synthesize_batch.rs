@@ -9,6 +9,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use qwen3tts::paths::find_existing_tokenizer_weight_dir;
 use qwen3tts::text_frontend::{CandleLLM, SynthesisOptions, TextFrontend};
 use qwen3tts::{Decoder12Hz, DecoderConfig};
 
@@ -72,19 +73,13 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
     let tokenizer_json = find_tokenizer_json(&args.model_dir)?;
 
-    let weight_dir = Path::new("weights/tokenizer");
-    if !weight_dir.join("codebook.safetensors").exists() {
-        return Err(format!(
-            "missing tokenizer decoder weights in {}",
-            weight_dir.display()
-        )
-        .into());
-    }
+    let weight_dir = find_existing_tokenizer_weight_dir()?;
 
     let device = candle_core::Device::Cpu;
     println!("loading tokenizer decoder once...");
+    println!("  tokenizer weights: {}", weight_dir.display());
     let mut decoder =
-        Decoder12Hz::from_safetensors(DecoderConfig::realtime(), weight_dir, &device)?;
+        Decoder12Hz::from_safetensors(DecoderConfig::realtime(), &weight_dir, &device)?;
 
     println!("loading Candle model once...");
     println!("  model dir: {}", args.model_dir.display());

@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.0 Windows x64`
+適用版本：`qwen3tts-rs v0.1.1 Windows x64`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
@@ -24,13 +24,20 @@ model.safetensors
 tokenizer.json
 ```
 
-2. 12Hz tokenizer decoder 權重，放在執行目錄下：
+2. 12Hz tokenizer decoder 權重，放在下列其中一個位置：
+
+```text
+<目前 PowerShell 所在目錄>\weights\tokenizer\
+<synthesize.exe 所在目錄>\weights\tokenizer\
+```
+
+release app 會依照上面的順序檢查。若你從其他目錄呼叫 exe，建議直接把 `weights\tokenizer` 放在 exe 同一層，例如：
 
 ```text
 weights\tokenizer\
 ```
 
-至少需包含 `codebook.safetensors` 以及 decoder 需要的 safetensors 權重。
+至少需包含 `codebook.safetensors` 以及 decoder 需要的 safetensors 權重。若找不到，app 會列出它實際檢查過的完整路徑。
 
 ## 單句合成
 
@@ -121,3 +128,4 @@ with wave.open(name, "rb") as w:
 - release 是 CPU/Candle build。第一次載入 1.7B 權重會花較久時間。
 - 批次模式可避免每句都重新載入模型。
 - 大型模型權重與 tokenizer decoder 權重未包含在 zip 內。
+- `v0.1.1` 修正 release app 只用目前工作目錄找 `weights/tokenizer` 的問題；現在也會檢查 exe 所在目錄。

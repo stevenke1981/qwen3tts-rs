@@ -1,5 +1,7 @@
 /target
 /dist
+qwen3tts-rs-v*-windows-x64/
+qwen3tts-rs-v*-windows-x64.zip
 /weights
 *.wav
 *.npy

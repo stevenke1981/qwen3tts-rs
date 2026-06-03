@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.0 Windows x64`
+Target version: `qwen3tts-rs v0.1.1 Windows x64`
 
 This release package contains pure Rust/Candle executables:
 
@@ -25,14 +25,24 @@ model.safetensors
 tokenizer.json
 ```
 
-2. The 12Hz tokenizer decoder weights under the current working directory:
+2. The 12Hz tokenizer decoder weights in one of these locations:
+
+```text
+<current PowerShell directory>\weights\tokenizer\
+<directory containing synthesize.exe>\weights\tokenizer\
+```
+
+The release app checks those paths in that order. If you run the exe from a
+different directory, the safest layout is to place `weights\tokenizer` next to
+the exe:
 
 ```text
 weights\tokenizer\
 ```
 
 At minimum, this directory must include `codebook.safetensors` and the
-additional safetensors files needed by the decoder.
+additional safetensors files needed by the decoder. If the weights are missing,
+the app prints the full paths it checked.
 
 ## Single Utterance
 
@@ -125,3 +135,5 @@ If `rms=0` and `peak=0`, the WAV is silent.
   time on startup.
 - Batch mode avoids reloading the model for every sentence.
 - Large model weights and tokenizer decoder weights are not bundled in the zip.
+- `v0.1.1` fixes the release app only checking `weights/tokenizer` relative to
+  the current working directory. It now also checks the executable directory.
