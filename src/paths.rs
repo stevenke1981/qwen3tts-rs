@@ -57,17 +57,13 @@ pub fn ensure_tokenizer_weight_dir() -> Result<PathBuf> {
     let cwd = std::env::current_dir()?;
     let exe = std::env::current_exe().ok();
     let candidates = resolve_tokenizer_weight_dir_from(&cwd, exe.as_deref());
-    let converter = find_converter_script_from(&cwd, exe.as_deref()).ok_or_else(|| {
+    let converter = find_converter_program_from(&cwd, exe.as_deref()).ok_or_else(|| {
         Error::Config(format!(
-            "{}\n\nNo bundled converter was found. Expected tools/convert_weights.py next to the app or in the current repository.",
+            "{}\n\nNo bundled converter was found. Expected convert_tokenizer.exe or tools/convert_weights.py next to the app or in the current repository.",
             missing_weights_error(&candidates)
         ))
     })?;
-    let output = converter
-        .parent()
-        .and_then(Path::parent)
-        .map(|base| base.join("weights").join("tokenizer"))
-        .unwrap_or_else(|| candidates[0].clone());
+    let output = converter.base_dir.join("weights").join("tokenizer");
 
     run_tokenizer_converter(&converter, &output)?;
     if is_complete_tokenizer_weight_dir(&output) {
@@ -100,44 +96,117 @@ pub fn resolve_converter_script_from(cwd: &Path, exe_path: Option<&Path>) -> Vec
     candidates
 }
 
-fn find_converter_script_from(cwd: &Path, exe_path: Option<&Path>) -> Option<PathBuf> {
-    resolve_converter_script_from(cwd, exe_path)
-        .into_iter()
-        .find(|path| path.exists())
-}
+/// Returns Rust converter executable candidates in search order.
+pub fn resolve_converter_exe_from(cwd: &Path, exe_path: Option<&Path>) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    push_unique(&mut candidates, cwd.join("convert_tokenizer.exe"));
 
-fn run_tokenizer_converter(converter: &Path, output: &Path) -> Result<()> {
-    eprintln!(
-        "Tokenizer decoder weights not found; attempting automatic conversion with {}",
-        converter.display()
-    );
-    eprintln!("Tokenizer converter output: {}", output.display());
-
-    for python in ["python", "py"] {
-        let mut cmd = Command::new(python);
-        if python == "py" {
-            cmd.arg("-3");
-        }
-        let status = cmd
-            .arg(converter)
-            .arg("tokenizer")
-            .arg("--output")
-            .arg(output)
-            .status();
-        match status {
-            Ok(status) if status.success() => return Ok(()),
-            Ok(status) => {
-                eprintln!("Converter via {python} exited with {status}");
-            }
-            Err(err) => {
-                eprintln!("Could not launch {python}: {err}");
-            }
+    if let Some(exe_path) = exe_path {
+        if let Some(exe_dir) = exe_path.parent() {
+            push_unique(&mut candidates, exe_dir.join("convert_tokenizer.exe"));
         }
     }
 
-    Err(Error::Config(
-        "Automatic tokenizer conversion failed. Install Python with torch, safetensors, huggingface_hub, and numpy, or run tools/convert_weights.py tokenizer manually.".into(),
-    ))
+    candidates
+}
+
+#[derive(Debug, Clone)]
+struct ConverterProgram {
+    path: PathBuf,
+    base_dir: PathBuf,
+    kind: ConverterKind,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ConverterKind {
+    RustExe,
+    PythonScript,
+}
+
+fn find_converter_program_from(cwd: &Path, exe_path: Option<&Path>) -> Option<ConverterProgram> {
+    for path in resolve_converter_exe_from(cwd, exe_path) {
+        if path.exists() {
+            let base_dir = path.parent().unwrap_or(cwd).to_path_buf();
+            return Some(ConverterProgram {
+                path,
+                base_dir,
+                kind: ConverterKind::RustExe,
+            });
+        }
+    }
+
+    for path in resolve_converter_script_from(cwd, exe_path) {
+        if path.exists() {
+            let base_dir = path
+                .parent()
+                .and_then(Path::parent)
+                .unwrap_or(cwd)
+                .to_path_buf();
+            return Some(ConverterProgram {
+                path,
+                base_dir,
+                kind: ConverterKind::PythonScript,
+            });
+        }
+    }
+
+    None
+}
+
+fn run_tokenizer_converter(converter: &ConverterProgram, output: &Path) -> Result<()> {
+    eprintln!(
+        "Tokenizer decoder weights not found; attempting automatic conversion with {}",
+        converter.path.display()
+    );
+    eprintln!("Tokenizer converter output: {}", output.display());
+
+    match converter.kind {
+        ConverterKind::RustExe => {
+            let status = Command::new(&converter.path)
+                .arg("--output")
+                .arg(output)
+                .status()
+                .map_err(|err| {
+                    Error::Config(format!(
+                        "Could not launch Rust tokenizer converter {}: {err}",
+                        converter.path.display()
+                    ))
+                })?;
+            if status.success() {
+                return Ok(());
+            }
+            Err(Error::Config(format!(
+                "Rust tokenizer converter exited with {status}"
+            )))
+        }
+        ConverterKind::PythonScript => {
+            for python in ["python", "py"] {
+                let mut cmd = Command::new(python);
+                if python == "py" {
+                    cmd.arg("-3");
+                }
+                let status = cmd
+                    .arg(&converter.path)
+                    .arg("tokenizer")
+                    .arg("--output")
+                    .arg(output)
+                    .status();
+                match status {
+                    Ok(status) if status.success() => return Ok(()),
+                    Ok(status) => {
+                        eprintln!("Converter via {python} exited with {status}");
+                    }
+                    Err(err) => {
+                        eprintln!("Could not launch {python}: {err}");
+                    }
+                }
+            }
+
+            Err(Error::Config(
+                "Automatic tokenizer conversion failed. Run convert_tokenizer.exe manually, or install Python with torch, safetensors, huggingface_hub, and numpy for the Python fallback.".into(),
+            ))
+        }
+    }
 }
 
 fn is_complete_tokenizer_weight_dir(path: &Path) -> bool {
@@ -181,8 +250,8 @@ fn push_unique(candidates: &mut Vec<PathBuf>, path: PathBuf) {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_complete_tokenizer_weight_dir, resolve_converter_script_from,
-        resolve_tokenizer_weight_dir_from,
+        is_complete_tokenizer_weight_dir, resolve_converter_exe_from,
+        resolve_converter_script_from, resolve_tokenizer_weight_dir_from,
     };
     use std::path::Path;
 
@@ -216,6 +285,17 @@ mod tests {
 
         assert_eq!(candidates[0], Path::new("C:/run/tools/convert_weights.py"));
         assert_eq!(candidates[1], Path::new("C:/app/tools/convert_weights.py"));
+    }
+
+    #[test]
+    fn resolves_rust_converter_exe_next_to_cwd_and_exe() {
+        let candidates = resolve_converter_exe_from(
+            Path::new("C:/run"),
+            Some(Path::new("C:/app/synthesize.exe")),
+        );
+
+        assert_eq!(candidates[0], Path::new("C:/run/convert_tokenizer.exe"));
+        assert_eq!(candidates[1], Path::new("C:/app/convert_tokenizer.exe"));
     }
 
     #[test]

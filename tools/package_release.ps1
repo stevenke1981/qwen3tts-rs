@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.2",
+    [string]$Version = "0.1.3",
     [switch]$SkipBuild
 )
 
@@ -14,7 +14,7 @@ $ZipPath = Join-Path $DistRoot "$PackageName.zip"
 if (-not $SkipBuild) {
     Push-Location $RepoRoot
     try {
-        cargo build --release --features candle-llm --example synthesize --example synthesize_batch
+        cargo build --release --features candle-llm --example synthesize --example synthesize_batch --example convert_tokenizer
     } finally {
         Pop-Location
     }
@@ -41,6 +41,7 @@ $exampleDir = Join-Path $RepoRoot "target\release\examples"
 $files = @(
     @{ Source = Join-Path $exampleDir "synthesize.exe"; Target = "synthesize.exe" },
     @{ Source = Join-Path $exampleDir "synthesize_batch.exe"; Target = "synthesize_batch.exe" },
+    @{ Source = Join-Path $exampleDir "convert_tokenizer.exe"; Target = "convert_tokenizer.exe" },
     @{ Source = Join-Path $RepoRoot "docs\release_usage_zh.md"; Target = "README.zh-TW.md" },
     @{ Source = Join-Path $RepoRoot "docs\release_usage_en.md"; Target = "README.en-US.md" },
     @{ Source = Join-Path $RepoRoot "docs\agent_voice_failure_playbook.md"; Target = "AGENT_VOICE_FAILURE_PLAYBOOK.md" },
@@ -60,13 +61,14 @@ qwen3tts-rs v$Version Windows x64
 Included:
 - synthesize.exe
 - synthesize_batch.exe
+- convert_tokenizer.exe
 - README.zh-TW.md
 - README.en-US.md
 - AGENT_VOICE_FAILURE_PLAYBOOK.md
 - tools/convert_weights.py
 
 Large weights are not bundled. If converted tokenizer decoder weights are
-missing, the app can attempt to run tools/convert_weights.py automatically.
+missing, the app can attempt to run convert_tokenizer.exe automatically.
 See README files before running.
 "@ | Set-Content -LiteralPath (Join-Path $PackageDir "VERSION.txt") -Encoding UTF8
 

@@ -257,6 +257,8 @@ fn main() {
         Err(err) => {
             eprintln!("錯誤: {err}");
             eprintln!("可手動轉換 Tokenizer 權重:");
+            eprintln!("  convert_tokenizer.exe --output weights/tokenizer");
+            eprintln!("或使用 Python fallback:");
             eprintln!("  python tools/convert_weights.py tokenizer --output weights/tokenizer");
             std::process::exit(1);
         }

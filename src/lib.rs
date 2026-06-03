@@ -17,6 +17,7 @@ pub mod quantization;
 pub mod talker;
 pub mod text_frontend;
 pub mod tokenizer;
+pub mod tokenizer_converter;
 pub mod vocoder;
 pub mod weights;
 

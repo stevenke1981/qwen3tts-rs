@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.2 Windows x64`
+適用版本：`qwen3tts-rs v0.1.3 Windows x64`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
@@ -26,23 +26,37 @@ tokenizer.json
 
 2. 12Hz tokenizer decoder 權重。
 
-`v0.1.2` 開始，若 app 找不到已轉換的 Rust 權重，會自動嘗試執行 release 包內的：
+`v0.1.3` 開始，若 app 找不到已轉換的 Rust 權重，會優先自動執行 release 包內的 Rust converter：
+
+```text
+convert_tokenizer.exe
+```
+
+這個轉換器不需要 Python。它會從本機 HuggingFace cache 尋找：
+
+```text
+Qwen/Qwen3-TTS-Tokenizer-12Hz
+```
+
+也可以手動指定 tokenizer decoder snapshot：
+
+```powershell
+.\convert_tokenizer.exe --input C:\path\to\Qwen3-TTS-Tokenizer-12Hz\snapshot --output weights\tokenizer
+```
+
+若找不到 Rust converter，app 才會退回舊的 Python converter：
 
 ```text
 tools\convert_weights.py
 ```
 
-自動轉換會下載/讀取 HuggingFace `Qwen/Qwen3-TTS-Tokenizer-12Hz`，並輸出到 release 目錄下：
+轉換輸出會放到 release 目錄下：
 
 ```text
 weights\tokenizer\
 ```
 
-自動轉換需要本機有 Python 以及這些 Python 套件：
-
-```powershell
-pip install torch safetensors huggingface_hub numpy
-```
+只有使用 Python fallback 時，才需要 Python 以及 `torch safetensors huggingface_hub numpy`。
 
 若你已經有轉好的權重，也可以直接放在下列其中一個位置：
 
@@ -160,3 +174,4 @@ with wave.open(name, "rb") as w:
 - 大型模型權重與 tokenizer decoder 權重未包含在 zip 內。
 - `v0.1.1` 修正 release app 只用目前工作目錄找 `weights/tokenizer` 的問題；現在也會檢查 exe 所在目錄。
 - `v0.1.2` 開始，若找不到 Rust tokenizer decoder 權重，app 會自動嘗試執行 bundled `tools/convert_weights.py tokenizer`。
+- `v0.1.3` 開始，app 優先使用 bundled `convert_tokenizer.exe` 做 Rust 原生轉換，不需要 Python；Python converter 只作為 fallback。

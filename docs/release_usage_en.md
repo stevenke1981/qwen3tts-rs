@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.2 Windows x64`
+Target version: `qwen3tts-rs v0.1.3 Windows x64`
 
 This release package contains pure Rust/Candle executables:
 
@@ -27,25 +27,41 @@ tokenizer.json
 
 2. The 12Hz tokenizer decoder weights.
 
-Starting from `v0.1.2`, if the app cannot find converted Rust weights, it
-automatically attempts to run the bundled converter:
+Starting from `v0.1.3`, if the app cannot find converted Rust weights, it first
+attempts to run the bundled Rust converter:
+
+```text
+convert_tokenizer.exe
+```
+
+This converter does not require Python. It searches the local HuggingFace cache
+for:
+
+```text
+Qwen/Qwen3-TTS-Tokenizer-12Hz
+```
+
+You can also manually pass a tokenizer decoder snapshot:
+
+```powershell
+.\convert_tokenizer.exe --input C:\path\to\Qwen3-TTS-Tokenizer-12Hz\snapshot --output weights\tokenizer
+```
+
+If the Rust converter is missing, the app falls back to the older Python
+converter:
 
 ```text
 tools\convert_weights.py
 ```
 
-The converter downloads/reads HuggingFace `Qwen/Qwen3-TTS-Tokenizer-12Hz` and
-writes converted Rust weights into the release directory:
+Converted weights are written into the release directory:
 
 ```text
 weights\tokenizer\
 ```
 
-Automatic conversion requires Python and these Python packages:
-
-```powershell
-pip install torch safetensors huggingface_hub numpy
-```
+Python plus `torch safetensors huggingface_hub numpy` is only required when the
+Python fallback is used.
 
 If you already have converted weights, place them in one of these locations:
 
@@ -170,3 +186,5 @@ If `rms=0` and `peak=0`, the WAV is silent.
   the current working directory. It now also checks the executable directory.
 - Starting from `v0.1.2`, if Rust tokenizer decoder weights are missing, the app
   automatically attempts to run bundled `tools/convert_weights.py tokenizer`.
+- Starting from `v0.1.3`, the app prefers bundled `convert_tokenizer.exe` for
+  Rust-native conversion without Python. The Python converter is only a fallback.
