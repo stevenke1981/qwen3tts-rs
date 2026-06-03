@@ -1,6 +1,6 @@
 [package]
 name = "qwen3tts-rs"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 description = "Qwen3-TTS Codec Decode module - pure Rust/Candle rewrite"
 license = "MIT"
@@ -56,3 +56,7 @@ opt-level = 3
 [lib]
 name = "qwen3tts"
 path = "src/lib.rs"
+
+[[example]]
+name = "synthesize_batch"
+required-features = ["candle-llm"]

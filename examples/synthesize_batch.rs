@@ -46,7 +46,7 @@ impl Default for Args {
             instruct: None,
             instruct_file: None,
             seed: None,
-            max_new_tokens: 128,
+            max_new_tokens: 4096,
             temperature: 0.9,
             top_k: 50,
             top_p: 1.0,
@@ -348,13 +348,17 @@ fn recommended_max_new_tokens(text: &str) -> usize {
     text.chars()
         .filter(|&ch| ('\u{4e00}'..='\u{9fff}').contains(&ch))
         .count()
-        .saturating_mul(3)
+        .saturating_mul(4)
         .max(16)
 }
 
 fn warn_if_max_new_tokens_low(text: &str, max_new_tokens: u32) {
     let recommended = recommended_max_new_tokens(text);
-    if recommended > 16 && (max_new_tokens as usize) < recommended {
+    let zh_chars = text
+        .chars()
+        .filter(|&ch| ('\u{4e00}'..='\u{9fff}').contains(&ch))
+        .count();
+    if zh_chars > 0 && (max_new_tokens as usize) < recommended {
         eprintln!(
             "  warning: --max-new-tokens={max_new_tokens} may be low for this Chinese text; suggest at least {recommended}"
         );
@@ -362,10 +366,15 @@ fn warn_if_max_new_tokens_low(text: &str, max_new_tokens: u32) {
 }
 
 fn warn_if_truncated(text: &str, max_new_tokens: u32, num_frames: usize) {
-    let recommended = recommended_max_new_tokens(text);
-    if recommended > 16 && max_new_tokens as usize <= num_frames {
+    if num_frames >= max_new_tokens as usize {
+        let recommended = recommended_max_new_tokens(text);
         eprintln!(
-            "  warning: generated frames reached --max-new-tokens={max_new_tokens}; text may be truncated"
+            "  warning: generated frames reached --max-new-tokens={}; text may be truncated!",
+            max_new_tokens
+        );
+        eprintln!(
+            "  suggest increasing --max-new-tokens to at least {}",
+            recommended
         );
     }
 }
@@ -462,8 +471,8 @@ mod tests {
     }
 
     #[test]
-    fn chinese_token_recommendation_scales_by_three() {
-        assert_eq!(recommended_max_new_tokens("今天天氣真好"), 18);
+    fn chinese_token_recommendation_scales_by_four() {
+        assert_eq!(recommended_max_new_tokens("今天天氣真好"), 24);
         assert_eq!(recommended_max_new_tokens("hello"), 16);
     }
 }

@@ -275,7 +275,27 @@ impl TextFrontend for CandleLLM {
             })
             .collect();
 
-        log::info!("CandleLLM::synthesize generated {} frames", codes.len());
+        let generated_frames = codes.len();
+        log::info!("CandleLLM::synthesize generated {} frames", generated_frames);
+
+        if generated_frames >= max_new_tokens {
+            let zh_chars = text
+                .chars()
+                .filter(|&ch| ('\u{4e00}'..='\u{9fff}').contains(&ch))
+                .count();
+            let recommended = zh_chars.saturating_mul(4).max(16);
+            log::warn!(
+                "CandleLLM::synthesize reached max_new_tokens limit of {}. The output may be truncated!",
+                max_new_tokens
+            );
+            if zh_chars > 0 {
+                log::warn!(
+                    "For this Chinese text ({} chars), at least {} max_new_tokens are recommended to prevent truncation.",
+                    zh_chars,
+                    recommended
+                );
+            }
+        }
 
         // ── 5. 解析為 TokenStream（自動過濾 EOS/PAD）──
         self.parser.parse(&codes, options)

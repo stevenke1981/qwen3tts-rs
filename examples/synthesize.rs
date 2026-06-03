@@ -33,9 +33,8 @@
 //! cargo run --example synthesize -- --tokens tokens.bin --output native.wav
 //! ```
 
-use std::path::Path;
 #[cfg(feature = "candle-llm")]
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend, TokenStream};
@@ -556,18 +555,24 @@ fn runtime_device() -> candle_core::Device {
 }
 
 fn warn_if_truncated(text: &str, max_new_tokens: u32, num_frames: usize) {
-    let zh_chars = text
-        .chars()
-        .filter(|&ch| ('\u{4e00}'..='\u{9fff}').contains(&ch))
-        .count();
-    let recommended = zh_chars.saturating_mul(3).max(16);
-    if zh_chars > 0
-        && max_new_tokens as usize <= num_frames
-        && (max_new_tokens as usize) < recommended
-    {
+    if num_frames >= max_new_tokens as usize {
+        let zh_chars = text
+            .chars()
+            .filter(|&ch| ('\u{4e00}'..='\u{9fff}').contains(&ch))
+            .count();
+        let recommended = zh_chars.saturating_mul(4).max(16);
         eprintln!(
-            "提示: --max-new-tokens={max_new_tokens} 可能截斷長中文；建議至少約中文字數 x 3，也就是 {recommended}。"
+            "⚠️ 警告: 已達到最大生成 Token 數 --max-new-tokens={}，語音後半段可能被截斷！",
+            max_new_tokens
         );
+        if zh_chars > 0 {
+            eprintln!(
+                "   提示：對於中文，建議 --max-new-tokens 至少設定為字數的 4 倍（目前字數 {}，建議值為 {}）。",
+                zh_chars, recommended
+            );
+        } else {
+            eprintln!("   提示：請增加 --max-new-tokens 參數值。");
+        }
     }
 }
 
