@@ -64,6 +64,9 @@ pub struct SynthesisOptions {
     /// VoiceDesign 模型需要此欄位；1.7B CustomVoice 也可用它做語氣控制。
     pub instruct: Option<String>,
 
+    /// 取樣 seed。None 時使用文字與條件 hash 產生穩定 seed。
+    pub seed: Option<u64>,
+
     /// LLM 取樣溫度
     pub temperature: f64,
 
@@ -83,6 +86,7 @@ impl Default for SynthesisOptions {
             language: "auto".into(),
             speaker: None,
             instruct: None,
+            seed: None,
             temperature: 0.9,
             top_k: 50,
             top_p: 1.0,

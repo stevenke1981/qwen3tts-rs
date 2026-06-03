@@ -166,6 +166,8 @@ fn main() {
     let mut language = "auto".to_string();
     let mut speaker: Option<String> = None;
     let mut instruct: Option<String> = None;
+    let mut instruct_file: Option<String> = None;
+    let mut seed: Option<u64> = None;
     let mut tokens_path: Option<String> = None;
     let mut save_tokens_path: Option<String> = None;
     let mut text_only = false; // 只跑到 LLM 階段，產生 Token 後直接結束
@@ -207,6 +209,11 @@ fn main() {
                 instruct = Some(args[i + 1].clone());
                 i += 2;
             }
+            "--instruct-file" => {
+                require_arg(&args, i, "--instruct-file");
+                instruct_file = Some(args[i + 1].clone());
+                i += 2;
+            }
             "--tokens" => {
                 require_arg(&args, i, "--tokens");
                 tokens_path = Some(args[i + 1].clone());
@@ -227,6 +234,14 @@ fn main() {
                     eprintln!("--max-new-tokens 必須是正整數");
                     std::process::exit(1);
                 });
+                i += 2;
+            }
+            "--seed" => {
+                require_arg(&args, i, "--seed");
+                seed = Some(args[i + 1].parse().unwrap_or_else(|_| {
+                    eprintln!("--seed 必須是 0..18446744073709551615 的整數");
+                    std::process::exit(1);
+                }));
                 i += 2;
             }
             "--model-dir" => {
@@ -278,6 +293,8 @@ fn main() {
         }
     }
 
+    let instruct = resolve_instruct(instruct, instruct_file);
+
     // --tokens 與 --text 二選一
     if text.is_empty() && tokens_path.is_none() {
         eprintln!("請使用 --text 指定要合成的文字（或用 --tokens 指定 Token 檔）");
@@ -308,6 +325,9 @@ fn main() {
     if let Some(ins) = &instruct {
         println!("指令    : {ins}");
     }
+    if let Some(seed) = seed {
+        println!("seed    : {seed}");
+    }
     if let Some(tp) = &save_tokens_path {
         println!("保存Token: {tp}");
     }
@@ -332,6 +352,7 @@ fn main() {
                     language,
                     speaker,
                     instruct,
+                    seed,
                     temperature: 0.9,
                     top_k: 50,
                     top_p: 1.0,
@@ -385,6 +406,7 @@ fn main() {
                     language,
                     speaker,
                     instruct,
+                    seed,
                     temperature: 0.9,
                     top_k: 50,
                     top_p: 1.0,
@@ -488,6 +510,29 @@ fn require_arg(args: &[String], i: usize, flag: &str) {
     }
 }
 
+fn resolve_instruct(instruct: Option<String>, instruct_file: Option<String>) -> Option<String> {
+    match (instruct, instruct_file) {
+        (Some(_), Some(_)) => {
+            eprintln!("--instruct 與 --instruct-file 只能擇一使用");
+            std::process::exit(1);
+        }
+        (Some(value), None) => Some(value),
+        (None, Some(path)) => {
+            let text = std::fs::read_to_string(&path).unwrap_or_else(|err| {
+                eprintln!("讀取 --instruct-file 失敗: {path}: {err}");
+                std::process::exit(1);
+            });
+            let text = text.trim().to_string();
+            if text.is_empty() {
+                eprintln!("--instruct-file 內容不可為空: {path}");
+                std::process::exit(1);
+            }
+            Some(text)
+        }
+        (None, None) => None,
+    }
+}
+
 fn runtime_device() -> candle_core::Device {
     #[cfg(feature = "cuda")]
     {
@@ -546,6 +591,8 @@ fn print_usage() {
   --language / -l    語言（預設: auto）
   --speaker / -s     說話者名稱（可選）
   --instruct         VoiceDesign/CustomVoice 音色或語氣指令
+  --instruct-file    從 UTF-8 文字檔讀取 VoiceDesign/CustomVoice 指令
+  --seed N           固定取樣 seed，讓相同文字/條件更容易重現
   --output / -o      輸出 WAV 路徑（預設: output.wav）
   --max-new-tokens N 最大生成 Token 數（預設: 4096）
   --text-only        只跑到 LLM 階段產生 Token，不解碼成音訊
@@ -570,6 +617,14 @@ fn print_usage() {
       --model-dir <Qwen3-TTS-12Hz-1.7B-VoiceDesign-snapshot> \\
       --language chinese \\
       --instruct \"年輕女性，台灣口語，溫柔親切，語速自然\"
+
+  # 從檔案讀音色設定，並固定 seed
+  cargo run --example synthesize --features \"candle-llm cuda\" -- \\
+      --text \"你好\" --backend candle \\
+      --model-dir <Qwen3-TTS-12Hz-1.7B-VoiceDesign-snapshot> \\
+      --language chinese \\
+      --instruct-file instruct.txt \\
+      --seed 20260603
 
 模型清單:
   0.6B（無 GPU，約 1.2GB RAM）:

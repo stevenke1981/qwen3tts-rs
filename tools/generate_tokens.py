@@ -12,6 +12,7 @@ Output (binary, little-endian stdout):
 import argparse
 import contextlib
 import io
+import random
 import struct
 import sys
 import warnings
@@ -50,6 +51,7 @@ def generate_codes(
     top_k=50,
     top_p=1.0,
     max_new_tokens=4096,
+    seed: Optional[int] = None,
 ):
     """
     Generate codec tokens from plain text.
@@ -98,6 +100,9 @@ def generate_codes(
         print(f"[bridge] speaker={speaker_actual}", file=sys.stderr)
     if instruct:
         print(f"[bridge] instruct={instruct}", file=sys.stderr)
+    if seed is not None:
+        set_seed(seed)
+        print(f"[bridge] seed={seed}", file=sys.stderr)
 
     # ── Generate ─────────────────────────────────────────────────────
     with torch.no_grad():
@@ -118,6 +123,16 @@ def generate_codes(
     for codes in codes_list:
         result.append(codes.cpu().numpy().astype(np.uint16))
     return result
+
+
+def set_seed(seed: int):
+    """Seed Python, NumPy, and Torch sampling for reproducible token generation."""
+    seed = int(seed)
+    random.seed(seed)
+    np.random.seed(seed % (2**32))
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def detect_language(text: str, lang_map: dict) -> str:
@@ -165,6 +180,7 @@ def main():
     parser.add_argument("--top-k", type=int, default=50)
     parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--max-new-tokens", type=int, default=4096)
+    parser.add_argument("--seed", type=int, default=None)
 
     args = parser.parse_args()
 
@@ -200,6 +216,7 @@ def main():
         top_k=args.top_k,
         top_p=args.top_p,
         max_new_tokens=args.max_new_tokens,
+        seed=args.seed,
     )
 
     n = codes_list[0].shape[0]

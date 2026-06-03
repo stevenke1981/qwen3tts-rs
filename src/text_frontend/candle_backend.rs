@@ -231,12 +231,15 @@ impl TextFrontend for CandleLLM {
                 )
                 .map_err(map_candle_err)?
         } else {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            text.hash(&mut hasher);
-            options.language.hash(&mut hasher);
-            options.speaker.hash(&mut hasher);
-            options.instruct.hash(&mut hasher);
-            let mut sampler = Sampler::new(hasher.finish());
+            let seed = options.seed.unwrap_or_else(|| {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                text.hash(&mut hasher);
+                options.language.hash(&mut hasher);
+                options.speaker.hash(&mut hasher);
+                options.instruct.hash(&mut hasher);
+                hasher.finish()
+            });
+            let mut sampler = Sampler::new(seed);
             let sampling = TalkerSamplingOptions {
                 temperature: options.temperature,
                 top_k: options.top_k as usize,

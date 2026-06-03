@@ -23,11 +23,14 @@ struct Args {
     language: String,
     speaker: Option<String>,
     instruct: Option<String>,
+    instruct_file: Option<PathBuf>,
+    seed: Option<u64>,
     max_new_tokens: u32,
     temperature: f64,
     top_k: u32,
     top_p: f64,
     save_tokens_dir: Option<PathBuf>,
+    save_tokens: bool,
 }
 
 impl Default for Args {
@@ -41,11 +44,14 @@ impl Default for Args {
             language: "auto".to_string(),
             speaker: None,
             instruct: None,
+            instruct_file: None,
+            seed: None,
             max_new_tokens: 128,
             temperature: 0.9,
             top_k: 50,
             top_p: 1.0,
             save_tokens_dir: None,
+            save_tokens: true,
         }
     }
 }
@@ -65,8 +71,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
 
     fs::create_dir_all(&args.output_dir)?;
-    if let Some(dir) = &args.save_tokens_dir {
-        fs::create_dir_all(dir)?;
+    if args.save_tokens {
+        if let Some(dir) = &args.save_tokens_dir {
+            fs::create_dir_all(dir)?;
+        }
     }
 
     let model_safetensors = args.model_dir.join("model.safetensors");
@@ -98,6 +106,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         language: args.language.clone(),
         speaker: args.speaker.clone(),
         instruct: args.instruct.clone(),
+        seed: args.seed,
         temperature: args.temperature,
         top_k: args.top_k,
         top_p: args.top_p,
@@ -109,6 +118,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         let one_based = idx + 1;
         let wav_path = make_output_path(&args.output_dir, &args.prefix, one_based);
         println!("[{one_based}/{}] {}", texts.len(), text);
+        warn_if_max_new_tokens_low(text, args.max_new_tokens);
 
         let synth_start = Instant::now();
         let stream = frontend.synthesize(text, &options)?;
@@ -118,10 +128,14 @@ fn run() -> Result<(), Box<dyn Error>> {
             continue;
         }
 
-        if let Some(tokens_dir) = &args.save_tokens_dir {
-            let token_path = make_token_path(tokens_dir, &args.prefix, one_based);
-            stream.write_binary(&token_path)?;
-            println!("  tokens: {}", token_path.display());
+        warn_if_truncated(text, args.max_new_tokens, stream.frames.len());
+
+        if args.save_tokens {
+            if let Some(tokens_dir) = &args.save_tokens_dir {
+                let token_path = make_token_path(tokens_dir, &args.prefix, one_based);
+                stream.write_binary(&token_path)?;
+                println!("  tokens: {}", token_path.display());
+            }
         }
 
         let decode_start = Instant::now();
@@ -179,6 +193,14 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
                 args.instruct = Some(require_arg(&raw, i, "--instruct")?);
                 i += 2;
             }
+            "--instruct-file" => {
+                args.instruct_file = Some(PathBuf::from(require_arg(&raw, i, "--instruct-file")?));
+                i += 2;
+            }
+            "--seed" => {
+                args.seed = Some(require_arg(&raw, i, "--seed")?.parse()?);
+                i += 2;
+            }
             "--max-new-tokens" => {
                 args.max_new_tokens = require_arg(&raw, i, "--max-new-tokens")?.parse()?;
                 i += 2;
@@ -200,6 +222,10 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
                     Some(PathBuf::from(require_arg(&raw, i, "--save-tokens-dir")?));
                 i += 2;
             }
+            "--no-save-tokens" => {
+                args.save_tokens = false;
+                i += 1;
+            }
             "--help" | "-h" => {
                 print_usage();
                 std::process::exit(0);
@@ -210,6 +236,19 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
 
     if args.model_dir.as_os_str().is_empty() {
         return Err("--model-dir is required".into());
+    }
+    if args.instruct.is_some() && args.instruct_file.is_some() {
+        return Err("--instruct and --instruct-file are mutually exclusive".into());
+    }
+    if let Some(path) = args.instruct_file.take() {
+        let value = fs::read_to_string(&path)?.trim().to_string();
+        if value.is_empty() {
+            return Err(format!("--instruct-file is empty: {}", path.display()).into());
+        }
+        args.instruct = Some(value);
+    }
+    if !args.save_tokens {
+        args.save_tokens_dir = None;
     }
     Ok(args)
 }
@@ -305,6 +344,32 @@ fn make_token_path(output_dir: &Path, prefix: &str, index: usize) -> PathBuf {
     output_dir.join(format!("{prefix}_{index:04}.tokens"))
 }
 
+fn recommended_max_new_tokens(text: &str) -> usize {
+    text.chars()
+        .filter(|&ch| ('\u{4e00}'..='\u{9fff}').contains(&ch))
+        .count()
+        .saturating_mul(3)
+        .max(16)
+}
+
+fn warn_if_max_new_tokens_low(text: &str, max_new_tokens: u32) {
+    let recommended = recommended_max_new_tokens(text);
+    if recommended > 16 && (max_new_tokens as usize) < recommended {
+        eprintln!(
+            "  warning: --max-new-tokens={max_new_tokens} may be low for this Chinese text; suggest at least {recommended}"
+        );
+    }
+}
+
+fn warn_if_truncated(text: &str, max_new_tokens: u32, num_frames: usize) {
+    let recommended = recommended_max_new_tokens(text);
+    if recommended > 16 && max_new_tokens as usize <= num_frames {
+        eprintln!(
+            "  warning: generated frames reached --max-new-tokens={max_new_tokens}; text may be truncated"
+        );
+    }
+}
+
 fn write_wav(path: &Path, samples: &[f32], sample_rate: u32) -> Result<(), Box<dyn Error>> {
     let spec = hound::WavSpec {
         channels: 1,
@@ -329,11 +394,14 @@ fn print_usage() {
            --language <name>        Language (default: auto)\n\
            --speaker <name>         Speaker condition\n\
            --instruct <text>        VoiceDesign/CustomVoice style instruction\n\
+           --instruct-file <path>   Read VoiceDesign/CustomVoice instruction from UTF-8 text file\n\
+           --seed <n>               Fixed sampling seed\n\
            --max-new-tokens <n>     Max generated frames (default: 128)\n\
            --temperature <f>        Sampling temperature (default: 0.9)\n\
            --top-k <n>              Top-k sampling (default: 50)\n\
            --top-p <f>              Top-p sampling (default: 1.0)\n\
-           --save-tokens-dir <dir>  Also write token files"
+           --save-tokens-dir <dir>  Also write token files\n\
+           --no-save-tokens         Disable token file output even if a wrapper passes --save-tokens-dir"
     );
 }
 
@@ -361,7 +429,7 @@ fn runtime_device() -> candle_core::Device {
 
 #[cfg(test)]
 mod tests {
-    use super::{make_output_path, parse_text_lines};
+    use super::{make_output_path, parse_args, parse_text_lines, recommended_max_new_tokens};
     use std::path::Path;
 
     #[test]
@@ -374,5 +442,28 @@ mod tests {
     fn make_output_path_uses_index_only() {
         let path = make_output_path(Path::new("out"), "clip", 7);
         assert_eq!(path, Path::new("out").join("clip_0007.wav"));
+    }
+
+    #[test]
+    fn parse_seed_and_no_save_tokens() {
+        let args = parse_args(vec![
+            "--model-dir".into(),
+            "model".into(),
+            "--seed".into(),
+            "42".into(),
+            "--save-tokens-dir".into(),
+            "tokens".into(),
+            "--no-save-tokens".into(),
+        ])
+        .unwrap();
+        assert_eq!(args.seed, Some(42));
+        assert!(!args.save_tokens);
+        assert!(args.save_tokens_dir.is_none());
+    }
+
+    #[test]
+    fn chinese_token_recommendation_scales_by_three() {
+        assert_eq!(recommended_max_new_tokens("今天天氣真好"), 18);
+        assert_eq!(recommended_max_new_tokens("hello"), 16);
     }
 }

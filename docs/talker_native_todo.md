@@ -31,6 +31,12 @@
   - Single and batch CLIs now fallback to Base model `tokenizer.json` from local HuggingFace cache when a VoiceDesign snapshot does not include one.
   - Single CLI warns when generated frame count reaches a too-low `--max-new-tokens` for long Chinese text.
   - Release guides now document Base voice-control limits, `--speaker` limitations, `--instruct`, batch `.tokens`, and the Chinese length heuristic.
+- 2026-06-03 v0.1.6 CLI usability update:
+  - Added `--instruct-file` for single and batch synthesis.
+  - Added `--seed` to control Candle sampler and Python fallback sampling.
+  - Added batch `--no-save-tokens` as an explicit token-output off switch.
+  - Batch now warns when Chinese text is likely to need a larger `--max-new-tokens`.
+  - Release guides now show 0.6B Base usage for lower hardware requirements.
 
 ## TODO
 

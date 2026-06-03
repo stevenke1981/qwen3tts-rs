@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.5 Windows x64 / Windows x64 CUDA`
+適用版本：`qwen3tts-rs v0.1.6 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
@@ -62,8 +62,8 @@ weights\tokenizer\
 
 ## CPU 與 CUDA 版本
 
-- `qwen3tts-rs-v0.1.5-windows-x64.zip`：CPU/Candle build。
-- `qwen3tts-rs-v0.1.5-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+- `qwen3tts-rs-v0.1.6-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.6-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
 
 建置 CUDA 版 release：
 
@@ -119,6 +119,19 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
 output.wav
 ```
 
+低硬體需求可改用 `0.6B-Base` snapshot；這也是 CLI 預設模型：
+
+```powershell
+$model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\<sha>"
+.\synthesize.exe `
+  --text "今天天氣真好" `
+  --backend candle `
+  --language chinese `
+  --model-dir $model `
+  --output output_0p6b.wav `
+  --max-new-tokens 32
+```
+
 ## VoiceDesign 音色指令
 
 `1.7B-VoiceDesign` 可用 `--instruct` 以自然語言描述音色與語氣：
@@ -131,7 +144,24 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --language chinese `
   --model-dir $model `
   --instruct "年輕女性，台灣口語，溫柔親切，語速自然" `
+  --seed 20260603 `
   --output voicedesign.wav `
+  --max-new-tokens 64
+```
+
+常用音色設定可存成 UTF-8 文字檔：
+
+```powershell
+"年輕女性，台灣口語，溫柔親切，語速自然" | Set-Content .\instruct.txt -Encoding UTF8
+
+.\synthesize.exe `
+  --text "歡迎使用 Qwen3-TTS Rust 原生版本" `
+  --backend candle `
+  --language chinese `
+  --model-dir $model `
+  --instruct-file .\instruct.txt `
+  --seed 20260603 `
+  --output voicedesign_file.wav `
   --max-new-tokens 64
 ```
 
@@ -155,7 +185,8 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --prefix qwen1p7b `
   --language chinese `
   --max-new-tokens 16 `
-  --instruct "年輕女性，台灣口語，溫柔親切" `
+  --instruct-file .\instruct.txt `
+  --seed 20260603 `
   --text "今天天氣真好" `
   --text "你好，測試第二句"
 ```
@@ -179,7 +210,8 @@ batch-output\qwen1p7b_0002.wav
   --model-dir $model `
   --texts .\texts.txt `
   --output-dir batch-output `
-  --language chinese
+  --language chinese `
+  --no-save-tokens
 ```
 
 ## 常用參數
@@ -190,10 +222,14 @@ batch-output\qwen1p7b_0002.wav
 | `--language` | 語言，中文建議使用 `chinese` |
 | `--speaker` | 說話者條件；若模型沒有 speaker id map，通常無作用 |
 | `--instruct` | VoiceDesign/CustomVoice 音色或語氣指令 |
+| `--instruct-file` | 從 UTF-8 文字檔讀取音色或語氣指令 |
+| `--seed` | 固定取樣 seed，讓相同文字/條件更容易重現 |
 | `--max-new-tokens` | 最大生成 frame 數，短句可先用 `16` 測試；長中文可用中文字數 × 3 估算 |
 | `--temperature` | 取樣溫度，預設 `0.9` |
 | `--top-k` | top-k 取樣，預設 `50` |
 | `--top-p` | top-p 取樣，預設 `1.0` |
+| `--save-tokens-dir` | batch 模式同步輸出每句 `.tokens` 檔 |
+| `--no-save-tokens` | batch 模式關閉 token 檔輸出 |
 
 ## 驗證輸出不是靜音
 
@@ -219,6 +255,7 @@ with wave.open(name, "rb") as w:
 - 1.7B native Candle 短句已可產生非靜音語音。
 - `v0.1.4` 提供 CPU 與 CUDA 兩種 release；CUDA binary 會優先使用 `CUDA:0`。
 - `v0.1.5` 新增 VoiceDesign/CustomVoice `--instruct`，並在 VoiceDesign snapshot 缺少 `tokenizer.json` 時自動 fallback 使用 Base tokenizer。
+- `v0.1.6` 新增 `--instruct-file`、`--seed`、batch `--no-save-tokens`，並讓 batch 對長中文提示 `--max-new-tokens` 建議。
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
 - 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。

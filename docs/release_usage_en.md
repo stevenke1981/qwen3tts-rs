@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.5 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.6 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
@@ -70,8 +70,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.5-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.5-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.6-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.6-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -132,6 +132,20 @@ Output:
 output.wav
 ```
 
+For lower hardware requirements, point `--model-dir` to a `0.6B-Base`
+snapshot. This is also the CLI default model:
+
+```powershell
+$model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\<sha>"
+.\synthesize.exe `
+  --text "今天天氣真好" `
+  --backend candle `
+  --language chinese `
+  --model-dir $model `
+  --output output_0p6b.wav `
+  --max-new-tokens 32
+```
+
 ## VoiceDesign Instructions
 
 `1.7B-VoiceDesign` supports natural-language voice/style control through
@@ -145,7 +159,24 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --language english `
   --model-dir $model `
   --instruct "young female voice, warm and friendly, natural speaking pace" `
+  --seed 20260603 `
   --output voicedesign.wav `
+  --max-new-tokens 64
+```
+
+You can keep reusable voice settings in a UTF-8 text file:
+
+```powershell
+"young female voice, warm and friendly, natural speaking pace" | Set-Content .\instruct.txt -Encoding UTF8
+
+.\synthesize.exe `
+  --text "Welcome to the native Rust Qwen3-TTS build" `
+  --backend candle `
+  --language english `
+  --model-dir $model `
+  --instruct-file .\instruct.txt `
+  --seed 20260603 `
+  --output voicedesign_file.wav `
   --max-new-tokens 64
 ```
 
@@ -174,7 +205,8 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --prefix qwen1p7b `
   --language chinese `
   --max-new-tokens 16 `
-  --instruct "young female voice, warm and friendly" `
+  --instruct-file .\instruct.txt `
+  --seed 20260603 `
   --text "今天天氣真好" `
   --text "你好，測試第二句"
 ```
@@ -191,7 +223,8 @@ You can also use a text file:
   --model-dir $model `
   --texts .\texts.txt `
   --output-dir batch-output `
-  --language chinese
+  --language chinese `
+  --no-save-tokens
 ```
 
 Batch output file names use only the numeric index:
@@ -209,10 +242,14 @@ batch-output\qwen1p7b_0002.wav
 | `--language` | Language condition. Use `chinese` for Chinese prompts |
 | `--speaker` | Optional speaker condition; usually no effect when the model has no speaker id map |
 | `--instruct` | VoiceDesign/CustomVoice voice or style instruction |
+| `--instruct-file` | Read voice or style instruction from a UTF-8 text file |
+| `--seed` | Fixed sampling seed for more reproducible output under the same text and conditions |
 | `--max-new-tokens` | Maximum generated frame count. Use `16` for short smoke tests; for long Chinese text, start with character count x 3 |
 | `--temperature` | Sampling temperature, default `0.9` |
 | `--top-k` | Top-k sampling, default `50` |
 | `--top-p` | Top-p sampling, default `1.0` |
+| `--save-tokens-dir` | Batch mode token-file output directory |
+| `--no-save-tokens` | Disable batch token-file output |
 
 ## Verify The Output Is Not Silent
 
@@ -241,6 +278,8 @@ If `rms=0` and `peak=0`, the WAV is silent.
 - `v0.1.5` adds VoiceDesign/CustomVoice `--instruct` support and automatically
   falls back to a Base tokenizer when a VoiceDesign snapshot does not include
   `tokenizer.json`.
+- `v0.1.6` adds `--instruct-file`, `--seed`, batch `--no-save-tokens`, and
+  batch warnings for long Chinese text with low `--max-new-tokens`.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.

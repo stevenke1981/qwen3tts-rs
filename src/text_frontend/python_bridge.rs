@@ -103,9 +103,13 @@ impl PythonBridge {
             .arg("--top-p")
             .arg(options.top_p.to_string())
             .arg("--max-new-tokens")
-            .arg(options.max_new_tokens.to_string())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .arg(options.max_new_tokens.to_string());
+
+        if let Some(seed) = options.seed {
+            cmd.arg("--seed").arg(seed.to_string());
+        }
+
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
         let mut child = cmd.spawn().map_err(|e| {
             crate::Error::Config(format!(
