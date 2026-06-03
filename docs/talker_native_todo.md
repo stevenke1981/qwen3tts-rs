@@ -11,6 +11,19 @@
   - Talker and code predictor attention now return K/V caches.
   - Code predictor now uses `talker_hidden + codebook_0_embed` as prefill and returns only codebooks 1-15.
   - Added a synthetic code predictor test that checks sub-codebook output shape and cache growth.
+- 2026-06-03 native 1.7B update:
+  - 1.7B `TalkerConfig` is now inferred from safetensors shapes.
+  - Optional `talker.code_predictor.small_to_mtp_projection.{weight,bias}` is loaded for 2048 -> 1024 code predictor projection.
+  - Practical synthesis uses deterministic temperature/top-k/top-p sampling when `temperature > 0`.
+  - Main codec head sampling suppresses control tokens `>= 2048` while allowing EOS.
+  - `cn_candle_1.7b_short.wav` was true silence: duration `1.280s`, RMS `0.0`, peak `0`.
+  - Fixed sampled output `cn_candle_1.7b_short_sampled_final.wav`: duration `1.280s`, RMS `1837.7`, peak `7067`.
+  - Added `examples/synthesize_batch.rs` to load the 1.7B Candle model and 12Hz decoder once, then synthesize multiple lines.
+  - Batch smoke with two Chinese lines:
+    - load once: `5.64s`
+    - line 1: synth `7.31s`, decode `1.09s`, RMS `1837.7`, peak `7067`
+    - line 2: synth `7.29s`, decode `1.05s`, RMS `1067.3`, peak `5620`
+    - total wall time: `23.65s`
 
 ## TODO
 
@@ -124,3 +137,5 @@
    - Remove hot-path allocations.
    - Preallocate KV caches.
    - Add latency benchmarks for first token and frame generation.
+   - Status: load-once batch runner added; next bottleneck is per-frame talker/code-predictor generation and repeated allocation inside generation.
+   - Next step: add timing around talker prefill, main codec head, code predictor sub-codebooks, and codec decode to identify the first hot path for optimization.
