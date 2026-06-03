@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.4 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.5 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
@@ -70,8 +70,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.4-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.4-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.5-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.5-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -238,6 +238,9 @@ If `rms=0` and `peak=0`, the WAV is silent.
 - Native Candle 1.7B short Chinese prompts now produce non-silent audio.
 - `v0.1.4` provides both CPU and CUDA release packages. The CUDA binary prefers
   `CUDA:0`.
+- `v0.1.5` adds VoiceDesign/CustomVoice `--instruct` support and automatically
+  falls back to a Base tokenizer when a VoiceDesign snapshot does not include
+  `tokenizer.json`.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.
