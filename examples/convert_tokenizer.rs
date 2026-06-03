@@ -29,6 +29,10 @@ fn run() -> qwen3tts::Result<()> {
                 print_usage();
                 return Ok(());
             }
+            "--version" | "-V" => {
+                println!("qwen3tts-rs {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
             other => {
                 return Err(qwen3tts::Error::Config(format!(
                     "Unknown argument: {other}"
@@ -59,7 +63,7 @@ fn require_arg(args: &[String], i: usize, flag: &str) -> qwen3tts::Result<String
 
 fn print_usage() {
     println!(
-        "Usage: convert_tokenizer.exe [--input <hf-tokenizer-snapshot>] [--output weights/tokenizer]\n\
+        "Usage: convert_tokenizer.exe [--input <hf-tokenizer-snapshot>] [--output weights/tokenizer] [--version | -V]\n\
          If --input is omitted, the converter searches the HuggingFace cache for\n\
          Qwen/Qwen3-TTS-Tokenizer-12Hz."
     );

@@ -125,6 +125,35 @@ impl Decoder12Hz {
             frame_embeddings.push(frame_embed.to_vec1()?);
         }
 
+        // Apply speed adjustment if requested (via linear interpolation on frame embeddings)
+        let speed = self.config.speed;
+        let frame_embeddings = if speed != 1.0 && num_frames > 1 {
+            let new_num_frames = ((num_frames as f64) / speed).round() as usize;
+            let new_num_frames = new_num_frames.max(1);
+            let mut interpolated = Vec::with_capacity(new_num_frames);
+            if new_num_frames == 1 {
+                interpolated.push(frame_embeddings[0].clone());
+            } else {
+                for j in 0..new_num_frames {
+                    let pos = (j as f64) * ((num_frames - 1) as f64) / ((new_num_frames - 1) as f64);
+                    let left = pos.floor() as usize;
+                    let right = pos.ceil() as usize;
+                    let weight = pos - left as f64;
+                    let left_embed = &frame_embeddings[left];
+                    let right_embed = &frame_embeddings[right];
+                    let mut mixed = Vec::with_capacity(left_embed.len());
+                    for idx in 0..left_embed.len() {
+                        mixed.push(left_embed[idx] * (1.0 - weight as f32) + right_embed[idx] * (weight as f32));
+                    }
+                    interpolated.push(mixed);
+                }
+            }
+            interpolated
+        } else {
+            frame_embeddings
+        };
+
+        let num_frames = frame_embeddings.len();
         let mut batch_data: Vec<f32> = Vec::with_capacity(self.config.embedding_dim * num_frames);
         for ch in 0..self.config.embedding_dim {
             for frame in &frame_embeddings {

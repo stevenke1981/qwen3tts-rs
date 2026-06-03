@@ -31,6 +31,7 @@ struct Args {
     top_p: f64,
     save_tokens_dir: Option<PathBuf>,
     save_tokens: bool,
+    speed: f64,
 }
 
 impl Default for Args {
@@ -52,6 +53,7 @@ impl Default for Args {
             top_p: 1.0,
             save_tokens_dir: None,
             save_tokens: true,
+            speed: 1.0,
         }
     }
 }
@@ -86,7 +88,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     let weight_dir = ensure_tokenizer_weight_dir()?;
 
     let device = runtime_device();
-    let decoder_config = DecoderConfig::realtime_with_capacity(args.max_new_tokens as usize);
+    let mut decoder_config = DecoderConfig::realtime_with_capacity(args.max_new_tokens as usize);
+    decoder_config.speed = args.speed;
     println!("loading tokenizer decoder once...");
     println!("  tokenizer weights: {}", weight_dir.display());
     println!(
@@ -225,6 +228,17 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
             "--no-save-tokens" => {
                 args.save_tokens = false;
                 i += 1;
+            }
+            "--speed" => {
+                args.speed = require_arg(&raw, i, "--speed")?.parse()?;
+                if args.speed <= 0.0 {
+                    return Err("--speed must be greater than 0.0".into());
+                }
+                i += 2;
+            }
+            "--version" | "-V" => {
+                println!("qwen3tts-rs {}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
             }
             "--help" | "-h" => {
                 print_usage();
@@ -409,8 +423,10 @@ fn print_usage() {
            --temperature <f>        Sampling temperature (default: 0.9)\n\
            --top-k <n>              Top-k sampling (default: 50)\n\
            --top-p <f>              Top-p sampling (default: 1.0)\n\
+           --speed <f>              Speech rate speed factor (default: 1.0)\n\
            --save-tokens-dir <dir>  Also write token files\n\
-           --no-save-tokens         Disable token file output even if a wrapper passes --save-tokens-dir"
+           --no-save-tokens         Disable token file output even if a wrapper passes --save-tokens-dir\n\
+           --version / -V           Show version info"
     );
 }
 

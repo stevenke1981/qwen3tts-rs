@@ -144,6 +144,51 @@ fn test_decode_frames_matches_pytorch_reference() {
 }
 
 #[test]
+fn test_decode_frames_speed_adjustment() {
+    let weight_dir = Path::new("weights/tokenizer");
+    if !weight_dir.join("codebook.safetensors").exists() {
+        eprintln!("Skipping: real weights not found");
+        return;
+    }
+
+    let device = candle_core::Device::Cpu;
+    let frames: Vec<[u16; 16]> = vec![
+        [1221, 1052, 1114, 1364, 1468, 1760, 974, 1318, 746, 391, 161, 1013, 663, 837, 216, 1929],
+        [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600],
+        [42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42],
+        [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160],
+    ];
+
+    // Speed 1.0 (Normal)
+    let config_normal = DecoderConfig::realtime();
+    let mut decoder_normal = Decoder12Hz::from_safetensors(config_normal, weight_dir, &device).unwrap();
+    let output_normal = decoder_normal.decode_frames(&frames).unwrap();
+
+    // Speed 2.0 (Double Speed - half the frames/samples)
+    let mut config_fast = DecoderConfig::realtime_with_capacity(frames.len());
+    config_fast.speed = 2.0;
+    let mut decoder_fast = Decoder12Hz::from_safetensors(config_fast, weight_dir, &device).unwrap();
+    let output_fast = decoder_fast.decode_frames(&frames).unwrap();
+
+    // Speed 0.5 (Half Speed - double the frames/samples)
+    // 4 frames at 0.5 speed = 8 frames -> capacity 8
+    let mut config_slow = DecoderConfig::realtime_with_capacity(8);
+    config_slow.speed = 0.5;
+    let mut decoder_slow = Decoder12Hz::from_safetensors(config_slow, weight_dir, &device).unwrap();
+    let output_slow = decoder_slow.decode_frames(&frames).unwrap();
+
+    println!("output_normal len = {}", output_normal.len());
+    println!("output_fast len = {}", output_fast.len());
+    println!("output_slow len = {}", output_slow.len());
+
+    assert!(output_fast.len() < output_normal.len());
+    assert!(output_slow.len() > output_normal.len());
+    assert_eq!(output_fast.len(), 3840);
+    assert_eq!(output_normal.len(), 7680);
+    assert_eq!(output_slow.len(), 15360);
+}
+
+#[test]
 fn test_decoder_start_conv_matches_pytorch_reference() {
     let weight_dir = Path::new("weights/tokenizer");
     if !weight_dir.join("decoder_blocks.safetensors").exists()

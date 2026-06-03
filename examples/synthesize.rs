@@ -174,6 +174,7 @@ fn main() {
     #[cfg(feature = "candle-llm")]
     let mut model_dir: Option<String> = None; // 給 CandleLLM 用
     let mut backend = default_backend();
+    let mut speed = 1.0;
 
     let mut i = 1;
     while i < args.len() {
@@ -280,6 +281,22 @@ fn main() {
                 };
                 i += 2;
             }
+            "--speed" => {
+                require_arg(&args, i, "--speed");
+                speed = args[i + 1].parse().unwrap_or_else(|_| {
+                    eprintln!("--speed 必須是浮點數");
+                    std::process::exit(1);
+                });
+                if speed <= 0.0 {
+                    eprintln!("--speed 必須大於 0.0");
+                    std::process::exit(1);
+                }
+                i += 2;
+            }
+            "--version" | "-V" => {
+                println!("qwen3tts-rs {}", env!("CARGO_PKG_VERSION"));
+                return;
+            }
             "--help" | "-h" => {
                 print_usage();
                 return;
@@ -321,6 +338,9 @@ fn main() {
     println!("後端    : {:?}", backend);
     println!("語言    : {language}");
     println!("輸出    : {output_path}");
+    if speed != 1.0 {
+        println!("語速    : {speed}x");
+    }
     if let Some(ins) = &instruct {
         println!("指令    : {ins}");
     }
@@ -455,7 +475,13 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let config = DecoderConfig::realtime_with_capacity(num_frames);
+    let target_frames = if speed != 1.0 {
+        (num_frames as f64 / speed).round() as usize
+    } else {
+        num_frames
+    };
+    let mut config = DecoderConfig::realtime_with_capacity(num_frames.max(target_frames));
+    config.speed = speed;
 
     println!("[2/3] 載入 Tokenizer 解碼器…");
     println!("      tokenizer weights: {}", weight_dir.display());
@@ -600,7 +626,9 @@ fn print_usage() {
   --seed N           固定取樣 seed，讓相同文字/條件更容易重現
   --output / -o      輸出 WAV 路徑（預設: output.wav）
   --max-new-tokens N 最大生成 Token 數（預設: 4096）
+  --speed N          調整語音語速，例如 1.2 變快，0.8 變慢（預設: 1.0）
   --text-only        只跑到 LLM 階段產生 Token，不解碼成音訊
+  --version / -V     顯示版本號
   --help / -h        顯示此說明
 
 範例:

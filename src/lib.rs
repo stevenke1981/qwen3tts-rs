@@ -121,6 +121,9 @@ pub struct DecoderConfig {
     /// 環形緩衝區最大幀數
     pub ring_buffer_capacity: usize,
 
+    /// 語音合成語速 (1.0 為正常速度)
+    pub speed: f64,
+
     // --- 12Hz 完整解碼器參數 ---
     /// pre_conv 輸出通道（預設 1024）
     pub latent_dim: usize,
@@ -171,6 +174,7 @@ impl Default for DecoderConfig {
             kernel_size: 3,
             conv_channels: 512,
             ring_buffer_capacity: 64,
+            speed: 1.0,
             latent_dim: 1024,
             transformer_dim: 512,
             transformer_heads: 16,
