@@ -225,11 +225,23 @@ fn main() {
         std::process::exit(1);
     }
 
+    #[cfg(feature = "candle-llm")]
+    let banner_model = if backend == BackendKind::Candle {
+        model_dir
+            .as_deref()
+            .map(|dir| display_model_id(&model_id, Path::new(dir)))
+            .unwrap_or_else(|| model_id.clone())
+    } else {
+        model_id.clone()
+    };
+    #[cfg(not(feature = "candle-llm"))]
+    let banner_model = model_id.clone();
+
     println!("╔══════════════════════════════════════╗");
     println!("║    Qwen3-TTS Rust 文字轉語音        ║");
     println!("╚══════════════════════════════════════╝");
     println!("文字    : {text}");
-    println!("模型    : {model_id}");
+    println!("模型    : {banner_model}");
     println!("後端    : {:?}", backend);
     println!("語言    : {language}");
     println!("輸出    : {output_path}");
