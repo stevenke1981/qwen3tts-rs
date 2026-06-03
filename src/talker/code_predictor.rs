@@ -7,7 +7,8 @@ use candle_core::{Device, Result, Tensor};
 
 use super::config::CodePredictorConfig;
 use super::decoder_layer::StandardDecoderLayer;
-use super::primitives::{create_causal_mask, embedding_lookup, linear, RMSNorm};
+use super::primitives::{create_causal_mask, embedding_lookup, linear, linear_with_bias, RMSNorm};
+use super::sampling::{Sampler, SamplingOptions};
 
 /// 子碼本預測器
 #[derive(Debug, Clone)]
@@ -20,6 +21,8 @@ pub struct CodePredictor {
     pub layers: Vec<StandardDecoderLayer>,
     /// 最終 norm
     pub norm: RMSNorm,
+    /// Optional projection from talker/codebook embedding width to code predictor width.
+    pub small_to_mtp_proj: Option<(Tensor, Tensor)>,
     /// 配置
     pub config: CodePredictorConfig,
 }
@@ -34,6 +37,7 @@ impl CodePredictor {
         device: &Device,
     ) -> Result<Tensor> {
         let prefill = Tensor::cat(&[talker_hidden.clone(), codebook_0_embed.clone()], 1)?;
+        let prefill = self.project_input(&prefill)?;
         let (cos, sin) = self.compute_rope_for_positions(&[0, 1], device)?;
         let causal_mask = create_causal_mask(2, device)?;
         let h = self.forward_layers(&prefill, &cos, &sin, Some(&causal_mask), kv_caches)?;
@@ -69,6 +73,7 @@ impl CodePredictor {
             let emb_weight = &self.codec_embeddings[step - 1];
             let next_input_ids = Tensor::from_slice(&[next_val], (1, 1), device)?;
             let next_input = embedding_lookup(emb_weight, &next_input_ids)?;
+            let next_input = self.project_input(&next_input)?;
             let pos = (step + 1) as u32;
             let (cos, sin) = self.compute_rope_for_positions(&[pos], device)?;
             let h = self.forward_layers(&next_input, &cos, &sin, None, kv_caches)?;
@@ -80,6 +85,46 @@ impl CodePredictor {
 
         let code_tensor = Tensor::from_slice(&generated_ids, (1, generated_ids.len()), device)?;
         Ok((code_tensor, kv_caches.to_vec()))
+    }
+
+    pub fn generate_sampled(
+        &self,
+        talker_hidden: &Tensor,
+        codebook_0_embed: &Tensor,
+        kv_caches: &mut [Option<(Tensor, Tensor)>],
+        device: &Device,
+        sampler: &mut Sampler,
+        sampling: SamplingOptions,
+    ) -> Result<(Tensor, Vec<Option<(Tensor, Tensor)>>)> {
+        let mut generated_ids: Vec<u32> = Vec::with_capacity(self.config.num_code_groups - 1);
+
+        let logits = self.first_step_logits(talker_hidden, codebook_0_embed, kv_caches, device)?;
+        let mut next_val = sampler.sample(&logits, sampling, None, None)?;
+        generated_ids.push(next_val);
+
+        for step in 1..(self.config.num_code_groups - 1) {
+            let emb_weight = &self.codec_embeddings[step - 1];
+            let next_input_ids = Tensor::from_slice(&[next_val], (1, 1), device)?;
+            let next_input = embedding_lookup(emb_weight, &next_input_ids)?;
+            let next_input = self.project_input(&next_input)?;
+            let pos = (step + 1) as u32;
+            let (cos, sin) = self.compute_rope_for_positions(&[pos], device)?;
+            let h = self.forward_layers(&next_input, &cos, &sin, None, kv_caches)?;
+            let logits = linear(&h, &self.lm_heads[step])?.squeeze(1)?;
+            next_val = sampler.sample(&logits, sampling, None, None)?;
+            generated_ids.push(next_val);
+        }
+
+        let code_tensor = Tensor::from_slice(&generated_ids, (1, generated_ids.len()), device)?;
+        Ok((code_tensor, kv_caches.to_vec()))
+    }
+
+    fn project_input(&self, input: &Tensor) -> Result<Tensor> {
+        if let Some((weight, bias)) = &self.small_to_mtp_proj {
+            linear_with_bias(input, weight, bias)
+        } else {
+            Ok(input.clone())
+        }
     }
 
     fn forward_layers(
@@ -191,6 +236,7 @@ mod tests {
             lm_heads: vec![zeros2(8, 4), zeros2(8, 4)],
             layers: vec![layer],
             norm: super::RMSNorm::new(ones1(4), config.rms_norm_eps),
+            small_to_mtp_proj: None,
             config,
         };
 

@@ -70,6 +70,61 @@ impl TalkerWeightLoader {
         })
     }
 
+    /// 從已載入的權重 shape 推斷 `TalkerConfig`
+    ///
+    /// 用於支援不同 hidden_size / intermediate_size 的模型變體
+    /// （0.6B 與 1.7B 共用同一套權重命名規則，僅維度不同）。
+    pub fn infer_config(&self) -> Result<TalkerConfig> {
+        // Talker 主幹
+        let codec_emb = self.get("talker.model.codec_embedding.weight")?;
+        let (_codec_vocab, hidden_size) = codec_emb.dims2()?;
+        let text_emb = self.get("talker.model.text_embedding.weight")?;
+        let (_text_vocab, text_hidden_size) = text_emb.dims2()?;
+
+        // 取 layer 0 的 mlp.gate_proj 形狀以推斷 intermediate_size
+        let mlp_gate = self.get("talker.model.layers.0.mlp.gate_proj.weight")?;
+        let (intermediate_size, _in_dim) = mlp_gate.dims2()?;
+
+        // num_hidden_layers: 透過 self_attn.q_proj.{i} 的數量
+        let num_hidden_layers = (0..64)
+            .take_while(|i| {
+                self.tensors
+                    .contains_key(&format!("talker.model.layers.{i}.self_attn.q_proj.weight"))
+            })
+            .count();
+
+        // code_predictor: 透過 lm_head.{0..14}
+        let cp_hidden_size = self
+            .get("talker.code_predictor.lm_head.0.weight")
+            .and_then(|t| t.dim(1).map_err(Error::from))
+            .unwrap_or(1024); // fallback for 0.6B-like
+        let cp_intermediate_size = self
+            .get("talker.code_predictor.model.layers.0.mlp.gate_proj.weight")
+            .ok()
+            .and_then(|t| t.dims2().ok())
+            .map(|(d, _)| d)
+            .unwrap_or(3072);
+        let cp_num_layers = (0..16)
+            .take_while(|i| {
+                self.tensors.contains_key(&format!(
+                    "talker.code_predictor.model.layers.{i}.self_attn.q_proj.weight"
+                ))
+            })
+            .count()
+            .max(5);
+
+        // 從 default 開始，覆寫推斷出的維度
+        let mut cfg = TalkerConfig::default();
+        cfg.hidden_size = hidden_size;
+        cfg.intermediate_size = intermediate_size;
+        cfg.text_hidden_size = text_hidden_size;
+        cfg.num_hidden_layers = num_hidden_layers;
+        cfg.code_predictor.hidden_size = cp_hidden_size;
+        cfg.code_predictor.intermediate_size = cp_intermediate_size;
+        cfg.code_predictor.num_hidden_layers = cp_num_layers;
+        Ok(cfg)
+    }
+
     /// 取得張量
     pub fn get(&self, name: &str) -> Result<Tensor> {
         self.tensors
@@ -246,14 +301,25 @@ impl TalkerWeightLoader {
 
         let norm = self.get("talker.code_predictor.model.norm.weight")?;
 
-        // Code predictor also has a projection from talker hidden to its hidden
-        // Since both are 1024, this is identity
+        // 1.7B projects 2048-wide talker/codebook embeddings into the
+        // 1024-wide code predictor transformer. 0.6B already uses 1024-wide
+        // embeddings here and has no projection tensor.
+        let small_to_mtp_proj = match (
+            self.tensors
+                .get("talker.code_predictor.small_to_mtp_projection.weight"),
+            self.tensors
+                .get("talker.code_predictor.small_to_mtp_projection.bias"),
+        ) {
+            (Some(w), Some(b)) => Some((w.clone(), b.clone())),
+            _ => None,
+        };
 
         Ok(CodePredictor {
             codec_embeddings: codec_embeds,
             lm_heads,
             layers,
             norm: RMSNorm::new(norm, cp.rms_norm_eps),
+            small_to_mtp_proj,
             config: cp.clone(),
         })
     }

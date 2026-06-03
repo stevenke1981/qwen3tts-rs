@@ -32,6 +32,7 @@ pub mod decoder_layer;
 pub mod input_builder;
 pub mod model;
 pub mod primitives;
+pub mod sampling;
 pub mod talker;
 pub mod talker_attention;
 pub mod weight_loader;

@@ -21,12 +21,14 @@
 //! 完整 token 序列 = 3 (role) + N (text) + 5 (tail) = N+8。
 //! 這 8 個固定 token 結構由 `InputBuilder::build` 預期。
 
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use candle_core::Device;
 use tokenizers::Tokenizer;
 
+use crate::talker::sampling::{Sampler, SamplingOptions as TalkerSamplingOptions};
 use crate::talker::{
     InputBuilder, TalkerConfig, TalkerForConditionalGeneration, TalkerWeightLoader,
 };
@@ -92,9 +94,17 @@ impl CandleLLM {
         }
         let loader = TalkerWeightLoader::from_safetensors(&safetensors_path, device)?;
 
-        // ── 3. 構建 Talker ──
-        let config = TalkerConfig::default();
+        // ── 3. 從權重 shape 推斷 config（支援 0.6B / 1.7B）──
+        let config = loader.infer_config()?;
         let talker = loader.build_talker(&config)?;
+
+        log::info!(
+            "CandleLLM loaded: hidden={} intermediate={} num_layers={} code_predictor_hidden={}",
+            config.hidden_size,
+            config.intermediate_size,
+            config.num_hidden_layers,
+            config.code_predictor.hidden_size
+        );
 
         Ok(Self {
             tokenizer: Arc::new(tokenizer),
@@ -114,8 +124,15 @@ impl CandleLLM {
         let tokenizer = Tokenizer::from_file(tokenizer_path.as_ref())
             .map_err(|e| Error::Config(format!("Failed to load tokenizer: {e}")))?;
         let loader = TalkerWeightLoader::from_safetensors(safetensors_path, device)?;
-        let config = TalkerConfig::default();
+        let config = loader.infer_config()?;
         let talker = loader.build_talker(&config)?;
+        log::info!(
+            "CandleLLM loaded: hidden={} intermediate={} num_layers={} code_predictor_hidden={}",
+            config.hidden_size,
+            config.intermediate_size,
+            config.num_hidden_layers,
+            config.code_predictor.hidden_size
+        );
         Ok(Self {
             tokenizer: Arc::new(tokenizer),
             talker: Arc::new(talker),
@@ -180,17 +197,41 @@ impl TextFrontend for CandleLLM {
 
         // ── 3. 自迴歸生成 codec tokens ──
         let max_new_tokens = options.max_new_tokens as usize;
-        let codes_tensor = self
-            .talker
-            .generate(
-                &inputs_embeds,
-                Some(&attention_mask),
-                Some(&trailing_text_hidden),
-                Some(&tts_pad_embed),
-                max_new_tokens,
-                &self.device,
-            )
-            .map_err(map_candle_err)?;
+        let codes_tensor = if options.temperature <= 0.0 {
+            self.talker
+                .generate(
+                    &inputs_embeds,
+                    Some(&attention_mask),
+                    Some(&trailing_text_hidden),
+                    Some(&tts_pad_embed),
+                    max_new_tokens,
+                    &self.device,
+                )
+                .map_err(map_candle_err)?
+        } else {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            text.hash(&mut hasher);
+            options.language.hash(&mut hasher);
+            options.speaker.hash(&mut hasher);
+            let mut sampler = Sampler::new(hasher.finish());
+            let sampling = TalkerSamplingOptions {
+                temperature: options.temperature,
+                top_k: options.top_k as usize,
+                top_p: options.top_p,
+            };
+            self.talker
+                .generate_sampled(
+                    &inputs_embeds,
+                    Some(&attention_mask),
+                    Some(&trailing_text_hidden),
+                    Some(&tts_pad_embed),
+                    max_new_tokens,
+                    &self.device,
+                    &mut sampler,
+                    sampling,
+                )
+                .map_err(map_candle_err)?
+        };
 
         // ── 4. Tensor → Vec<Vec<u16>> ──
         let (num_frames, _codebooks) = codes_tensor.dims2().map_err(map_candle_err)?;

@@ -18,6 +18,7 @@ use super::model::TalkerModel;
 use super::primitives::{
     create_causal_mask, embedding_lookup, linear, linear_with_bias, MultimodalRotaryEmbedding,
 };
+use super::sampling::{Sampler, SamplingOptions};
 
 /// Talker 條件生成模型
 #[derive(Debug, Clone)]
@@ -219,6 +220,111 @@ impl TalkerForConditionalGeneration {
             .collect();
         let result = Tensor::from_slice(&flat_u32, (n, 16), device)?;
         Ok(result)
+    }
+
+    pub fn generate_sampled(
+        &self,
+        inputs_embeds: &Tensor,
+        attention_mask: Option<&Tensor>,
+        trailing_text_hidden: Option<&Tensor>,
+        tts_pad_embed: Option<&Tensor>,
+        max_new_tokens: usize,
+        device: &Device,
+        sampler: &mut Sampler,
+        sampling: SamplingOptions,
+    ) -> Result<Tensor> {
+        let (batch, seq_len, _hidden) = inputs_embeds.dims3()?;
+        assert_eq!(batch, 1, "Only batch=1 supported");
+
+        let mask = attention_mask
+            .cloned()
+            .unwrap_or_else(|| Tensor::ones(&[batch, seq_len], DType::I64, device).unwrap());
+        let (position_ids, _rope_delta) = self.compute_position_ids(&mask)?;
+        let causal_mask = create_causal_mask(seq_len, device)?;
+        let (cos, sin) = self.rope.forward(inputs_embeds, &position_ids)?;
+
+        let mut kv_caches = vec![None; self.config.num_hidden_layers];
+        let (hidden, new_caches) = self.model.forward(
+            inputs_embeds,
+            &cos,
+            &sin,
+            Some(&causal_mask),
+            &mut kv_caches,
+        )?;
+        kv_caches = new_caches;
+        let mut last_hidden = hidden.narrow(1, seq_len - 1, 1)?;
+
+        let mut all_codes: Vec<Vec<u16>> = Vec::new();
+        let tts_pad = tts_pad_embed.cloned().unwrap_or_else(|| {
+            Tensor::zeros(&[1, 1, self.config.hidden_size], DType::F32, device).unwrap()
+        });
+        let trailing = trailing_text_hidden.cloned().unwrap_or_else(|| {
+            Tensor::zeros(&[batch, 1, self.config.hidden_size], DType::F32, device).unwrap()
+        });
+        let trailing_len = trailing.dim(1)?;
+        let mut gen_step: usize = 0;
+
+        for _step in 0..max_new_tokens {
+            let logits = self.codec_head_logits(&last_hidden)?.squeeze(1)?;
+            let c0_val = sampler.sample(
+                &logits,
+                sampling,
+                Some(2048),
+                Some(self.config.codec_eos_token_id as usize),
+            )? as u16;
+            let c0_t = Tensor::new(&[c0_val as u32], device)?;
+            let c0_2d = c0_t.reshape((1, 1))?;
+            let c0_emb = self.embed_codec(&c0_2d)?;
+
+            let mut cp_kv_caches = vec![None; self.config.code_predictor.num_hidden_layers];
+            let (codes_1_15, _) = self.code_predictor.generate_sampled(
+                &last_hidden,
+                &c0_emb,
+                &mut cp_kv_caches,
+                device,
+                sampler,
+                sampling,
+            )?;
+
+            let full_codes = Tensor::cat(&[c0_2d.clone(), codes_1_15.clone()], 1)?;
+            let codes_flat = full_codes.squeeze(0)?.to_vec1::<u32>()?;
+            let frame: Vec<u16> = codes_flat.iter().map(|&x| x as u16).collect();
+            all_codes.push(frame);
+
+            if c0_val as u32 == self.config.codec_eos_token_id {
+                break;
+            }
+
+            let mut sum_emb = c0_emb;
+            for i in 0..(self.config.num_code_groups - 1) {
+                let ci_token = codes_1_15.narrow(1, i, 1)?;
+                let ci_emb = embedding_lookup(&self.code_predictor.codec_embeddings[i], &ci_token)?;
+                sum_emb = (sum_emb + ci_emb)?;
+            }
+
+            let text_add = if gen_step < trailing_len {
+                trailing.narrow(1, gen_step, 1)?
+            } else {
+                tts_pad.clone()
+            };
+            let next_input = (sum_emb + text_add)?;
+
+            let position_ids = self.generation_position_ids(seq_len + gen_step, batch, device)?;
+            let (cos, sin) = self.rope.forward(&next_input, &position_ids)?;
+            let (hidden, new_caches) =
+                self.model
+                    .forward(&next_input, &cos, &sin, None, &mut kv_caches)?;
+            kv_caches = new_caches;
+            last_hidden = hidden;
+            gen_step += 1;
+        }
+
+        let n = all_codes.len();
+        let flat_u32: Vec<u32> = all_codes
+            .iter()
+            .flat_map(|frame| frame.iter().map(|&x| x as u32))
+            .collect();
+        Tensor::from_slice(&flat_u32, (n, 16), device)
     }
 
     fn generation_position_ids(
