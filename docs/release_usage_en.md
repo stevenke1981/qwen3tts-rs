@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.10 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.11 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
@@ -86,8 +86,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.10-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.10-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.11-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.11-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -163,6 +163,40 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.
   --max-new-tokens 32
 ```
 
+## Model Capabilities And Modes
+
+List the built-in model capability catalog:
+
+```powershell
+.\synthesize.exe --list-models
+.\synthesize_batch.exe --list-models
+```
+
+| Model | Params | Main function | Languages | Streaming | Instruct control | Recommended use |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Qwen3-TTS-12Hz-1.7B-VoiceDesign` | 1.7B | Text-described voice design | 10 | yes | yes | Custom voice creation |
+| `Qwen3-TTS-12Hz-1.7B-CustomVoice` | 1.7B | 9 preset voices plus instruction style control | 10 | yes | yes | High-quality narration, multi-character voices |
+| `Qwen3-TTS-12Hz-1.7B-Base` | 1.7B | 3-second voice cloning and fine-tuning base | 10 | yes | - | Cloning, fine-tuning |
+| `Qwen3-TTS-12Hz-0.6B-CustomVoice` | 0.6B | 9 preset voices without instruction control | 10 | yes | - | Lightweight deployment |
+| `Qwen3-TTS-12Hz-0.6B-Base` | 0.6B | 3-second voice cloning and fine-tuning base | 10 | yes | - | Resource-constrained environments |
+
+Supported language conditions are `Chinese`, `English`, `French`, `German`,
+`Italian`, `Spanish`, `Portuguese`, `Japanese`, `Korean`, and `Russian`. The
+CLI also accepts `auto` when you want the model prompt to infer the language.
+
+Use `--mode` to make the requested generation contract explicit:
+
+| Mode | Validation |
+| --- | --- |
+| `--mode auto` | Default compatibility mode; does not block existing scripts |
+| `--mode custom-voice` | Requires a CustomVoice model and `--speaker`; rejects `--instruct` on 0.6B CustomVoice |
+| `--mode voice-design` | Requires `1.7B-VoiceDesign` and `--instruct` or `--instruct-file` |
+| `--mode voice-clone` | Requires a Base model and `--reference-audio`; native reference-audio conditioning is still pending |
+
+The 12Hz models are streaming-capable at the model level. The current release
+CLI writes complete WAV files; chunk streaming is the next API layer, not a
+separate model format.
+
 ## VoiceDesign Instructions
 
 `1.7B-VoiceDesign` supports natural-language voice/style control through
@@ -179,6 +213,20 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --seed 20260603 `
   --output voicedesign.wav `
   --max-new-tokens 64
+```
+
+Rust CLI equivalent of the upstream `generate_voice_design(...)` call:
+
+```powershell
+.\synthesize.exe `
+  --text "哥哥，你回來啦..." `
+  --backend candle `
+  --language chinese `
+  --model "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign" `
+  --mode voice-design `
+  --instruct "一位溫柔可愛、帶點撒嬌語氣的年輕女孩聲音，語速稍慢" `
+  --output voicedesign_cn.wav `
+  --max-new-tokens 80
 ```
 
 You can keep reusable voice settings in a UTF-8 text file:
@@ -239,6 +287,21 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.
   --max-new-tokens 64
 ```
 
+Rust CLI equivalent of the upstream `generate_custom_voice(...)` call:
+
+```powershell
+.\synthesize.exe `
+  --text "其實我真的有發現，我是一個特別善於觀察別人情緒的人。" `
+  --backend candle `
+  --language chinese `
+  --model "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice" `
+  --mode custom-voice `
+  --speaker Vivian `
+  --instruct "用特別憤怒的語氣說" `
+  --output vivian_custom_voice.wav `
+  --max-new-tokens 96
+```
+
 For VoiceDesign or Base models without a speaker map, the same flag injects the
 matching instruction preset. You can combine `--speaker` with `--instruct` or
 `--instruct-file`: the speaker preset gives the broad voice, and your instruction
@@ -257,6 +320,35 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --output vivian_voicedesign.wav `
   --max-new-tokens 80
 ```
+
+## Voice Clone Status
+
+The upstream Base-model API accepts a short reference audio file:
+
+```python
+wavs, sr = model.generate_voice_clone(
+    text="Test text...",
+    language="Chinese",
+    reference_audio="reference.wav",
+)
+```
+
+The Rust CLI now exposes the matching capability check:
+
+```powershell
+.\synthesize.exe `
+  --text "測試文字..." `
+  --backend candle `
+  --language chinese `
+  --model "Qwen/Qwen3-TTS-12Hz-1.7B-Base" `
+  --mode voice-clone `
+  --reference-audio .\reference.wav `
+  --output clone.wav `
+  --max-new-tokens 80
+```
+
+Native reference-audio conditioning is not implemented yet, so this mode returns
+a clear error instead of silently ignoring the reference audio.
 
 If long Chinese text is truncated, increase `--max-new-tokens`. A conservative
 starting point is:
@@ -395,11 +487,14 @@ multiple agents compare the same sample set:
 
 | Option | Description |
 | --- | --- |
+| `--list-models` | Show the built-in model capability catalog |
 | `--model-dir` | Qwen3-TTS model snapshot directory |
 | `--model` | Batch mode HuggingFace model id; used for local HF cache auto-search when `--model-dir` is omitted |
+| `--mode` | Generation contract: `auto`, `custom-voice`, `voice-design`, or `voice-clone` |
 | `--language` | Language condition. Use `chinese` for Chinese prompts |
 | `--speaker` | Speaker condition; supports built-in presets such as `Vivian`, `Uncle_Fu`, and `Dylan`. CustomVoice uses real speaker ids; other models use instruct fallback |
 | `--list-speakers` | Show built-in speaker presets |
+| `--reference-audio` | Voice Clone reference audio; currently used for capability validation while native conditioning is pending |
 | `--instruct` | VoiceDesign/CustomVoice voice or style instruction |
 | `--instruct-file` | Read voice or style instruction from a UTF-8 text file; in batch mode repeat it once per line to switch voices |
 | `--seed` | Fixed sampling seed; in batch mode repeat it once per line to vary seeds |
@@ -451,6 +546,9 @@ If `rms=0` and `peak=0`, the WAV is silent.
   map.
 - `v0.1.10` adds `quantize_tokenizer.exe`, Q8/Q4-hybrid safetensors,
   WeightLoader auto-dequantization, and tokenizer decoder quantization reports.
+- `v0.1.11` adds the model capability catalog, `--list-models`, `--mode`,
+  `--reference-audio`, and explicit CustomVoice / VoiceDesign / VoiceClone
+  capability validation.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.

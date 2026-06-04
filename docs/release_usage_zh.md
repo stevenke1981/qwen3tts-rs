@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.10 Windows x64 / Windows x64 CUDA`
+適用版本：`qwen3tts-rs v0.1.11 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
@@ -76,8 +76,8 @@ weights\tokenizer\
 
 ## CPU 與 CUDA 版本
 
-- `qwen3tts-rs-v0.1.10-windows-x64.zip`：CPU/Candle build。
-- `qwen3tts-rs-v0.1.10-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+- `qwen3tts-rs-v0.1.11-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.11-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
 
 建置 CUDA 版 release：
 
@@ -147,6 +147,40 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.
   --max-new-tokens 32
 ```
 
+## 模型能力與模式
+
+`v0.1.11` 起，CLI 內建 Qwen3-TTS 模型能力表：
+
+```powershell
+.\synthesize.exe --list-models
+.\synthesize_batch.exe --list-models
+```
+
+| 模型名稱 | 參數量 | 主要功能 | 語言支援 | 流式 | 指令控制 | 推薦場景 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Qwen3-TTS-12Hz-1.7B-VoiceDesign` | 1.7B | 文字描述聲音設計 | 10 種 | yes | yes | 自訂聲音創作 |
+| `Qwen3-TTS-12Hz-1.7B-CustomVoice` | 1.7B | 9 種預設音色 + 指令風格控制 | 10 種 | yes | yes | 高品質敘事、多角色 |
+| `Qwen3-TTS-12Hz-1.7B-Base` | 1.7B | 3 秒聲音克隆 + 微調基礎 | 10 種 | yes | - | 克隆、Fine-tuning |
+| `Qwen3-TTS-12Hz-0.6B-CustomVoice` | 0.6B | 9 種預設音色（無指令） | 10 種 | yes | - | 輕量部署 |
+| `Qwen3-TTS-12Hz-0.6B-Base` | 0.6B | 3 秒聲音克隆 + 微調基礎 | 10 種 | yes | - | 資源受限環境 |
+
+支援語言清單：
+
+```text
+Chinese, English, French, German, Italian, Spanish, Portuguese, Japanese, Korean, Russian
+```
+
+CLI 也新增模式檢查：
+
+| 參數 | 說明 |
+| --- | --- |
+| `--mode auto` | 預設，不阻擋既有流程 |
+| `--mode custom-voice` | 要求 CustomVoice 模型與 `--speaker`；0.6B CustomVoice 不允許 `--instruct` |
+| `--mode voice-design` | 要求 `1.7B-VoiceDesign` 與 `--instruct` / `--instruct-file` |
+| `--mode voice-clone` | 要求 Base 模型與 `--reference-audio`；Rust 原生 reference-audio conditioning 尚未實作，會明確報錯 |
+
+目前 release 的「流式」能力指模型支援 12Hz streaming token/audio 架構；CLI 仍是整句寫 WAV，尚未提供即時 audio chunk callback。
+
 ## VoiceDesign 音色指令
 
 `1.7B-VoiceDesign` 可用 `--instruct` 以自然語言描述音色與語氣：
@@ -162,6 +196,19 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --seed 20260603 `
   --output voicedesign.wav `
   --max-new-tokens 64
+```
+
+等價於 Python 高階 API `generate_voice_design(...)` 的 Rust CLI 用法是：
+
+```powershell
+.\synthesize.exe `
+  --mode voice-design `
+  --model "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign" `
+  --model-dir $model `
+  --text "哥哥，你回來啦..." `
+  --language Chinese `
+  --instruct "一位溫柔可愛、帶點撒嬌語氣的年輕女孩聲音，語速稍慢" `
+  --output voice_design.wav
 ```
 
 常用音色設定可存成 UTF-8 文字檔：
@@ -217,6 +264,20 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.
   --max-new-tokens 64
 ```
 
+等價於 Python 高階 API `generate_custom_voice(...)` 的 Rust CLI 用法是：
+
+```powershell
+.\synthesize.exe `
+  --mode custom-voice `
+  --model "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice" `
+  --model-dir $model `
+  --text "其實我真的有發現，我是一個特別善於觀察別人情緒的人。" `
+  --language Chinese `
+  --speaker Vivian `
+  --instruct "用特別憤怒的語氣說" `
+  --output custom_voice.wav
+```
+
 VoiceDesign 或 Base 模型沒有 speaker map 時，相同指令會自動加入對應的 instruct preset；也可以與 `--instruct` / `--instruct-file` 疊加，讓 preset 控制大方向、文字指令控制語氣：
 
 ```powershell
@@ -232,6 +293,32 @@ $model = "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-1.
   --output uncle_fu_voicedesign.wav `
   --max-new-tokens 80
 ```
+
+## Voice Clone 狀態
+
+Base 模型對應 Python 高階 API `generate_voice_clone(...)`：
+
+```python
+wavs, sr = model.generate_voice_clone(
+    text="測試文字...",
+    language="Chinese",
+    reference_audio="reference.wav",
+)
+```
+
+Rust CLI 已新增參數與能力檢查：
+
+```powershell
+.\synthesize.exe `
+  --mode voice-clone `
+  --model "Qwen/Qwen3-TTS-12Hz-1.7B-Base" `
+  --model-dir $model `
+  --text "測試文字..." `
+  --language Chinese `
+  --reference-audio reference.wav
+```
+
+目前會明確報錯：Rust 原生尚未實作 reference-audio conditioning。這比靜默忽略參考音訊安全；後續要補的是 reference audio encoder/conditioning 與 PyTorch fixture 對齊。
 
 長中文句子若 `--max-new-tokens` 太低會被截斷。保守估算可用：
 
@@ -363,6 +450,9 @@ weights\tokenizer-q8\quantization_report.json
 | `--language` | 語言，中文建議使用 `chinese` |
 | `--speaker` | 說話者條件；支援內建 `Vivian`、`Uncle_Fu`、`Dylan` 等 preset，CustomVoice 走真實 speaker id，其他模型轉成 instruct fallback |
 | `--list-speakers` | 顯示內建 speaker preset 清單 |
+| `--list-models` | 顯示模型名稱、參數量、主要功能、語言支援、流式、指令控制、推薦場景 |
+| `--mode` | `auto`、`custom-voice`、`voice-design`、`voice-clone` |
+| `--reference-audio` | Voice Clone 參考音訊；目前僅做能力檢查，原生 conditioning 尚未實作 |
 | `--instruct` | VoiceDesign/CustomVoice 音色或語氣指令 |
 | `--instruct-file` | 從 UTF-8 文字檔讀取音色或語氣指令；batch 可重複傳入做到逐句切換 |
 | `--seed` | 固定取樣 seed；batch 可重複傳入做到逐句 seed |
@@ -405,6 +495,7 @@ with wave.open(name, "rb") as w:
 - `v0.1.8` 新增 batch 逐句 `--instruct-file`/`--seed`、batch 0.6B 模型自動尋找，以及 tokenizer decoder 全域快取。
 - `v0.1.9` 新增 9 個內建 CustomVoice speaker presets、`--list-speakers`，並讓 Base/VoiceDesign 在無 speaker map 時自動轉成 instruct fallback。
 - `v0.1.10` 新增 `quantize_tokenizer.exe`、Q8/Q4-hybrid safetensors 格式、WeightLoader 自動反量化，以及 tokenizer decoder 量化報告。
+- `v0.1.11` 新增模型能力 catalog、`--list-models`、`--mode`、`--reference-audio`，並對 CustomVoice / VoiceDesign / VoiceClone 做明確能力檢查。
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
 - 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。

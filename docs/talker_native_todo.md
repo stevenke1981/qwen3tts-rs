@@ -54,6 +54,13 @@
   - Added `quantize_tokenizer.exe` with per-tensor cosine/max-error report and low-cosine F32 anchor preservation.
   - Local Q8 tokenizer decoder conversion: 99 tensors quantized, 137 preserved, stored/original ratio `0.266`; decoder smoke cosine vs base `0.99974333`.
   - Local Q4 tokenizer decoder with `group-size=32` and `min-cosine=0.995`: 12 tensors quantized, 224 preserved, stored/original ratio `0.947`; decoder smoke cosine vs base `0.99235672`. Treat Q4 as experimental until activation calibration and audio quality validation are stronger.
+- 2026-06-04 v0.1.11 model capability update:
+  - Added a Rust-native model capability catalog for 1.7B VoiceDesign, 1.7B CustomVoice, 1.7B Base, 0.6B CustomVoice, and 0.6B Base.
+  - Added `--list-models`, `--mode`, and `--reference-audio` to single and batch CLIs.
+  - `--mode custom-voice` now validates CustomVoice model usage and requires `--speaker`; 0.6B CustomVoice rejects `--instruct`.
+  - `--mode voice-design` now requires a 1.7B VoiceDesign model plus `--instruct` or `--instruct-file`.
+  - `--mode voice-clone` now validates Base model plus `--reference-audio`, then returns a clear pending-implementation error because native reference-audio conditioning is not implemented yet.
+  - Release guides now document the model table, supported languages, streaming status, and Rust CLI equivalents for upstream `generate_custom_voice`, `generate_voice_design`, and `generate_voice_clone`.
 
 ## TODO
 

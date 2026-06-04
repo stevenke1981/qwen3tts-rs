@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
+use qwen3tts::text_frontend::model_catalog::{
+    GenerationMode, SUPPORTED_LANGUAGES, model_capability, model_table, validate_generation_request,
+};
 use qwen3tts::text_frontend::speaker_presets;
 use qwen3tts::text_frontend::{CandleLLM, SynthesisOptions, TextFrontend};
 use qwen3tts::{Decoder12Hz, DecoderConfig};
@@ -24,6 +27,8 @@ struct Args {
     texts_file: Option<PathBuf>,
     language: String,
     speaker: Option<String>,
+    mode: GenerationMode,
+    reference_audio: Option<PathBuf>,
     instruct: Option<String>,
     instruct_files: Vec<PathBuf>,
     instruct_values: Vec<String>,
@@ -48,6 +53,8 @@ impl Default for Args {
             texts_file: None,
             language: "auto".to_string(),
             speaker: None,
+            mode: GenerationMode::Auto,
+            reference_audio: None,
             instruct: None,
             instruct_files: Vec::new(),
             instruct_values: Vec::new(),
@@ -77,6 +84,21 @@ fn run() -> Result<(), Box<dyn Error>> {
         return Err("no text lines provided".into());
     }
     validate_per_line_options(&args, texts.len())?;
+    let validation_model = args
+        .model_dir
+        .as_ref()
+        .map(|path| path.to_string_lossy())
+        .unwrap_or_else(|| args.model_id.as_str().into());
+    validate_generation_request(
+        validation_model.as_ref(),
+        args.mode,
+        args.speaker.as_deref(),
+        select_instruct(&args, 0).map(String::as_str),
+        args.reference_audio
+            .as_ref()
+            .map(|path| path.to_string_lossy())
+            .as_deref(),
+    )?;
 
     fs::create_dir_all(&args.output_dir)?;
     if args.save_tokens {
@@ -107,6 +129,16 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     println!("loading Candle model once...");
     println!("  model: {}", args.model_id);
+    if let Some(capability) = model_capability(validation_model.as_ref()) {
+        println!(
+            "  capability: {} / {} / {} languages / streaming={}",
+            capability.parameters,
+            capability.main_function,
+            capability.languages,
+            if capability.streaming { "yes" } else { "no" }
+        );
+    }
+    println!("  mode: {}", args.mode.as_str());
     println!("  model dir: {}", model_dir.display());
     println!("  tokenizer: {}", tokenizer_json.display());
     let load_start = Instant::now();
@@ -213,6 +245,15 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
                 args.speaker = Some(require_arg(&raw, i, "--speaker")?);
                 i += 2;
             }
+            "--mode" => {
+                args.mode = GenerationMode::parse(&require_arg(&raw, i, "--mode")?)?;
+                i += 2;
+            }
+            "--reference-audio" => {
+                args.reference_audio =
+                    Some(PathBuf::from(require_arg(&raw, i, "--reference-audio")?));
+                i += 2;
+            }
             "--instruct" => {
                 args.instruct = Some(require_arg(&raw, i, "--instruct")?);
                 i += 2;
@@ -264,6 +305,10 @@ fn parse_args(raw: Vec<String>) -> Result<Args, Box<dyn Error>> {
             }
             "--list-speakers" => {
                 print_speakers();
+                std::process::exit(0);
+            }
+            "--list-models" => {
+                print_models();
                 std::process::exit(0);
             }
             "--help" | "-h" => {
@@ -509,6 +554,9 @@ fn print_usage() {
            --language <name>        Language (default: auto)\n\
            --speaker <name>         Speaker condition or built-in preset: Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna, Sohee\n\
            --list-speakers          Show built-in speaker presets\n\
+           --list-models            Show Qwen3-TTS model capability table\n\
+           --mode <name>            auto | custom-voice | voice-design | voice-clone\n\
+           --reference-audio <wav>  Voice Clone reference audio (3s+; native Rust path not implemented yet)\n\
            --instruct <text>        VoiceDesign/CustomVoice style instruction\n\
            --instruct-file <path>   Read instruction from UTF-8 text file; repeat once per line to switch voices\n\
            --seed <n>               Fixed sampling seed; repeat once per line to vary seeds\n\
@@ -520,6 +568,37 @@ fn print_usage() {
            --save-tokens-dir <dir>  Also write token files\n\
            --no-save-tokens         Disable token file output even if a wrapper passes --save-tokens-dir\n\
            --version / -V           Show version info"
+    );
+}
+
+fn print_models() {
+    println!("Qwen3-TTS model capability table:");
+    println!(
+        "{:<42} {:<5} {:<46} {:<7} {:<9} {:<9} {}",
+        "Model", "Params", "Main function", "Langs", "Streaming", "Instruct", "Recommended"
+    );
+    for model in model_table() {
+        println!(
+            "{:<42} {:<5} {:<46} {:<7} {:<9} {:<9} {}",
+            model
+                .model_id
+                .strip_prefix("Qwen/")
+                .unwrap_or(model.model_id),
+            model.parameters,
+            model.main_function,
+            model.languages,
+            if model.streaming { "yes" } else { "no" },
+            model.instruction_control.label(),
+            model.recommended_scenario
+        );
+    }
+    println!();
+    println!(
+        "Supported languages (10): {}",
+        SUPPORTED_LANGUAGES.join(", ")
+    );
+    println!(
+        "Voice clone requires a Base model plus --reference-audio, but native Rust reference-audio conditioning is not implemented yet."
     );
 }
 

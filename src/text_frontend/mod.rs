@@ -32,6 +32,7 @@
 //! - **PythonBridge** (✅ 即時可用): 子行程調用 qwen-tts Python 套件
 //! - **CandleLLM** (🔜 規劃中): 純 Rust/Candle + GGUF 權重
 
+pub mod model_catalog;
 mod python_bridge;
 pub mod speaker_presets;
 mod token_parser;

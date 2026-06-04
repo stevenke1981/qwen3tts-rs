@@ -37,6 +37,9 @@
 use std::path::{Path, PathBuf};
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
+use qwen3tts::text_frontend::model_catalog::{
+    GenerationMode, SUPPORTED_LANGUAGES, model_capability, model_table, validate_generation_request,
+};
 use qwen3tts::text_frontend::speaker_presets;
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend, TokenStream};
 use qwen3tts::{Decoder12Hz, DecoderConfig};
@@ -167,6 +170,8 @@ fn main() {
     let mut speaker: Option<String> = None;
     let mut instruct: Option<String> = None;
     let mut instruct_file: Option<String> = None;
+    let mut mode = GenerationMode::Auto;
+    let mut reference_audio: Option<String> = None;
     let mut seed: Option<u64> = None;
     let mut tokens_path: Option<String> = None;
     let mut save_tokens_path: Option<String> = None;
@@ -213,6 +218,19 @@ fn main() {
             "--instruct-file" => {
                 require_arg(&args, i, "--instruct-file");
                 instruct_file = Some(args[i + 1].clone());
+                i += 2;
+            }
+            "--mode" => {
+                require_arg(&args, i, "--mode");
+                mode = GenerationMode::parse(&args[i + 1]).unwrap_or_else(|err| {
+                    eprintln!("錯誤: {err}");
+                    std::process::exit(1);
+                });
+                i += 2;
+            }
+            "--reference-audio" => {
+                require_arg(&args, i, "--reference-audio");
+                reference_audio = Some(args[i + 1].clone());
                 i += 2;
             }
             "--tokens" => {
@@ -302,6 +320,10 @@ fn main() {
                 print_speakers();
                 return;
             }
+            "--list-models" => {
+                print_models();
+                return;
+            }
             "--help" | "-h" => {
                 print_usage();
                 return;
@@ -315,6 +337,17 @@ fn main() {
     }
 
     let instruct = resolve_instruct(instruct, instruct_file);
+    let validation_model = model_dir.as_deref().unwrap_or(&model_id);
+    if let Err(err) = validate_generation_request(
+        validation_model,
+        mode,
+        speaker.as_deref(),
+        instruct.as_deref(),
+        reference_audio.as_deref(),
+    ) {
+        eprintln!("錯誤: {err}");
+        std::process::exit(1);
+    }
 
     // --tokens 與 --text 二選一
     if text.is_empty() && tokens_path.is_none() {
@@ -340,7 +373,19 @@ fn main() {
     println!("╚══════════════════════════════════════╝");
     println!("文字    : {text}");
     println!("模型    : {banner_model}");
+    if let Some(capability) =
+        model_capability(&banner_model).or_else(|| model_capability(validation_model))
+    {
+        println!(
+            "能力    : {} / {} / {} languages / streaming={}",
+            capability.parameters,
+            capability.main_function,
+            capability.languages,
+            if capability.streaming { "yes" } else { "no" }
+        );
+    }
     println!("後端    : {:?}", backend);
+    println!("模式    : {}", mode.as_str());
     println!("語言    : {language}");
     println!("輸出    : {output_path}");
     if let Some(spk) = &speaker {
@@ -358,6 +403,9 @@ fn main() {
     if let Some(ins) = &instruct {
         println!("指令    : {ins}");
     }
+    if let Some(path) = &reference_audio {
+        println!("參考音訊: {path}");
+    }
     if let Some(seed) = seed {
         println!("seed    : {seed}");
     }
@@ -371,8 +419,14 @@ fn main() {
     // ----- 步驟 2: 獲取 Token（透過 LLM 或從檔案載入）-----
     let stream: TokenStream = if let Some(tp) = tokens_path {
         println!("[1/3] 從二進位檔載入 Token ({tp})…");
-        let data = std::fs::read(&tp).expect("讀取 Token 檔失敗");
-        qwen3tts::text_frontend::TokenParser::parse_binary(&data).expect("解析 Token 檔失敗")
+        let data = std::fs::read(&tp).unwrap_or_else(|err| {
+            eprintln!("錯誤: 讀取 Token 檔失敗 {tp}: {err}");
+            std::process::exit(1);
+        });
+        qwen3tts::text_frontend::TokenParser::parse_binary(&data).unwrap_or_else(|err| {
+            eprintln!("錯誤: 解析 Token 檔失敗 {tp}: {err}");
+            std::process::exit(1);
+        })
     } else {
         match backend {
             BackendKind::Python => {
@@ -638,6 +692,9 @@ fn print_usage() {
                     內建: Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna, Sohee
                     CustomVoice 有 speaker id 時走真實 speaker；其他模型轉成 instruct preset
   --list-speakers    顯示內建 speaker preset 清單
+  --list-models      顯示 Qwen3-TTS 模型能力表
+  --mode             生成模式：auto | custom-voice | voice-design | voice-clone
+  --reference-audio  Voice Clone 參考音訊（3 秒以上；Rust 原生尚未實作）
   --instruct         VoiceDesign/CustomVoice 音色或語氣指令
   --instruct-file    從 UTF-8 文字檔讀取 VoiceDesign/CustomVoice 指令
   --seed N           固定取樣 seed，讓相同文字/條件更容易重現
@@ -693,6 +750,37 @@ fn print_usage() {
     Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
     Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 "
+    );
+}
+
+fn print_models() {
+    println!("Qwen3-TTS model capability table:");
+    println!(
+        "{:<42} {:<5} {:<46} {:<7} {:<9} {:<9} {}",
+        "Model", "Params", "Main function", "Langs", "Streaming", "Instruct", "Recommended"
+    );
+    for model in model_table() {
+        println!(
+            "{:<42} {:<5} {:<46} {:<7} {:<9} {:<9} {}",
+            model
+                .model_id
+                .strip_prefix("Qwen/")
+                .unwrap_or(model.model_id),
+            model.parameters,
+            model.main_function,
+            model.languages,
+            if model.streaming { "yes" } else { "no" },
+            model.instruction_control.label(),
+            model.recommended_scenario
+        );
+    }
+    println!();
+    println!(
+        "Supported languages (10): {}",
+        SUPPORTED_LANGUAGES.join(", ")
+    );
+    println!(
+        "Voice clone requires a Base model plus --reference-audio, but native Rust reference-audio conditioning is not implemented yet."
     );
 }
 

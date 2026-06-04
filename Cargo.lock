@@ -1688,7 +1688,7 @@ dependencies = [
 
 [[package]]
 name = "qwen3tts-rs"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "candle-core",
  "candle-nn",
