@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.12 Windows x64 / Windows x64 CUDA`
+適用版本：`qwen3tts-rs v0.1.13 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
@@ -76,8 +76,8 @@ weights\tokenizer\
 
 ## CPU 與 CUDA 版本
 
-- `qwen3tts-rs-v0.1.12-windows-x64.zip`：CPU/Candle build。
-- `qwen3tts-rs-v0.1.12-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+- `qwen3tts-rs-v0.1.13-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.13-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
 
 建置 CUDA 版 release：
 
@@ -419,6 +419,14 @@ weights\tokenizer-q8
 
 搜尋順序是：`QWEN3TTS_TOKENIZER_WEIGHT_DIR` 明確指定、目前目錄 `weights\tokenizer-q8`、目前目錄 `weights\tokenizer`、exe 旁 `weights\tokenizer-q8`、exe 旁 `weights\tokenizer`、全域 cache Q8、全域 cache F32。
 
+`v0.1.13` 起，第一次執行若完全找不到 tokenizer decoder 權重，app 會先自動執行 `convert_tokenizer.exe` 建立 F32 cache，接著自動嘗試用 `quantize_tokenizer.exe` 建立 Q8 cache。若 Q8 建立成功，後續會直接使用 Q8；若 quantizer 不存在或失敗，會保留 F32 fallback，不中斷合成。
+
+當實際使用 Q8 權重且目錄內有 `quantization_report.json` 時，terminal 會顯示摘要，例如：
+
+```text
+已使用 Q8 量化 tokenizer decoder 權重: ...\tokenizer-12hz-q8 (約 125 MB，-73%，99/236 tensors quantized)
+```
+
 量化策略：
 
 | 模式 | 狀態 | 說明 |
@@ -506,6 +514,7 @@ with wave.open(name, "rb") as w:
 - `v0.1.10` 新增 `quantize_tokenizer.exe`、Q8/Q4-hybrid safetensors 格式、WeightLoader 自動反量化，以及 tokenizer decoder 量化報告。
 - `v0.1.11` 新增模型能力 catalog、`--list-models`、`--mode`、`--reference-audio`，並對 CustomVoice / VoiceDesign / VoiceClone 做明確能力檢查。
 - `v0.1.12` 自動優先使用 `weights\tokenizer-q8` 與 `%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz-q8`，讓已驗證的 Q8 tokenizer decoder 不必每次手動指定環境變數。
+- `v0.1.13` 第一次自動轉換 F32 tokenizer decoder 後會自動嘗試建立 Q8 cache，並在使用 Q8 時顯示大小、節省比例與量化 tensor 摘要。
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
 - 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。

@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.12 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.13 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
@@ -86,8 +86,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.12-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.12-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.13-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.13-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -460,6 +460,19 @@ Search order is: explicit `QWEN3TTS_TOKENIZER_WEIGHT_DIR`, current directory
 directory `weights\tokenizer-q8`, executable directory `weights\tokenizer`,
 global Q8 cache, then global F32 cache.
 
+Starting in `v0.1.13`, if no tokenizer decoder weights exist on first run, the
+app automatically runs `convert_tokenizer.exe` to build the F32 cache, then
+attempts `quantize_tokenizer.exe` to build the Q8 cache. If Q8 succeeds, later
+runs use Q8 directly. If the quantizer is missing or fails, synthesis continues
+with the F32 fallback.
+
+When Q8 is actually used and `quantization_report.json` is present, the terminal
+prints a summary:
+
+```text
+已使用 Q8 量化 tokenizer decoder 權重: ...\tokenizer-12hz-q8 (約 125 MB，-73%，99/236 tensors quantized)
+```
+
 Quantization status:
 
 | Mode | Status | Notes |
@@ -566,6 +579,9 @@ If `rms=0` and `peak=0`, the WAV is silent.
 - `v0.1.12` automatically prefers `weights\tokenizer-q8` and
   `%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz-q8`, so validated Q8 tokenizer
   decoder weights no longer need a per-run environment variable.
+- `v0.1.13` automatically attempts to build a Q8 cache after first-run F32
+  tokenizer conversion, and prints size/savings/tensor-count summary when Q8 is
+  used.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.

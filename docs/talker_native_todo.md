@@ -66,6 +66,10 @@
   - Global cache lookup now checks `%LOCALAPPDATA%/qwen3tts-rs/tokenizer-12hz-q8` before the F32 `%LOCALAPPDATA%/qwen3tts-rs/tokenizer-12hz` cache.
   - `QWEN3TTS_TOKENIZER_WEIGHT_DIR` remains the explicit override and is searched first.
   - Q4 remains experimental because the local 0.995 cosine gate only quantized 12/236 tensors; Q8 is the practical default candidate.
+- 2026-06-04 v0.1.13 Q8 first-run cache update:
+  - After automatic F32 tokenizer conversion succeeds, the app now attempts to run `quantize_tokenizer.exe --format q8_0` into the sibling Q8 cache.
+  - Q8 cache build failure is non-fatal; synthesis falls back to the F32 cache.
+  - When Q8 is selected, the app prints a terminal summary from `quantization_report.json`, including stored MB, percent savings, and quantized/total tensors.
 
 ## TODO
 

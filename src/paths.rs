@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::{Error, Result};
+use serde::Deserialize;
 
 const TOKENIZER_WEIGHT_FILES: &[&str] = &[
     "codebook.safetensors",
@@ -52,6 +53,7 @@ pub fn find_existing_tokenizer_weight_dir() -> Result<PathBuf> {
 
     for candidate in &candidates {
         if is_complete_tokenizer_weight_dir(candidate) {
+            log_tokenizer_weight_dir(candidate);
             return Ok(candidate.clone());
         }
     }
@@ -80,6 +82,11 @@ pub fn ensure_tokenizer_weight_dir() -> Result<PathBuf> {
 
     run_tokenizer_converter(&converter, &output)?;
     if is_complete_tokenizer_weight_dir(&output) {
+        if let Some(q8_output) = try_build_q8_tokenizer_cache(&cwd, exe.as_deref(), &output) {
+            log_tokenizer_weight_dir(&q8_output);
+            return Ok(q8_output);
+        }
+        log_tokenizer_weight_dir(&output);
         return Ok(output);
     }
 
@@ -117,6 +124,20 @@ pub fn resolve_converter_exe_from(cwd: &Path, exe_path: Option<&Path>) -> Vec<Pa
     if let Some(exe_path) = exe_path {
         if let Some(exe_dir) = exe_path.parent() {
             push_unique(&mut candidates, exe_dir.join("convert_tokenizer.exe"));
+        }
+    }
+
+    candidates
+}
+
+/// Returns Rust tokenizer quantizer executable candidates in search order.
+pub fn resolve_quantizer_exe_from(cwd: &Path, exe_path: Option<&Path>) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    push_unique(&mut candidates, cwd.join("quantize_tokenizer.exe"));
+
+    if let Some(exe_path) = exe_path {
+        if let Some(exe_dir) = exe_path.parent() {
+            push_unique(&mut candidates, exe_dir.join("quantize_tokenizer.exe"));
         }
     }
 
@@ -164,6 +185,12 @@ fn find_converter_program_from(cwd: &Path, exe_path: Option<&Path>) -> Option<Co
     }
 
     None
+}
+
+fn find_quantizer_program_from(cwd: &Path, exe_path: Option<&Path>) -> Option<PathBuf> {
+    resolve_quantizer_exe_from(cwd, exe_path)
+        .into_iter()
+        .find(|path| path.exists())
 }
 
 fn run_tokenizer_converter(converter: &ConverterProgram, output: &Path) -> Result<()> {
@@ -222,10 +249,132 @@ fn run_tokenizer_converter(converter: &ConverterProgram, output: &Path) -> Resul
     }
 }
 
+fn try_build_q8_tokenizer_cache(
+    cwd: &Path,
+    exe_path: Option<&Path>,
+    f32_output: &Path,
+) -> Option<PathBuf> {
+    let q8_output = q8_dir_for_f32_dir(f32_output);
+    if is_complete_tokenizer_weight_dir(&q8_output) {
+        return Some(q8_output);
+    }
+
+    let Some(quantizer) = find_quantizer_program_from(cwd, exe_path) else {
+        eprintln!(
+            "Q8 tokenizer auto-cache skipped: quantize_tokenizer.exe was not found next to the app."
+        );
+        return None;
+    };
+
+    eprintln!(
+        "Building Q8 tokenizer decoder cache with {}",
+        quantizer.display()
+    );
+    eprintln!("Q8 tokenizer cache output: {}", q8_output.display());
+
+    let status = Command::new(&quantizer)
+        .arg("--input")
+        .arg(f32_output)
+        .arg("--output")
+        .arg(&q8_output)
+        .arg("--format")
+        .arg("q8_0")
+        .arg("--group-size")
+        .arg("64")
+        .arg("--min-cosine")
+        .arg("0.995")
+        .status();
+
+    match status {
+        Ok(status) if status.success() && is_complete_tokenizer_weight_dir(&q8_output) => {
+            Some(q8_output)
+        }
+        Ok(status) => {
+            eprintln!(
+                "Q8 tokenizer auto-cache skipped: quantize_tokenizer.exe exited with {status}; using F32 tokenizer weights."
+            );
+            None
+        }
+        Err(err) => {
+            eprintln!(
+                "Q8 tokenizer auto-cache skipped: could not launch {}: {err}; using F32 tokenizer weights.",
+                quantizer.display()
+            );
+            None
+        }
+    }
+}
+
 fn is_complete_tokenizer_weight_dir(path: &Path) -> bool {
     TOKENIZER_WEIGHT_FILES
         .iter()
         .all(|file| path.join(file).exists())
+}
+
+fn q8_dir_for_f32_dir(path: &Path) -> PathBuf {
+    match path.file_name().and_then(|name| name.to_str()) {
+        Some("tokenizer-12hz") => path.with_file_name("tokenizer-12hz-q8"),
+        Some("tokenizer") => path.with_file_name("tokenizer-q8"),
+        Some(name) => path.with_file_name(format!("{name}-q8")),
+        None => path.join("tokenizer-q8"),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct QuantizationSummary {
+    total_original_bytes: usize,
+    total_stored_bytes: usize,
+    quantized_tensors: usize,
+    preserved_tensors: usize,
+}
+
+fn q8_weight_summary(path: &Path) -> Option<String> {
+    if !is_q8_tokenizer_dir(path) {
+        return None;
+    }
+
+    let report_path = path.join("quantization_report.json");
+    let report = std::fs::read_to_string(report_path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<QuantizationSummary>(&text).ok());
+
+    let Some(report) = report else {
+        return Some(format!(
+            "已使用 Q8 量化 tokenizer decoder 權重: {}",
+            path.display()
+        ));
+    };
+
+    let stored_mb = (report.total_stored_bytes as f64 / 1_000_000.0).round() as usize;
+    let saved_pct = if report.total_original_bytes == 0 {
+        0
+    } else {
+        (100.0 * (1.0 - report.total_stored_bytes as f64 / report.total_original_bytes as f64))
+            .round() as isize
+    };
+    let tensor_total = report.quantized_tensors + report.preserved_tensors;
+
+    Some(format!(
+        "已使用 Q8 量化 tokenizer decoder 權重: {} (約 {} MB，-{}%，{}/{} tensors quantized)",
+        path.display(),
+        stored_mb,
+        saved_pct.max(0),
+        report.quantized_tensors,
+        tensor_total
+    ))
+}
+
+fn is_q8_tokenizer_dir(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.ends_with("tokenizer-q8") || name.ends_with("tokenizer-12hz-q8"))
+        .unwrap_or(false)
+}
+
+fn log_tokenizer_weight_dir(path: &Path) {
+    if let Some(summary) = q8_weight_summary(path) {
+        eprintln!("{summary}");
+    }
 }
 
 fn missing_weights_error(candidates: &[PathBuf]) -> Error {
@@ -291,8 +440,9 @@ fn default_tokenizer_cache_root() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_complete_tokenizer_weight_dir, resolve_converter_exe_from,
-        resolve_converter_script_from, resolve_tokenizer_weight_dir_from,
+        is_complete_tokenizer_weight_dir, q8_dir_for_f32_dir, q8_weight_summary,
+        resolve_converter_exe_from, resolve_converter_script_from, resolve_quantizer_exe_from,
+        resolve_tokenizer_weight_dir_from,
     };
     use std::path::Path;
 
@@ -347,6 +497,58 @@ mod tests {
 
         assert_eq!(candidates[0], Path::new("C:/run/convert_tokenizer.exe"));
         assert_eq!(candidates[1], Path::new("C:/app/convert_tokenizer.exe"));
+    }
+
+    #[test]
+    fn resolves_quantizer_exe_next_to_cwd_and_exe() {
+        let candidates = resolve_quantizer_exe_from(
+            Path::new("C:/run"),
+            Some(Path::new("C:/app/synthesize.exe")),
+        );
+
+        assert_eq!(candidates[0], Path::new("C:/run/quantize_tokenizer.exe"));
+        assert_eq!(candidates[1], Path::new("C:/app/quantize_tokenizer.exe"));
+    }
+
+    #[test]
+    fn derives_q8_output_dir_from_f32_cache_or_weight_dir() {
+        assert_eq!(
+            q8_dir_for_f32_dir(Path::new("C:/cache/tokenizer-12hz")),
+            Path::new("C:/cache/tokenizer-12hz-q8")
+        );
+        assert_eq!(
+            q8_dir_for_f32_dir(Path::new("C:/app/weights/tokenizer")),
+            Path::new("C:/app/weights/tokenizer-q8")
+        );
+    }
+
+    #[test]
+    fn q8_weight_summary_uses_quantization_report_size_and_ratio() {
+        let base = std::env::temp_dir()
+            .join(format!("qwen3tts-q8-summary-test-{}", std::process::id()))
+            .join("tokenizer-q8");
+        let root = base.parent().unwrap().to_path_buf();
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::write(
+            base.join("quantization_report.json"),
+            r#"{
+                "total_original_bytes": 467000000,
+                "total_stored_bytes": 125000000,
+                "quantized_tensors": 99,
+                "preserved_tensors": 137
+            }"#,
+        )
+        .unwrap();
+
+        let summary = q8_weight_summary(&base).expect("summary");
+
+        assert!(summary.contains("已使用 Q8"));
+        assert!(summary.contains("125 MB"));
+        assert!(summary.contains("-73%"));
+        assert!(summary.contains("99/236"));
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
