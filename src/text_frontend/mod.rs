@@ -66,6 +66,14 @@ pub struct SynthesisOptions {
     /// VoiceDesign 模型需要此欄位；1.7B CustomVoice 也可用它做語氣控制。
     pub instruct: Option<String>,
 
+    /// Voice Clone 參考音訊路徑。
+    pub reference_audio: Option<String>,
+
+    /// Voice Clone 參考音訊逐字稿。
+    ///
+    /// 未提供時，Python fallback 會使用 speaker-embedding-only 模式。
+    pub reference_text: Option<String>,
+
     /// 取樣 seed。None 時使用文字與條件 hash 產生穩定 seed。
     pub seed: Option<u64>,
 
@@ -88,6 +96,8 @@ impl Default for SynthesisOptions {
             language: "auto".into(),
             speaker: None,
             instruct: None,
+            reference_audio: None,
+            reference_text: None,
             seed: None,
             temperature: 0.9,
             top_k: 50,

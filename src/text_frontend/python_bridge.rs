@@ -10,7 +10,7 @@
 //! - LLM 載入後持續在行程記憶體中（多次呼叫共享行程）
 
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::Result;
@@ -82,39 +82,104 @@ impl PythonBridge {
         self
     }
 
-    /// 執行 Python 子行程並回傳 Token 位元組
-    fn run_python(&self, text: &str, options: &SynthesisOptions) -> Result<Vec<u8>> {
-        let mut cmd = Command::new(&self.python_path);
+    fn effective_conditions(options: &SynthesisOptions) -> (Option<String>, Option<String>) {
         let requested_speaker = options.speaker.as_deref();
         let effective_speaker = requested_speaker
             .and_then(speaker_presets::canonical_name)
-            .or(requested_speaker);
-        let effective_instruct =
-            speaker_presets::effective_instruct(options.instruct.clone(), effective_speaker);
+            .or(requested_speaker)
+            .map(ToOwned::to_owned);
+        let effective_instruct = speaker_presets::effective_instruct(
+            options.instruct.clone(),
+            effective_speaker.as_deref(),
+        );
+        (effective_speaker, effective_instruct)
+    }
 
-        cmd.arg(&self.script_path)
-            .arg("--text")
-            .arg(text)
-            .arg("--model")
-            .arg(&self.model_id)
-            .arg("--language")
-            .arg(&options.language)
-            .arg("--speaker")
-            .arg(effective_speaker.unwrap_or(""))
-            .arg("--instruct")
-            .arg(effective_instruct.as_deref().unwrap_or(""))
-            .arg("--temperature")
-            .arg(options.temperature.to_string())
-            .arg("--top-k")
-            .arg(options.top_k.to_string())
-            .arg("--top-p")
-            .arg(options.top_p.to_string())
-            .arg("--max-new-tokens")
-            .arg(options.max_new_tokens.to_string());
+    fn build_token_args(&self, text: &str, options: &SynthesisOptions) -> Vec<String> {
+        let (effective_speaker, effective_instruct) = Self::effective_conditions(options);
+        let mut args = vec![
+            self.script_path.to_string_lossy().into_owned(),
+            "--text".into(),
+            text.into(),
+            "--model".into(),
+            self.model_id.clone(),
+            "--language".into(),
+            options.language.clone(),
+            "--speaker".into(),
+            effective_speaker.unwrap_or_default(),
+            "--instruct".into(),
+            effective_instruct.unwrap_or_default(),
+            "--temperature".into(),
+            options.temperature.to_string(),
+            "--top-k".into(),
+            options.top_k.to_string(),
+            "--top-p".into(),
+            options.top_p.to_string(),
+            "--max-new-tokens".into(),
+            options.max_new_tokens.to_string(),
+        ];
 
         if let Some(seed) = options.seed {
-            cmd.arg("--seed").arg(seed.to_string());
+            args.push("--seed".into());
+            args.push(seed.to_string());
         }
+
+        args
+    }
+
+    fn build_voice_clone_args(
+        &self,
+        text: &str,
+        options: &SynthesisOptions,
+        output_path: &Path,
+    ) -> Result<Vec<String>> {
+        let reference_audio = options.reference_audio.as_deref().ok_or_else(|| {
+            crate::Error::Config(
+                "voice-clone Python bridge requires options.reference_audio".into(),
+            )
+        })?;
+
+        let mut args = vec![
+            self.script_path.to_string_lossy().into_owned(),
+            "--voice-clone".into(),
+            "--text".into(),
+            text.into(),
+            "--model".into(),
+            self.model_id.clone(),
+            "--language".into(),
+            options.language.clone(),
+            "--reference-audio".into(),
+            reference_audio.into(),
+            "--output-wav".into(),
+            output_path.to_string_lossy().into_owned(),
+            "--temperature".into(),
+            options.temperature.to_string(),
+            "--top-k".into(),
+            options.top_k.to_string(),
+            "--top-p".into(),
+            options.top_p.to_string(),
+            "--max-new-tokens".into(),
+            options.max_new_tokens.to_string(),
+        ];
+
+        if let Some(reference_text) = options.reference_text.as_deref() {
+            if !reference_text.trim().is_empty() {
+                args.push("--reference-text".into());
+                args.push(reference_text.into());
+            }
+        }
+        if let Some(seed) = options.seed {
+            args.push("--seed".into());
+            args.push(seed.to_string());
+        }
+
+        Ok(args)
+    }
+
+    /// 執行 Python 子行程並回傳 Token 位元組
+    fn run_python(&self, text: &str, options: &SynthesisOptions) -> Result<Vec<u8>> {
+        let mut cmd = Command::new(&self.python_path);
+        cmd.args(self.build_token_args(text, options));
 
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
@@ -142,6 +207,45 @@ impl PythonBridge {
         }
 
         Ok(output)
+    }
+
+    /// Run the official qwen-tts voice-clone path and write a WAV directly.
+    ///
+    /// This path is intentionally separate from token generation: official
+    /// Voice Clone needs the speech tokenizer encoder and speaker encoder,
+    /// which are still pending in the native Candle implementation.
+    pub fn synthesize_voice_clone_wav(
+        &self,
+        text: &str,
+        options: &SynthesisOptions,
+        output_path: impl AsRef<Path>,
+    ) -> Result<()> {
+        let mut cmd = Command::new(&self.python_path);
+        cmd.args(self.build_voice_clone_args(text, options, output_path.as_ref())?);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+        let output = cmd.output().map_err(|e| {
+            crate::Error::Config(format!(
+                "Failed to launch Python voice-clone bridge: {e}.\n\
+                 Make sure Python with qwen-tts package is installed:\n\
+                 pip install qwen-tts"
+            ))
+        })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(crate::Error::Config(format!(
+                "Python voice-clone bridge failed: {stderr}"
+            )));
+        }
+        if !output.stderr.is_empty() {
+            log::info!(
+                "Python voice-clone bridge stderr: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        Ok(())
     }
 }
 
@@ -228,5 +332,46 @@ mod tests {
             found.is_some(),
             "generate_tokens.py should exist at tools/generate_tokens.py"
         );
+    }
+
+    #[test]
+    fn voice_clone_args_include_reference_audio_and_output() {
+        let bridge = PythonBridge::new("Qwen/Qwen3-TTS-12Hz-0.6B-Base")
+            .unwrap()
+            .with_script("tools/generate_tokens.py");
+        let options = SynthesisOptions {
+            language: "Chinese".into(),
+            reference_audio: Some("ref.wav".into()),
+            reference_text: Some("參考文字".into()),
+            seed: Some(1234),
+            ..SynthesisOptions::default()
+        };
+
+        let args = bridge
+            .build_voice_clone_args("要合成的文字", &options, Path::new("clone.wav"))
+            .unwrap();
+
+        assert!(args.contains(&"--voice-clone".into()));
+        assert_arg_pair(&args, "--reference-audio", "ref.wav");
+        assert_arg_pair(&args, "--reference-text", "參考文字");
+        assert_arg_pair(&args, "--output-wav", "clone.wav");
+        assert_arg_pair(&args, "--seed", "1234");
+    }
+
+    #[test]
+    fn voice_clone_args_require_reference_audio() {
+        let bridge = PythonBridge::new("Qwen/Qwen3-TTS-12Hz-0.6B-Base").unwrap();
+        let err = bridge
+            .build_voice_clone_args("text", &SynthesisOptions::default(), Path::new("out.wav"))
+            .unwrap_err();
+        assert!(err.to_string().contains("reference_audio"));
+    }
+
+    fn assert_arg_pair(args: &[String], flag: &str, value: &str) {
+        let idx = args
+            .iter()
+            .position(|arg| arg == flag)
+            .unwrap_or_else(|| panic!("missing arg {flag} in {args:?}"));
+        assert_eq!(args.get(idx + 1).map(String::as_str), Some(value));
     }
 }

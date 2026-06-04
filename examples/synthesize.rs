@@ -172,6 +172,7 @@ fn main() {
     let mut instruct_file: Option<String> = None;
     let mut mode = GenerationMode::Auto;
     let mut reference_audio: Option<String> = None;
+    let mut reference_text: Option<String> = None;
     let mut seed: Option<u64> = None;
     let mut tokens_path: Option<String> = None;
     let mut save_tokens_path: Option<String> = None;
@@ -231,6 +232,11 @@ fn main() {
             "--reference-audio" => {
                 require_arg(&args, i, "--reference-audio");
                 reference_audio = Some(args[i + 1].clone());
+                i += 2;
+            }
+            "--reference-text" => {
+                require_arg(&args, i, "--reference-text");
+                reference_text = Some(args[i + 1].clone());
                 i += 2;
             }
             "--tokens" => {
@@ -406,6 +412,9 @@ fn main() {
     if let Some(path) = &reference_audio {
         println!("參考音訊: {path}");
     }
+    if let Some(text) = &reference_text {
+        println!("參考逐字: {text}");
+    }
     if let Some(seed) = seed {
         println!("seed    : {seed}");
     }
@@ -413,6 +422,46 @@ fn main() {
         println!("保存Token: {tp}");
     }
     println!();
+
+    if tokens_path.is_none() && mode == GenerationMode::VoiceClone {
+        match backend {
+            BackendKind::Python => {
+                println!("[1/1] 使用 Python 官方 Voice Clone 路徑產生 WAV…");
+                println!("      （首次載入需下載權重，約 1-5 分鐘）");
+                let bridge = PythonBridge::new(&model_id)
+                    .expect("建立 PythonBridge 失敗")
+                    .with_python("python");
+                let options = SynthesisOptions {
+                    language,
+                    speaker: None,
+                    instruct: None,
+                    reference_audio,
+                    reference_text,
+                    seed,
+                    temperature: 0.9,
+                    top_k: 50,
+                    top_p: 1.0,
+                    max_new_tokens,
+                };
+                bridge
+                    .synthesize_voice_clone_wav(&text, &options, &output_path)
+                    .expect("Python Voice Clone 生成失敗");
+                println!();
+                println!("✅ 完成! 已儲存: {output_path}");
+                return;
+            }
+            #[cfg(feature = "candle-llm")]
+            BackendKind::Candle => {
+                eprintln!(
+                    "錯誤: Candle/Rust 原生 Voice Clone 尚未完成。\n\
+                     reference-audio 需要先移植 speech tokenizer encoder、speaker encoder 與 ICL prompt。\n\
+                     目前可用方式:\n\
+                       synthesize.exe --backend python --mode voice-clone --model Qwen/Qwen3-TTS-12Hz-0.6B-Base --text \"測試文字\" --reference-audio reference.wav --output clone.wav"
+                );
+                std::process::exit(1);
+            }
+        }
+    }
 
     let device = runtime_device();
 
@@ -439,6 +488,8 @@ fn main() {
                     language,
                     speaker,
                     instruct,
+                    reference_audio,
+                    reference_text,
                     seed,
                     temperature: 0.9,
                     top_k: 50,
@@ -493,6 +544,8 @@ fn main() {
                     language,
                     speaker,
                     instruct,
+                    reference_audio,
+                    reference_text,
                     seed,
                     temperature: 0.9,
                     top_k: 50,
@@ -694,7 +747,8 @@ fn print_usage() {
   --list-speakers    顯示內建 speaker preset 清單
   --list-models      顯示 Qwen3-TTS 模型能力表
   --mode             生成模式：auto | custom-voice | voice-design | voice-clone
-  --reference-audio  Voice Clone 參考音訊（3 秒以上；Rust 原生尚未實作）
+  --reference-audio  Voice Clone 參考音訊（3 秒以上；目前用 --backend python 可生成）
+  --reference-text   Voice Clone 參考音訊逐字稿；未提供時使用 speaker-embedding-only 模式
   --instruct         VoiceDesign/CustomVoice 音色或語氣指令
   --instruct-file    從 UTF-8 文字檔讀取 VoiceDesign/CustomVoice 指令
   --seed N           固定取樣 seed，讓相同文字/條件更容易重現
@@ -740,6 +794,17 @@ fn print_usage() {
       --instruct-file instruct.txt \\
       --seed 20260603
 
+  # Voice Clone（可用路徑：Python 官方 qwen_tts；Base 模型）
+  cargo run --example synthesize -- \\
+      --backend python \\
+      --mode voice-clone \\
+      --model Qwen/Qwen3-TTS-12Hz-0.6B-Base \\
+      --text \"測試文字\" \\
+      --language Chinese \\
+      --reference-audio reference.wav \\
+      --reference-text \"參考音訊的逐字稿\" \\
+      --output clone.wav
+
 模型清單:
   0.6B（無 GPU，約 1.2GB RAM）:
     Qwen/Qwen3-TTS-12Hz-0.6B-Base
@@ -780,7 +845,7 @@ fn print_models() {
         SUPPORTED_LANGUAGES.join(", ")
     );
     println!(
-        "Voice clone requires a Base model plus --reference-audio, but native Rust reference-audio conditioning is not implemented yet."
+        "Voice clone requires a Base model plus --reference-audio. Use synthesize.exe --backend python for working reference-audio cloning; native Rust conditioning is still pending."
     );
 }
 

@@ -15,6 +15,7 @@ import io
 import random
 import struct
 import sys
+import wave
 import warnings
 from typing import Optional
 
@@ -164,6 +165,107 @@ def write_codes_binary(codes_list, stream):
                 stream.buffer.write(struct.pack("<H", int(token)))
 
 
+def api_language(language: str) -> str:
+    """Map CLI language names to qwen_tts generate_* API names."""
+    if not language or language.lower() == "auto":
+        return "Auto"
+
+    aliases = {
+        "zh": "Chinese",
+        "cn": "Chinese",
+        "chinese": "Chinese",
+        "en": "English",
+        "english": "English",
+        "fr": "French",
+        "french": "French",
+        "de": "German",
+        "german": "German",
+        "it": "Italian",
+        "italian": "Italian",
+        "es": "Spanish",
+        "spanish": "Spanish",
+        "pt": "Portuguese",
+        "portuguese": "Portuguese",
+        "ja": "Japanese",
+        "japanese": "Japanese",
+        "ko": "Korean",
+        "korean": "Korean",
+        "ru": "Russian",
+        "russian": "Russian",
+    }
+    return aliases.get(language.lower(), language)
+
+
+def as_numpy_wav(wav):
+    """Convert qwen_tts output into a mono float32 NumPy array."""
+    if hasattr(wav, "detach"):
+        wav = wav.detach().cpu().numpy()
+    wav = np.asarray(wav, dtype=np.float32)
+    if wav.ndim > 1:
+        wav = np.squeeze(wav)
+    if wav.ndim > 1:
+        wav = wav[0]
+    return np.clip(wav, -1.0, 1.0)
+
+
+def write_wav(path: str, wav, sample_rate: int):
+    """Write mono PCM16 WAV without depending on soundfile."""
+    samples = as_numpy_wav(wav)
+    pcm = (samples * 32767.0).astype("<i2", copy=False)
+    with wave.open(path, "wb") as writer:
+        writer.setnchannels(1)
+        writer.setsampwidth(2)
+        writer.setframerate(int(sample_rate))
+        writer.writeframes(pcm.tobytes())
+
+
+def generate_voice_clone_wav(
+    model,
+    text: str,
+    language: str,
+    reference_audio: str,
+    output_wav: str,
+    reference_text: Optional[str] = None,
+    temperature=0.9,
+    top_k=50,
+    top_p=1.0,
+    max_new_tokens=4096,
+    seed: Optional[int] = None,
+):
+    """Generate Voice Clone audio with the official qwen_tts high-level API."""
+    if seed is not None:
+        set_seed(seed)
+        print(f"[bridge] seed={seed}", file=sys.stderr)
+
+    reference_text = reference_text.strip() if reference_text else None
+    x_vector_only = reference_text is None
+    language_name = api_language(language)
+    print(f"[bridge] voice-clone language={language_name}", file=sys.stderr)
+    print(f"[bridge] reference_audio={reference_audio}", file=sys.stderr)
+    if reference_text:
+        print(f"[bridge] reference_text={reference_text}", file=sys.stderr)
+    else:
+        print("[bridge] reference_text not provided; using speaker-embedding-only mode", file=sys.stderr)
+
+    with torch.no_grad():
+        wavs, sr = model.generate_voice_clone(
+            text=text,
+            language=language_name,
+            ref_audio=reference_audio,
+            ref_text=reference_text,
+            x_vector_only_mode=x_vector_only,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+        )
+
+    write_wav(output_wav, wavs[0], sr)
+    duration = as_numpy_wav(wavs[0]).shape[0] / float(sr)
+    print(f"[bridge] Wrote {output_wav} ({duration:.2f}s @ {sr} Hz)", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Qwen3-TTS token generator")
     parser.add_argument("--text", type=str, default=None, help="Input text")
@@ -181,6 +283,14 @@ def main():
     parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--max-new-tokens", type=int, default=4096)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument(
+        "--voice-clone",
+        action="store_true",
+        help="Run official generate_voice_clone() and write --output-wav",
+    )
+    parser.add_argument("--reference-audio", type=str, default=None)
+    parser.add_argument("--reference-text", type=str, default=None)
+    parser.add_argument("--output-wav", type=str, default=None)
 
     args = parser.parse_args()
 
@@ -203,6 +313,31 @@ def main():
     sys.stdout = sys.stderr
 
     loaded = load_model(args.model)
+
+    if args.voice_clone:
+        if not args.reference_audio:
+            print("[bridge] Error: --voice-clone requires --reference-audio", file=sys.stderr)
+            sys.exit(1)
+        if not args.output_wav:
+            print("[bridge] Error: --voice-clone requires --output-wav", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"[bridge] Generating voice clone ({len(text)} chars)...", file=sys.stderr)
+        generate_voice_clone_wav(
+            loaded,
+            text,
+            language=args.language,
+            reference_audio=args.reference_audio,
+            output_wav=args.output_wav,
+            reference_text=args.reference_text,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            top_p=args.top_p,
+            max_new_tokens=args.max_new_tokens,
+            seed=args.seed,
+        )
+        print("[bridge] Done.", file=sys.stderr)
+        return
 
     # Generate codes
     print(f"[bridge] Generating tokens ({len(text)} chars)...", file=sys.stderr)

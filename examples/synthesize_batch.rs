@@ -99,6 +99,12 @@ fn run() -> Result<(), Box<dyn Error>> {
             .map(|path| path.to_string_lossy())
             .as_deref(),
     )?;
+    if args.mode == GenerationMode::VoiceClone {
+        return Err(
+            "batch voice-clone is not implemented yet; use synthesize.exe --backend python --mode voice-clone for single-file reference-audio cloning"
+                .into(),
+        );
+    }
 
     fs::create_dir_all(&args.output_dir)?;
     if args.save_tokens {
@@ -156,6 +162,11 @@ fn run() -> Result<(), Box<dyn Error>> {
             language: args.language.clone(),
             speaker: args.speaker.clone(),
             instruct: select_instruct(&args, idx).cloned(),
+            reference_audio: args
+                .reference_audio
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned()),
+            reference_text: None,
             seed: select_seed(&args, idx),
             temperature: args.temperature,
             top_k: args.top_k,
@@ -556,7 +567,7 @@ fn print_usage() {
            --list-speakers          Show built-in speaker presets\n\
            --list-models            Show Qwen3-TTS model capability table\n\
            --mode <name>            auto | custom-voice | voice-design | voice-clone\n\
-           --reference-audio <wav>  Voice Clone reference audio (3s+; native Rust path not implemented yet)\n\
+           --reference-audio <wav>  Voice Clone reference audio (3s+; batch voice-clone is not wired yet)\n\
            --instruct <text>        VoiceDesign/CustomVoice style instruction\n\
            --instruct-file <path>   Read instruction from UTF-8 text file; repeat once per line to switch voices\n\
            --seed <n>               Fixed sampling seed; repeat once per line to vary seeds\n\
@@ -598,7 +609,7 @@ fn print_models() {
         SUPPORTED_LANGUAGES.join(", ")
     );
     println!(
-        "Voice clone requires a Base model plus --reference-audio, but native Rust reference-audio conditioning is not implemented yet."
+        "Voice clone requires a Base model plus --reference-audio. Single-file cloning is available via synthesize.exe --backend python; batch voice-clone and native Rust conditioning are still pending."
     );
 }
 

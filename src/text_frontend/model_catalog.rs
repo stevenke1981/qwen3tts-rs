@@ -234,10 +234,7 @@ pub fn validate_generation_request(
                         .into(),
                 ));
             }
-            Err(crate::Error::Config(
-                "voice-clone reference-audio conditioning is not implemented in the native Rust path yet"
-                    .into(),
-            ))
+            Ok(())
         }
     }
 }
@@ -342,6 +339,18 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn validates_voice_clone_when_reference_audio_is_present() {
+        validate_generation_request(
+            "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+            GenerationMode::VoiceClone,
+            None,
+            None,
+            Some("reference.wav"),
+        )
+        .unwrap();
     }
 
     #[test]

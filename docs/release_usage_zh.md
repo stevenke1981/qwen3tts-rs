@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.13 Windows x64 / Windows x64 CUDA`
+適用版本：`qwen3tts-rs v0.1.14 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
@@ -76,8 +76,8 @@ weights\tokenizer\
 
 ## CPU 與 CUDA 版本
 
-- `qwen3tts-rs-v0.1.13-windows-x64.zip`：CPU/Candle build。
-- `qwen3tts-rs-v0.1.13-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+- `qwen3tts-rs-v0.1.14-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.14-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
 
 建置 CUDA 版 release：
 
@@ -177,7 +177,7 @@ CLI 也新增模式檢查：
 | `--mode auto` | 預設，不阻擋既有流程 |
 | `--mode custom-voice` | 要求 CustomVoice 模型與 `--speaker`；0.6B CustomVoice 不允許 `--instruct` |
 | `--mode voice-design` | 要求 `1.7B-VoiceDesign` 與 `--instruct` / `--instruct-file` |
-| `--mode voice-clone` | 要求 Base 模型與 `--reference-audio`；Rust 原生 reference-audio conditioning 尚未實作，會明確報錯 |
+| `--mode voice-clone` | 要求 Base 模型與 `--reference-audio`；單句 Python backend 可用，Candle 原生 conditioning 尚未實作 |
 
 目前 release 的「流式」能力指模型支援 12Hz streaming token/audio 架構；CLI 仍是整句寫 WAV，尚未提供即時 audio chunk callback。
 
@@ -318,7 +318,21 @@ Rust CLI 已新增參數與能力檢查：
   --reference-audio reference.wav
 ```
 
-目前會明確報錯：Rust 原生尚未實作 reference-audio conditioning。這比靜默忽略參考音訊安全；後續要補的是 reference audio encoder/conditioning 與 PyTorch fixture 對齊。
+`v0.1.14` 起，單句模式可用 Python 官方 `qwen_tts` 路徑實際生成 Voice Clone WAV：
+
+```powershell
+.\synthesize.exe `
+  --backend python `
+  --mode voice-clone `
+  --model "Qwen/Qwen3-TTS-12Hz-0.6B-Base" `
+  --text "測試文字..." `
+  --language Chinese `
+  --reference-audio reference.wav `
+  --reference-text "參考音訊的逐字稿" `
+  --output clone.wav
+```
+
+`--reference-text` 可省略；省略時會使用 speaker-embedding-only 模式。Candle/Rust 原生 reference-audio conditioning 仍未完成，因為還需要移植 speech tokenizer encoder、speaker encoder 與 ICL prompt，現在會明確報錯而不是靜默忽略參考音訊。batch voice-clone 也尚未接上，請先用單句 `synthesize.exe --backend python`。
 
 長中文句子若 `--max-new-tokens` 太低會被截斷。保守估算可用：
 
@@ -469,7 +483,8 @@ weights\tokenizer-q8\quantization_report.json
 | `--list-speakers` | 顯示內建 speaker preset 清單 |
 | `--list-models` | 顯示模型名稱、參數量、主要功能、語言支援、流式、指令控制、推薦場景 |
 | `--mode` | `auto`、`custom-voice`、`voice-design`、`voice-clone` |
-| `--reference-audio` | Voice Clone 參考音訊；目前僅做能力檢查，原生 conditioning 尚未實作 |
+| `--reference-audio` | Voice Clone 參考音訊；單句 `synthesize.exe --backend python` 可實際生成，Candle 原生仍待 speech tokenizer encoder/speaker encoder |
+| `--reference-text` | Voice Clone 參考音訊逐字稿；未提供時使用 speaker-embedding-only 模式 |
 | `--instruct` | VoiceDesign/CustomVoice 音色或語氣指令 |
 | `--instruct-file` | 從 UTF-8 文字檔讀取音色或語氣指令；batch 可重複傳入做到逐句切換 |
 | `--seed` | 固定取樣 seed；batch 可重複傳入做到逐句 seed |
@@ -515,6 +530,7 @@ with wave.open(name, "rb") as w:
 - `v0.1.11` 新增模型能力 catalog、`--list-models`、`--mode`、`--reference-audio`，並對 CustomVoice / VoiceDesign / VoiceClone 做明確能力檢查。
 - `v0.1.12` 自動優先使用 `weights\tokenizer-q8` 與 `%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz-q8`，讓已驗證的 Q8 tokenizer decoder 不必每次手動指定環境變數。
 - `v0.1.13` 第一次自動轉換 F32 tokenizer decoder 後會自動嘗試建立 Q8 cache，並在使用 Q8 時顯示大小、節省比例與量化 tensor 摘要。
+- `v0.1.14` 單句 `synthesize.exe --backend python --mode voice-clone` 會呼叫官方 `generate_voice_clone()` 並直接輸出 WAV；`--reference-text` 可選。Candle 原生 Voice Clone 仍待 speech tokenizer encoder/speaker encoder/ICL prompt。
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
 - 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。

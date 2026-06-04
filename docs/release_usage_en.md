@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.13 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.14 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
@@ -86,8 +86,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.13-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.13-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.14-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.14-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -191,7 +191,7 @@ Use `--mode` to make the requested generation contract explicit:
 | `--mode auto` | Default compatibility mode; does not block existing scripts |
 | `--mode custom-voice` | Requires a CustomVoice model and `--speaker`; rejects `--instruct` on 0.6B CustomVoice |
 | `--mode voice-design` | Requires `1.7B-VoiceDesign` and `--instruct` or `--instruct-file` |
-| `--mode voice-clone` | Requires a Base model and `--reference-audio`; native reference-audio conditioning is still pending |
+| `--mode voice-clone` | Requires a Base model and `--reference-audio`; single-file Python backend works, native Candle conditioning is still pending |
 
 The 12Hz models are streaming-capable at the model level. The current release
 CLI writes complete WAV files; chunk streaming is the next API layer, not a
@@ -333,22 +333,27 @@ wavs, sr = model.generate_voice_clone(
 )
 ```
 
-The Rust CLI now exposes the matching capability check:
+Starting in `v0.1.14`, single-file synthesis can use the official Python
+`qwen_tts` Voice Clone path and write a WAV directly:
 
 ```powershell
 .\synthesize.exe `
   --text "測試文字..." `
-  --backend candle `
-  --language chinese `
-  --model "Qwen/Qwen3-TTS-12Hz-1.7B-Base" `
+  --backend python `
+  --language Chinese `
+  --model "Qwen/Qwen3-TTS-12Hz-0.6B-Base" `
   --mode voice-clone `
   --reference-audio .\reference.wav `
+  --reference-text "reference transcript" `
   --output clone.wav `
   --max-new-tokens 80
 ```
 
-Native reference-audio conditioning is not implemented yet, so this mode returns
-a clear error instead of silently ignoring the reference audio.
+`--reference-text` is optional. If it is omitted, the bridge uses
+speaker-embedding-only mode. Native Candle/Rust reference-audio conditioning is
+still pending because it needs the speech tokenizer encoder, speaker encoder,
+and ICL prompt path. The Candle backend and batch mode return clear errors
+instead of silently ignoring the reference audio.
 
 If long Chinese text is truncated, increase `--max-new-tokens`. A conservative
 starting point is:
@@ -521,7 +526,8 @@ multiple agents compare the same sample set:
 | `--language` | Language condition. Use `chinese` for Chinese prompts |
 | `--speaker` | Speaker condition; supports built-in presets such as `Vivian`, `Uncle_Fu`, and `Dylan`. CustomVoice uses real speaker ids; other models use instruct fallback |
 | `--list-speakers` | Show built-in speaker presets |
-| `--reference-audio` | Voice Clone reference audio; currently used for capability validation while native conditioning is pending |
+| `--reference-audio` | Voice Clone reference audio; single-file `synthesize.exe --backend python` can use it now, while native Candle conditioning is still pending |
+| `--reference-text` | Optional Voice Clone reference transcript; omitted means speaker-embedding-only mode |
 | `--instruct` | VoiceDesign/CustomVoice voice or style instruction |
 | `--instruct-file` | Read voice or style instruction from a UTF-8 text file; in batch mode repeat it once per line to switch voices |
 | `--seed` | Fixed sampling seed; in batch mode repeat it once per line to vary seeds |
@@ -582,6 +588,11 @@ If `rms=0` and `peak=0`, the WAV is silent.
 - `v0.1.13` automatically attempts to build a Q8 cache after first-run F32
   tokenizer conversion, and prints size/savings/tensor-count summary when Q8 is
   used.
+- `v0.1.14` adds working single-file
+  `synthesize.exe --backend python --mode voice-clone` WAV output through the
+  official `generate_voice_clone()` API, plus optional `--reference-text`.
+  Native Candle Voice Clone still needs the speech tokenizer encoder, speaker
+  encoder, and ICL prompt path.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.

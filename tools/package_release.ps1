@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.13",
+    [string]$Version = "0.1.14",
     [switch]$Cuda,
     [string]$CudaComputeCap = "86",
     [string]$CudaToolkitRoot = "",
@@ -161,7 +161,8 @@ $files = @(
     @{ Source = Join-Path $RepoRoot "docs\release_usage_zh.md"; Target = "README.zh-TW.md" },
     @{ Source = Join-Path $RepoRoot "docs\release_usage_en.md"; Target = "README.en-US.md" },
     @{ Source = Join-Path $RepoRoot "docs\agent_voice_failure_playbook.md"; Target = "AGENT_VOICE_FAILURE_PLAYBOOK.md" },
-    @{ Source = Join-Path $RepoRoot "tools\convert_weights.py"; Target = "tools\convert_weights.py" }
+    @{ Source = Join-Path $RepoRoot "tools\convert_weights.py"; Target = "tools\convert_weights.py" },
+    @{ Source = Join-Path $RepoRoot "tools\generate_tokens.py"; Target = "tools\generate_tokens.py" }
 )
 
 foreach ($file in $files) {
@@ -183,6 +184,7 @@ Included:
 - README.en-US.md
 - AGENT_VOICE_FAILURE_PLAYBOOK.md
 - tools/convert_weights.py
+- tools/generate_tokens.py
 
 Large weights are not bundled. If converted tokenizer decoder weights are
 missing, the app can attempt to run convert_tokenizer.exe automatically.
