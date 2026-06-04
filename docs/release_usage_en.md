@@ -215,7 +215,7 @@ Use `--mode` to make the requested generation contract explicit:
 | `--mode auto` | Default compatibility mode; does not block existing scripts |
 | `--mode custom-voice` | Requires a CustomVoice model and `--speaker`; rejects `--instruct` on 0.6B CustomVoice |
 | `--mode voice-design` | Requires `1.7B-VoiceDesign` and `--instruct` or `--instruct-file` |
-| `--mode voice-clone` | Requires a Base model and `--reference-audio`; single-file Python backend works, native Candle conditioning is still pending |
+| `--mode voice-clone` | Requires a Base model and `--reference-audio`; best quality should also include `--reference-text`; native Candle/Rust voice-clone is not implemented yet |
 
 The 12Hz models are streaming-capable at the model level. The current release
 CLI writes complete WAV files; chunk streaming is the next API layer, not a
@@ -373,12 +373,16 @@ Starting in `v0.1.14`, single-file synthesis can use the official Python
   --max-new-tokens 80
 ```
 
-`--reference-text` is optional. If it is omitted, the bridge uses
-speaker-embedding-only mode. The final target is still zero Python dependency.
-`v0.1.15` removes the first native Voice Clone blocker by converting tokenizer
-encoder/quantizer weights and Base-model speaker encoder weights with Rust
-executables. The remaining work is the Rust speech tokenizer encoder, speaker
-encoder forward pass, ICL prompt path, and reference-code trimming.
+`--reference-text` is optional at the CLI level, but best quality should include
+an accurate reference transcript. If it is omitted, the bridge uses
+speaker-embedding-only mode, which is usually less stable for voice and content
+alignment. Native Candle/Rust voice-clone is not implemented yet; do not expect
+`--backend candle --mode voice-clone` to use the reference audio. The final
+target is still zero Python dependency. `v0.1.15` removes the first native Voice
+Clone blocker by converting tokenizer encoder/quantizer weights and Base-model
+speaker encoder weights with Rust executables. The remaining work is the Rust
+speech tokenizer encoder, speaker encoder forward pass, ICL prompt path, and
+reference-code trimming.
 
 If long Chinese text is truncated, increase `--max-new-tokens`. A conservative
 starting point is:
@@ -551,8 +555,8 @@ multiple agents compare the same sample set:
 | `--language` | Language condition. Use `chinese` for Chinese prompts |
 | `--speaker` | Speaker condition; supports built-in presets such as `Vivian`, `Uncle_Fu`, and `Dylan`. CustomVoice uses real speaker ids; other models use instruct fallback |
 | `--list-speakers` | Show built-in speaker presets |
-| `--reference-audio` | Voice Clone reference audio; single-file `synthesize.exe --backend python` can use it now, while native Candle conditioning is still pending |
-| `--reference-text` | Optional Voice Clone reference transcript; omitted means speaker-embedding-only mode |
+| `--reference-audio` | Voice Clone reference audio; native Candle/Rust voice-clone is not implemented yet, so only the temporary Python reference path can use it |
+| `--reference-text` | Voice Clone reference transcript; strongly recommended for best quality, omitted means speaker-embedding-only mode |
 | `--instruct` | VoiceDesign/CustomVoice voice or style instruction |
 | `--instruct-file` | Read voice or style instruction from a UTF-8 text file; in batch mode repeat it once per line to switch voices |
 | `--seed` | Fixed sampling seed; in batch mode repeat it once per line to vary seeds |
@@ -615,9 +619,10 @@ If `rms=0` and `peak=0`, the WAV is silent.
   used.
 - `v0.1.14` adds working single-file
   `synthesize.exe --backend python --mode voice-clone` WAV output through the
-  official `generate_voice_clone()` API, plus optional `--reference-text`.
-  Native Candle Voice Clone still needs the speech tokenizer encoder, speaker
-  encoder, and ICL prompt path.
+  official `generate_voice_clone()` API. Best quality should include
+  `--reference-text`. Native Candle/Rust Voice Clone is not implemented yet and
+  still needs the speech tokenizer encoder, speaker encoder, and ICL prompt
+  path.
 - `v0.1.15` starts the native Voice Clone path by extending
   `convert_tokenizer.exe` to write `encoder.safetensors` and
   `quantizer.safetensors`, and by adding `convert_speaker_encoder.exe` for

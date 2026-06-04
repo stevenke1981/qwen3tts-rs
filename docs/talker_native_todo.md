@@ -72,7 +72,7 @@
   - When Q8 is selected, the app prints a terminal summary from `quantization_report.json`, including stored MB, percent savings, and quantized/total tensors.
 - 2026-06-04 v0.1.14 Voice Clone bridge update:
   - Single-file `synthesize.exe --backend python --mode voice-clone` now calls the official `qwen_tts.generate_voice_clone()` path and writes the WAV directly.
-  - Added optional `--reference-text`; when omitted, the Python bridge uses speaker-embedding-only mode.
+  - Added `--reference-text`; it is optional at CLI level, but best voice-clone quality should include an accurate reference transcript. When omitted, the Python bridge uses speaker-embedding-only mode.
   - Batch voice-clone is explicitly rejected for now, and Candle native voice-clone still returns a clear unsupported-backend error.
   - Native Rust work remaining: port the speech tokenizer encoder, port the Base-model speaker encoder, build the ICL prompt embedding path, decode `ref_code + generated_code`, trim the reference segment, and align with PyTorch fixtures.
 - 2026-06-04 v0.1.15 native Voice Clone prerequisites:

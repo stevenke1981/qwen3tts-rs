@@ -415,6 +415,11 @@ fn main() {
     if let Some(text) = &reference_text {
         println!("參考逐字: {text}");
     }
+    if mode == GenerationMode::VoiceClone && reference_text.is_none() {
+        eprintln!(
+            "提示: Voice Clone 最佳效果建議提供 --reference-text；未提供時只能使用 speaker-embedding-only 模式，音色/內容穩定性可能較差。"
+        );
+    }
     if let Some(seed) = seed {
         println!("seed    : {seed}");
     }
@@ -455,8 +460,9 @@ fn main() {
                 eprintln!(
                     "錯誤: Candle/Rust 原生 Voice Clone 尚未完成。\n\
                      reference-audio 需要先移植 speech tokenizer encoder、speaker encoder 與 ICL prompt。\n\
+                     最佳效果還需要 --reference-text 提供參考音訊逐字稿。\n\
                      目前可用方式:\n\
-                       synthesize.exe --backend python --mode voice-clone --model Qwen/Qwen3-TTS-12Hz-0.6B-Base --text \"測試文字\" --reference-audio reference.wav --output clone.wav"
+                       synthesize.exe --backend python --mode voice-clone --model Qwen/Qwen3-TTS-12Hz-0.6B-Base --text \"測試文字\" --reference-audio reference.wav --reference-text \"參考逐字稿\" --output clone.wav"
                 );
                 std::process::exit(1);
             }
@@ -747,8 +753,8 @@ fn print_usage() {
   --list-speakers    顯示內建 speaker preset 清單
   --list-models      顯示 Qwen3-TTS 模型能力表
   --mode             生成模式：auto | custom-voice | voice-design | voice-clone
-  --reference-audio  Voice Clone 參考音訊（3 秒以上；目前用 --backend python 可生成）
-  --reference-text   Voice Clone 參考音訊逐字稿；未提供時使用 speaker-embedding-only 模式
+  --reference-audio  Voice Clone 參考音訊（3 秒以上；Candle/Rust 原生尚未實作）
+  --reference-text   Voice Clone 參考音訊逐字稿；最佳效果強烈建議提供
   --instruct         VoiceDesign/CustomVoice 音色或語氣指令
   --instruct-file    從 UTF-8 文字檔讀取 VoiceDesign/CustomVoice 指令
   --seed N           固定取樣 seed，讓相同文字/條件更容易重現
@@ -794,7 +800,7 @@ fn print_usage() {
       --instruct-file instruct.txt \\
       --seed 20260603
 
-  # Voice Clone（可用路徑：Python 官方 qwen_tts；Base 模型）
+  # Voice Clone（目前可用路徑：Python 官方 qwen_tts；Candle/Rust 原生尚未實作）
   cargo run --example synthesize -- \\
       --backend python \\
       --mode voice-clone \\
@@ -845,7 +851,7 @@ fn print_models() {
         SUPPORTED_LANGUAGES.join(", ")
     );
     println!(
-        "Voice clone requires a Base model plus --reference-audio. Use synthesize.exe --backend python for working reference-audio cloning; native Rust conditioning is still pending."
+        "Voice clone requires a Base model plus --reference-audio, and best quality should include --reference-text. Candle/Rust native voice-clone conditioning is not implemented yet."
     );
 }
 

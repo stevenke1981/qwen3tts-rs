@@ -101,7 +101,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     )?;
     if args.mode == GenerationMode::VoiceClone {
         return Err(
-            "batch voice-clone is not implemented yet; use synthesize.exe --backend python --mode voice-clone for single-file reference-audio cloning"
+            "batch voice-clone is not implemented yet, and Candle/Rust native voice-clone is not implemented yet. For best reference cloning quality in the temporary Python path, use synthesize.exe --backend python --mode voice-clone with both --reference-audio and --reference-text"
                 .into(),
         );
     }
@@ -567,7 +567,7 @@ fn print_usage() {
            --list-speakers          Show built-in speaker presets\n\
            --list-models            Show Qwen3-TTS model capability table\n\
            --mode <name>            auto | custom-voice | voice-design | voice-clone\n\
-           --reference-audio <wav>  Voice Clone reference audio (3s+; batch voice-clone is not wired yet)\n\
+           --reference-audio <wav>  Voice Clone reference audio (3s+; batch/Candle voice-clone is not implemented yet)\n\
            --instruct <text>        VoiceDesign/CustomVoice style instruction\n\
            --instruct-file <path>   Read instruction from UTF-8 text file; repeat once per line to switch voices\n\
            --seed <n>               Fixed sampling seed; repeat once per line to vary seeds\n\
@@ -609,7 +609,7 @@ fn print_models() {
         SUPPORTED_LANGUAGES.join(", ")
     );
     println!(
-        "Voice clone requires a Base model plus --reference-audio. Single-file cloning is available via synthesize.exe --backend python; batch voice-clone and native Rust conditioning are still pending."
+        "Voice clone requires a Base model plus --reference-audio, and best quality should include --reference-text. Batch voice-clone and Candle/Rust native conditioning are not implemented yet."
     );
 }
 

@@ -198,7 +198,7 @@ CLI 也新增模式檢查：
 | `--mode auto` | 預設，不阻擋既有流程 |
 | `--mode custom-voice` | 要求 CustomVoice 模型與 `--speaker`；0.6B CustomVoice 不允許 `--instruct` |
 | `--mode voice-design` | 要求 `1.7B-VoiceDesign` 與 `--instruct` / `--instruct-file` |
-| `--mode voice-clone` | 要求 Base 模型與 `--reference-audio`；單句 Python backend 可用，Candle 原生 conditioning 尚未實作 |
+| `--mode voice-clone` | 要求 Base 模型與 `--reference-audio`；最佳效果建議同時提供 `--reference-text`；Candle/Rust 原生 voice-clone 尚未實作 |
 
 目前 release 的「流式」能力指模型支援 12Hz streaming token/audio 架構；CLI 仍是整句寫 WAV，尚未提供即時 audio chunk callback。
 
@@ -353,7 +353,7 @@ Rust CLI 已新增參數與能力檢查：
   --output clone.wav
 ```
 
-`--reference-text` 可省略；省略時會使用 speaker-embedding-only 模式。最終目標仍是完全不依賴 Python。`v0.1.15` 已先補上 Rust 原生權重準備：`convert_tokenizer.exe` 會輸出 tokenizer encoder/quantizer，`convert_speaker_encoder.exe` 會輸出 Base model speaker encoder。下一步是實作 Rust speech tokenizer encoder、speaker encoder forward、ICL prompt 與 ref-code trimming。
+`--reference-text` 在 CLI 上可省略，但最佳效果應提供準確的參考音訊逐字稿；省略時只能使用 speaker-embedding-only 模式，音色穩定性與內容對齊通常較差。Candle/Rust 原生 voice-clone 目前尚未實作，不能用 `--backend candle --mode voice-clone` 期待 reference-audio 生效。最終目標仍是完全不依賴 Python。`v0.1.15` 已先補上 Rust 原生權重準備：`convert_tokenizer.exe` 會輸出 tokenizer encoder/quantizer，`convert_speaker_encoder.exe` 會輸出 Base model speaker encoder。下一步是實作 Rust speech tokenizer encoder、speaker encoder forward、ICL prompt 與 ref-code trimming。
 
 長中文句子若 `--max-new-tokens` 太低會被截斷。保守估算可用：
 
@@ -504,8 +504,8 @@ weights\tokenizer-q8\quantization_report.json
 | `--list-speakers` | 顯示內建 speaker preset 清單 |
 | `--list-models` | 顯示模型名稱、參數量、主要功能、語言支援、流式、指令控制、推薦場景 |
 | `--mode` | `auto`、`custom-voice`、`voice-design`、`voice-clone` |
-| `--reference-audio` | Voice Clone 參考音訊；單句 `synthesize.exe --backend python` 可實際生成，Candle 原生仍待 speech tokenizer encoder/speaker encoder |
-| `--reference-text` | Voice Clone 參考音訊逐字稿；未提供時使用 speaker-embedding-only 模式 |
+| `--reference-audio` | Voice Clone 參考音訊；Candle/Rust 原生尚未實作，暫時只有 Python 參考路徑可用 |
+| `--reference-text` | Voice Clone 參考音訊逐字稿；最佳效果應提供，未提供時使用 speaker-embedding-only 模式 |
 | `--instruct` | VoiceDesign/CustomVoice 音色或語氣指令 |
 | `--instruct-file` | 從 UTF-8 文字檔讀取音色或語氣指令；batch 可重複傳入做到逐句切換 |
 | `--seed` | 固定取樣 seed；batch 可重複傳入做到逐句 seed |
@@ -551,7 +551,7 @@ with wave.open(name, "rb") as w:
 - `v0.1.11` 新增模型能力 catalog、`--list-models`、`--mode`、`--reference-audio`，並對 CustomVoice / VoiceDesign / VoiceClone 做明確能力檢查。
 - `v0.1.12` 自動優先使用 `weights\tokenizer-q8` 與 `%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz-q8`，讓已驗證的 Q8 tokenizer decoder 不必每次手動指定環境變數。
 - `v0.1.13` 第一次自動轉換 F32 tokenizer decoder 後會自動嘗試建立 Q8 cache，並在使用 Q8 時顯示大小、節省比例與量化 tensor 摘要。
-- `v0.1.14` 單句 `synthesize.exe --backend python --mode voice-clone` 會呼叫官方 `generate_voice_clone()` 並直接輸出 WAV；`--reference-text` 可選。Candle 原生 Voice Clone 仍待 speech tokenizer encoder/speaker encoder/ICL prompt。
+- `v0.1.14` 單句 `synthesize.exe --backend python --mode voice-clone` 會呼叫官方 `generate_voice_clone()` 並直接輸出 WAV；最佳效果建議提供 `--reference-text`。Candle/Rust 原生 Voice Clone 尚未實作，仍待 speech tokenizer encoder/speaker encoder/ICL prompt。
 - `v0.1.15` 開始移除 native Voice Clone 的權重阻塞：`convert_tokenizer.exe` 額外輸出 `encoder.safetensors` 與 `quantizer.safetensors`，新增 `convert_speaker_encoder.exe` 輸出 `speaker_encoder.safetensors`。
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
