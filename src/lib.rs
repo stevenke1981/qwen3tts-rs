@@ -14,6 +14,7 @@
 pub mod codec;
 pub mod paths;
 pub mod quantization;
+pub mod speaker_converter;
 pub mod talker;
 pub mod text_frontend;
 pub mod tokenizer;

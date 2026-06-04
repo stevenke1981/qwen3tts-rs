@@ -1,4 +1,4 @@
-//! Rust converter for Qwen3-TTS 12Hz tokenizer decoder weights.
+//! Rust converter for Qwen3-TTS 12Hz tokenizer weights.
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -73,7 +73,7 @@ impl View for OwnedTensor {
     }
 }
 
-/// Converts Qwen3-TTS tokenizer decoder weights into Rust/Candle safetensors.
+/// Converts Qwen3-TTS tokenizer weights into Rust/Candle safetensors.
 pub fn convert_tokenizer_weights(options: &ConverterOptions) -> Result<ConvertedTokenizerWeights> {
     let input_dir = if let Some(input_dir) = &options.input_dir {
         input_dir.clone()
@@ -122,6 +122,16 @@ pub fn convert_tokenizer_weights(options: &ConverterOptions) -> Result<Converted
     save_tensors(
         &options.output_dir.join("decoder_blocks.safetensors"),
         extract_prefixed(&tensors, "decoder.decoder", "decoder.")?,
+        &mut written,
+    )?;
+    save_tensors(
+        &options.output_dir.join("encoder.safetensors"),
+        extract_prefixed(&tensors, "encoder.", "encoder.")?,
+        &mut written,
+    )?;
+    save_tensors(
+        &options.output_dir.join("quantizer.safetensors"),
+        extract_prefixed(&tensors, "decoder.quantizer", "quantizer.")?,
         &mut written,
     )?;
 

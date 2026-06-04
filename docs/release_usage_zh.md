@@ -1,11 +1,13 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.14 Windows x64 / Windows x64 CUDA`
+適用版本：`qwen3tts-rs v0.1.15 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
 - `synthesize.exe`：單句文字轉語音。
 - `synthesize_batch.exe`：批次文字轉語音，模型只載入一次，適合連續測試多句。
+- `convert_tokenizer.exe`：將 12Hz tokenizer decoder/encoder/quantizer 權重轉成 Rust safetensors。
+- `convert_speaker_encoder.exe`：將 Base model 的 speaker encoder 權重轉成 Rust safetensors。
 - `quantize_tokenizer.exe`：將已轉換的 tokenizer decoder safetensors 量化成 Q8/Q4-hybrid。
 
 ## 重要限制
@@ -27,7 +29,7 @@ tokenizer.json
 
 若使用 `1.7B-VoiceDesign` snapshot 且該目錄缺少 `tokenizer.json`，app 會自動嘗試使用本機 HuggingFace cache 裡的 Base 模型 tokenizer。你也可以手動把 Base 模型的 `tokenizer.json` 放到 `models\tokenizer.json`。
 
-2. 12Hz tokenizer decoder 權重。
+2. 12Hz tokenizer 權重。
 
 `v0.1.3` 開始，若 app 找不到已轉換的 Rust 權重，會優先自動執行 release 包內的 Rust converter：
 
@@ -41,10 +43,29 @@ convert_tokenizer.exe
 Qwen/Qwen3-TTS-Tokenizer-12Hz
 ```
 
-也可以手動指定 tokenizer decoder snapshot：
+也可以手動指定 tokenizer snapshot：
 
 ```powershell
 .\convert_tokenizer.exe --input C:\path\to\Qwen3-TTS-Tokenizer-12Hz\snapshot --output weights\tokenizer
+```
+
+`v0.1.15` 起，這個 Rust converter 會額外輸出 native Voice Clone 所需的：
+
+```text
+encoder.safetensors
+quantizer.safetensors
+```
+
+3. Native Voice Clone 還需要 Base model 的 speaker encoder 權重，可用 Rust converter 轉換：
+
+```powershell
+.\convert_speaker_encoder.exe --input C:\path\to\Qwen3-TTS-12Hz-0.6B-Base\snapshot --output weights\speaker
+```
+
+輸出：
+
+```text
+weights\speaker\speaker_encoder.safetensors
 ```
 
 若找不到 Rust converter，app 才會退回舊的 Python converter：
@@ -76,8 +97,8 @@ weights\tokenizer\
 
 ## CPU 與 CUDA 版本
 
-- `qwen3tts-rs-v0.1.14-windows-x64.zip`：CPU/Candle build。
-- `qwen3tts-rs-v0.1.14-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+- `qwen3tts-rs-v0.1.15-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.15-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
 
 建置 CUDA 版 release：
 
@@ -318,7 +339,7 @@ Rust CLI 已新增參數與能力檢查：
   --reference-audio reference.wav
 ```
 
-`v0.1.14` 起，單句模式可用 Python 官方 `qwen_tts` 路徑實際生成 Voice Clone WAV：
+`v0.1.14` 起，單句模式可用 Python 官方 `qwen_tts` 路徑生成 Voice Clone WAV，作為 native 對齊參考：
 
 ```powershell
 .\synthesize.exe `
@@ -332,7 +353,7 @@ Rust CLI 已新增參數與能力檢查：
   --output clone.wav
 ```
 
-`--reference-text` 可省略；省略時會使用 speaker-embedding-only 模式。Candle/Rust 原生 reference-audio conditioning 仍未完成，因為還需要移植 speech tokenizer encoder、speaker encoder 與 ICL prompt，現在會明確報錯而不是靜默忽略參考音訊。batch voice-clone 也尚未接上，請先用單句 `synthesize.exe --backend python`。
+`--reference-text` 可省略；省略時會使用 speaker-embedding-only 模式。最終目標仍是完全不依賴 Python。`v0.1.15` 已先補上 Rust 原生權重準備：`convert_tokenizer.exe` 會輸出 tokenizer encoder/quantizer，`convert_speaker_encoder.exe` 會輸出 Base model speaker encoder。下一步是實作 Rust speech tokenizer encoder、speaker encoder forward、ICL prompt 與 ref-code trimming。
 
 長中文句子若 `--max-new-tokens` 太低會被截斷。保守估算可用：
 
@@ -531,6 +552,7 @@ with wave.open(name, "rb") as w:
 - `v0.1.12` 自動優先使用 `weights\tokenizer-q8` 與 `%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz-q8`，讓已驗證的 Q8 tokenizer decoder 不必每次手動指定環境變數。
 - `v0.1.13` 第一次自動轉換 F32 tokenizer decoder 後會自動嘗試建立 Q8 cache，並在使用 Q8 時顯示大小、節省比例與量化 tensor 摘要。
 - `v0.1.14` 單句 `synthesize.exe --backend python --mode voice-clone` 會呼叫官方 `generate_voice_clone()` 並直接輸出 WAV；`--reference-text` 可選。Candle 原生 Voice Clone 仍待 speech tokenizer encoder/speaker encoder/ICL prompt。
+- `v0.1.15` 開始移除 native Voice Clone 的權重阻塞：`convert_tokenizer.exe` 額外輸出 `encoder.safetensors` 與 `quantizer.safetensors`，新增 `convert_speaker_encoder.exe` 輸出 `speaker_encoder.safetensors`。
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
 - 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。

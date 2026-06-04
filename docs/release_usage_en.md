@@ -1,12 +1,16 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.14 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.15 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
 - `synthesize.exe`: single-utterance text-to-speech.
 - `synthesize_batch.exe`: batch text-to-speech. The model is loaded once and
   reused across multiple lines.
+- `convert_tokenizer.exe`: converts 12Hz tokenizer decoder/encoder/quantizer
+  weights into Rust safetensors.
+- `convert_speaker_encoder.exe`: converts Base-model speaker encoder weights
+  into Rust safetensors.
 - `quantize_tokenizer.exe`: quantizes converted tokenizer decoder safetensors
   into Q8/Q4-hybrid directories.
 
@@ -32,7 +36,7 @@ If you use a `1.7B-VoiceDesign` snapshot that does not include
 from the local HuggingFace cache. You can also copy the Base model
 `tokenizer.json` to `models\tokenizer.json`.
 
-2. The 12Hz tokenizer decoder weights.
+2. The 12Hz tokenizer weights.
 
 Starting from `v0.1.3`, if the app cannot find converted Rust weights, it first
 attempts to run the bundled Rust converter:
@@ -48,10 +52,30 @@ for:
 Qwen/Qwen3-TTS-Tokenizer-12Hz
 ```
 
-You can also manually pass a tokenizer decoder snapshot:
+You can also manually pass a tokenizer snapshot:
 
 ```powershell
 .\convert_tokenizer.exe --input C:\path\to\Qwen3-TTS-Tokenizer-12Hz\snapshot --output weights\tokenizer
+```
+
+Starting in `v0.1.15`, this Rust converter also writes the native Voice Clone
+prerequisites:
+
+```text
+encoder.safetensors
+quantizer.safetensors
+```
+
+3. Native Voice Clone also needs Base-model speaker encoder weights:
+
+```powershell
+.\convert_speaker_encoder.exe --input C:\path\to\Qwen3-TTS-12Hz-0.6B-Base\snapshot --output weights\speaker
+```
+
+Output:
+
+```text
+weights\speaker\speaker_encoder.safetensors
 ```
 
 If the Rust converter is missing, the app falls back to the older Python
@@ -86,8 +110,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.14-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.14-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.15-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.15-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -334,7 +358,7 @@ wavs, sr = model.generate_voice_clone(
 ```
 
 Starting in `v0.1.14`, single-file synthesis can use the official Python
-`qwen_tts` Voice Clone path and write a WAV directly:
+`qwen_tts` Voice Clone path as a native-alignment reference:
 
 ```powershell
 .\synthesize.exe `
@@ -350,10 +374,11 @@ Starting in `v0.1.14`, single-file synthesis can use the official Python
 ```
 
 `--reference-text` is optional. If it is omitted, the bridge uses
-speaker-embedding-only mode. Native Candle/Rust reference-audio conditioning is
-still pending because it needs the speech tokenizer encoder, speaker encoder,
-and ICL prompt path. The Candle backend and batch mode return clear errors
-instead of silently ignoring the reference audio.
+speaker-embedding-only mode. The final target is still zero Python dependency.
+`v0.1.15` removes the first native Voice Clone blocker by converting tokenizer
+encoder/quantizer weights and Base-model speaker encoder weights with Rust
+executables. The remaining work is the Rust speech tokenizer encoder, speaker
+encoder forward pass, ICL prompt path, and reference-code trimming.
 
 If long Chinese text is truncated, increase `--max-new-tokens`. A conservative
 starting point is:
@@ -593,6 +618,10 @@ If `rms=0` and `peak=0`, the WAV is silent.
   official `generate_voice_clone()` API, plus optional `--reference-text`.
   Native Candle Voice Clone still needs the speech tokenizer encoder, speaker
   encoder, and ICL prompt path.
+- `v0.1.15` starts the native Voice Clone path by extending
+  `convert_tokenizer.exe` to write `encoder.safetensors` and
+  `quantizer.safetensors`, and by adding `convert_speaker_encoder.exe` for
+  `speaker_encoder.safetensors`.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.

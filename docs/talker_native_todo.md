@@ -75,6 +75,10 @@
   - Added optional `--reference-text`; when omitted, the Python bridge uses speaker-embedding-only mode.
   - Batch voice-clone is explicitly rejected for now, and Candle native voice-clone still returns a clear unsupported-backend error.
   - Native Rust work remaining: port the speech tokenizer encoder, port the Base-model speaker encoder, build the ICL prompt embedding path, decode `ref_code + generated_code`, trim the reference segment, and align with PyTorch fixtures.
+- 2026-06-04 v0.1.15 native Voice Clone prerequisites:
+  - `convert_tokenizer.exe` now writes `encoder.safetensors` and `quantizer.safetensors` in addition to the existing decoder files.
+  - Added `convert_speaker_encoder.exe` to extract Base-model `speaker_encoder.*` tensors into `weights/speaker/speaker_encoder.safetensors`.
+  - This keeps the target on zero Python runtime dependency; the remaining work is Rust forward implementations, not Python process optimization.
 
 ## TODO
 

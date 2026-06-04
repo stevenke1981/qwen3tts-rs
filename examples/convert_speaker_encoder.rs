@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use qwen3tts::tokenizer_converter::{ConverterOptions, convert_tokenizer_weights};
+use qwen3tts::speaker_converter::{SpeakerConverterOptions, convert_speaker_encoder_weights};
 
 fn main() {
     if let Err(err) = run() {
@@ -11,7 +11,7 @@ fn main() {
 
 fn run() -> qwen3tts::Result<()> {
     let mut input_dir: Option<PathBuf> = None;
-    let mut output_dir = PathBuf::from("weights/tokenizer");
+    let mut output_dir = PathBuf::from("weights/speaker");
 
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
@@ -41,12 +41,12 @@ fn run() -> qwen3tts::Result<()> {
         }
     }
 
-    let converted = convert_tokenizer_weights(&ConverterOptions {
+    let converted = convert_speaker_encoder_weights(&SpeakerConverterOptions {
         input_dir,
         output_dir,
     })?;
     println!(
-        "Converted tokenizer weights -> {}",
+        "Converted speaker encoder weights -> {}",
         converted.output_dir.display()
     );
     for file in converted.files {
@@ -63,10 +63,8 @@ fn require_arg(args: &[String], i: usize, flag: &str) -> qwen3tts::Result<String
 
 fn print_usage() {
     println!(
-        "Usage: convert_tokenizer.exe [--input <hf-tokenizer-snapshot>] [--output weights/tokenizer] [--version | -V]\n\
+        "Usage: convert_speaker_encoder.exe [--input <base-model-snapshot>] [--output weights/speaker] [--version | -V]\n\
          If --input is omitted, the converter searches the HuggingFace cache for\n\
-         Qwen/Qwen3-TTS-Tokenizer-12Hz.\n\
-         The output includes decoder weights plus native Voice Clone prerequisites:\n\
-         encoder.safetensors and quantizer.safetensors."
+         Qwen/Qwen3-TTS-12Hz-0.6B-Base or Qwen/Qwen3-TTS-12Hz-1.7B-Base."
     );
 }
