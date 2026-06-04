@@ -48,6 +48,12 @@
   - `--speaker` is still passed through as a real speaker id for CustomVoice models with `spk_id`.
   - Base/VoiceDesign snapshots with empty speaker maps now translate known speaker names into a natural-language instruct fallback.
   - Added `--list-speakers` to single and batch CLIs.
+- 2026-06-04 v0.1.10 quantization update:
+  - Added Q8_0 and Q4_0 safetensors quantization payloads: `{tensor}.qweight`, `{tensor}.scales`, `{tensor}.meta`.
+  - `WeightLoader` now auto-detects quantized payloads and dequantizes them back to F32 tensors before existing decoder construction.
+  - Added `quantize_tokenizer.exe` with per-tensor cosine/max-error report and low-cosine F32 anchor preservation.
+  - Local Q8 tokenizer decoder conversion: 99 tensors quantized, 137 preserved, stored/original ratio `0.266`; decoder smoke cosine vs base `0.99974333`.
+  - Local Q4 tokenizer decoder with `group-size=32` and `min-cosine=0.995`: 12 tensors quantized, 224 preserved, stored/original ratio `0.947`; decoder smoke cosine vs base `0.99235672`. Treat Q4 as experimental until activation calibration and audio quality validation are stronger.
 
 ## TODO
 
@@ -172,6 +178,7 @@
 
 10. Remaining release polish.
    - Shared tokenizer cache implemented in v0.1.8.
+   - Q8/Q4-hybrid tokenizer quantization tooling implemented in v0.1.10.
    - Decide whether CUDA release zips should exclude Python scripts to reduce package size.
    - Keep batch token export as `--save-tokens-dir`; add `--tokens` batch replay only if a concrete workflow needs it.
-   - Model quantization (Q4/Q8) remains a larger follow-up because codec/vocoder quality needs calibrated safetensors quantization, not LLM-style GGUF quantization.
+   - Remaining quantization work: add activation calibration, objective audio metrics, and true int8/int4 compute kernels. Current v0.1.10 path dequantizes to F32 for compatibility.

@@ -1,11 +1,12 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.9 Windows x64 / Windows x64 CUDA`
+適用版本：`qwen3tts-rs v0.1.10 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
 - `synthesize.exe`：單句文字轉語音。
 - `synthesize_batch.exe`：批次文字轉語音，模型只載入一次，適合連續測試多句。
+- `quantize_tokenizer.exe`：將已轉換的 tokenizer decoder safetensors 量化成 Q8/Q4-hybrid。
 
 ## 重要限制
 
@@ -75,8 +76,8 @@ weights\tokenizer\
 
 ## CPU 與 CUDA 版本
 
-- `qwen3tts-rs-v0.1.9-windows-x64.zip`：CPU/Candle build。
-- `qwen3tts-rs-v0.1.9-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+- `qwen3tts-rs-v0.1.10-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.10-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
 
 建置 CUDA 版 release：
 
@@ -302,6 +303,57 @@ batch-output\qwen1p7b_0002.wav
   --output-dir batch-output
 ```
 
+## Tokenizer decoder Q8/Q4 量化
+
+`v0.1.10` 新增 `quantize_tokenizer.exe`。它輸入已轉好的 Rust tokenizer decoder 權重，輸出另一個可直接被 `synthesize.exe` / `synthesize_batch.exe` 讀取的量化目錄：
+
+```powershell
+.\quantize_tokenizer.exe `
+  --input weights\tokenizer `
+  --output weights\tokenizer-q8 `
+  --format q8_0 `
+  --group-size 64 `
+  --min-cosine 0.995
+```
+
+使用量化權重：
+
+```powershell
+$env:QWEN3TTS_TOKENIZER_WEIGHT_DIR = "D:\qwen3tts-rs\weights\tokenizer-q8"
+.\synthesize.exe --tokens .\sample.tokens --output q8.wav
+```
+
+量化策略：
+
+| 模式 | 狀態 | 說明 |
+| --- | --- | --- |
+| `q8_0` | 建議測試 | 本機 tokenizer decoder 量化結果：99 個 tensor 量化、137 個保留，大小約為原始 26.6%；decoder smoke cosine vs base `0.99974333` |
+| `q4_0` | experimental | 預設會自動把低於 `--min-cosine` 的 tensor 保留為 F32 anchor；本機 0.995 門檻下只有 12 個 tensor 量化、224 個保留，大小約為原始 94.7%；decoder smoke cosine vs base `0.99235672` |
+
+`quantize_tokenizer.exe` 會寫出：
+
+```text
+weights\tokenizer-q8\quantization_report.json
+```
+
+報告內含每個 tensor 是否量化、cosine、最大絕對誤差、保留原因。若你要強制檢查「低 cosine 就失敗，不自動保留」，加上：
+
+```powershell
+.\quantize_tokenizer.exe --format q4_0 --fail-low-cosine
+```
+
+目前量化 loader 採取相容優先：讀取 Q8/Q4 safetensors 後會反量化回 F32 Tensor 再進現有 decoder。這已能降低磁碟大小，但還不是 int8/int4 kernel 熱路徑加速。vocoder / HiFi-GAN 類權重仍預設保留，避免音質劣化。
+
+可把校準文字清單記入報告，方便不同 agent 比對同一批評估資料：
+
+```powershell
+.\quantize_tokenizer.exe `
+  --input weights\tokenizer `
+  --output weights\tokenizer-q8 `
+  --format q8_0 `
+  --calibration-texts .\calibration_texts.txt
+```
+
 ## 常用參數
 
 | 參數 | 說明 |
@@ -321,6 +373,8 @@ batch-output\qwen1p7b_0002.wav
 | `--speed` | 語速倍率，預設 `1.0` |
 | `--save-tokens-dir` | batch 模式同步輸出每句 `.tokens` 檔 |
 | `--no-save-tokens` | batch 模式關閉 token 檔輸出 |
+| `quantize_tokenizer.exe --format` | tokenizer decoder 權重量化格式：`q8_0` 或 `q4_0` |
+| `quantize_tokenizer.exe --min-cosine` | 量化 tensor 的 cosine 門檻，預設 `0.995`；低於門檻會自動保留為 F32 anchor |
 
 ## 驗證輸出不是靜音
 
@@ -350,6 +404,7 @@ with wave.open(name, "rb") as w:
 - `v0.1.7` 新增 `--speed` 與 `--version`，並修正中文截斷建議。
 - `v0.1.8` 新增 batch 逐句 `--instruct-file`/`--seed`、batch 0.6B 模型自動尋找，以及 tokenizer decoder 全域快取。
 - `v0.1.9` 新增 9 個內建 CustomVoice speaker presets、`--list-speakers`，並讓 Base/VoiceDesign 在無 speaker map 時自動轉成 instruct fallback。
+- `v0.1.10` 新增 `quantize_tokenizer.exe`、Q8/Q4-hybrid safetensors 格式、WeightLoader 自動反量化，以及 tokenizer decoder 量化報告。
 - decoder 容量會依實際 frame 數或 batch `--max-new-tokens` 擴展，修復超過 64 幀時的 `narrow` crash。
 - 批次模式可避免每句都重新載入模型。
 - 批次模式輸出檔名固定為 `prefix_0001.wav`，不再把完整文字放入檔名。

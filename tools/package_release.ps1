@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.9",
+    [string]$Version = "0.1.10",
     [switch]$Cuda,
     [string]$CudaComputeCap = "86",
     [string]$CudaToolkitRoot = "",
@@ -118,13 +118,13 @@ function Invoke-ReleaseBuild {
             Write-Host "Using cl.exe: $cl"
             Write-Host "Using CUDA toolkit: $cudaRoot"
             Write-Host "CUDA_COMPUTE_CAP=$CudaComputeCap"
-            $buildCommand = "call `"$vcvars`"$vcvarsArgs && set CUDA_COMPUTE_CAP=$CudaComputeCap&& set CUDAFORGE_THREADS=$CudaForgeThreads&& set RAYON_NUM_THREADS=$CudaForgeThreads&& set CUDA_ROOT=$cudaRoot&& set CUDA_PATH=$cudaRoot&& set NVCC=$nvcc&& set NVCC_CCBIN=$cl&& set PATH=$clDir;$cudaRoot\bin;%PATH%&& cargo build --release --features `"$FeatureList`" --example synthesize --example synthesize_batch --example convert_tokenizer"
+            $buildCommand = "call `"$vcvars`"$vcvarsArgs && set CUDA_COMPUTE_CAP=$CudaComputeCap&& set CUDAFORGE_THREADS=$CudaForgeThreads&& set RAYON_NUM_THREADS=$CudaForgeThreads&& set CUDA_ROOT=$cudaRoot&& set CUDA_PATH=$cudaRoot&& set NVCC=$nvcc&& set NVCC_CCBIN=$cl&& set PATH=$clDir;$cudaRoot\bin;%PATH%&& cargo build --release --features `"$FeatureList`" --example synthesize --example synthesize_batch --example convert_tokenizer --example quantize_tokenizer"
             & cmd.exe /d /c $buildCommand
             if ($LASTEXITCODE -ne 0) {
                 throw "cargo CUDA release build failed with exit code $LASTEXITCODE"
             }
         } else {
-            cargo build --release --features $FeatureList --example synthesize --example synthesize_batch --example convert_tokenizer
+            cargo build --release --features $FeatureList --example synthesize --example synthesize_batch --example convert_tokenizer --example quantize_tokenizer
         }
     } finally {
         Pop-Location
@@ -157,6 +157,7 @@ $files = @(
     @{ Source = Join-Path $exampleDir "synthesize.exe"; Target = "synthesize.exe" },
     @{ Source = Join-Path $exampleDir "synthesize_batch.exe"; Target = "synthesize_batch.exe" },
     @{ Source = Join-Path $exampleDir "convert_tokenizer.exe"; Target = "convert_tokenizer.exe" },
+    @{ Source = Join-Path $exampleDir "quantize_tokenizer.exe"; Target = "quantize_tokenizer.exe" },
     @{ Source = Join-Path $RepoRoot "docs\release_usage_zh.md"; Target = "README.zh-TW.md" },
     @{ Source = Join-Path $RepoRoot "docs\release_usage_en.md"; Target = "README.en-US.md" },
     @{ Source = Join-Path $RepoRoot "docs\agent_voice_failure_playbook.md"; Target = "AGENT_VOICE_FAILURE_PLAYBOOK.md" },
@@ -177,6 +178,7 @@ Included:
 - synthesize.exe
 - synthesize_batch.exe
 - convert_tokenizer.exe
+- quantize_tokenizer.exe
 - README.zh-TW.md
 - README.en-US.md
 - AGENT_VOICE_FAILURE_PLAYBOOK.md

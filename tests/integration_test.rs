@@ -104,6 +104,69 @@ fn test_decoder_12hz_with_real_weights() {
 }
 
 #[test]
+fn test_decoder_12hz_with_quantized_weights_smoke() {
+    let base_dir = Path::new("weights/tokenizer");
+    if !base_dir.join("codebook.safetensors").exists() {
+        eprintln!("Skipping: real weights not found at {base_dir:?}");
+        return;
+    }
+
+    let quantized_dirs = [
+        Path::new("weights/tokenizer-q8"),
+        Path::new("weights/tokenizer-q4"),
+    ];
+    if quantized_dirs
+        .iter()
+        .all(|dir| !dir.join("codebook.safetensors").exists())
+    {
+        eprintln!("Skipping: quantized tokenizer dirs not found");
+        return;
+    }
+
+    let device = candle_core::Device::Cpu;
+    let tokens: Vec<u16> = vec![
+        42, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500,
+    ];
+
+    let mut base_decoder =
+        Decoder12Hz::from_safetensors(DecoderConfig::realtime(), base_dir, &device).unwrap();
+    let base_output = base_decoder.decode_chunk(&tokens).unwrap();
+    let base_peak = base_output.iter().map(|x| x.abs()).fold(0.0f32, f32::max);
+    assert!(
+        base_peak > 0.01,
+        "base decoded audio peak is too low: {base_peak}"
+    );
+
+    for quantized_dir in quantized_dirs {
+        if !quantized_dir.join("codebook.safetensors").exists() {
+            continue;
+        }
+        let mut decoder =
+            Decoder12Hz::from_safetensors(DecoderConfig::realtime(), quantized_dir, &device)
+                .unwrap();
+        let output = decoder.decode_chunk(&tokens).unwrap();
+        let peak = output.iter().map(|x| x.abs()).fold(0.0f32, f32::max);
+        let cos = cosine_sim(&base_output, &output);
+        println!(
+            "quantized decoder {}: len={} peak={peak:.6} cosine_vs_base={cos:.8}",
+            quantized_dir.display(),
+            output.len()
+        );
+
+        assert_eq!(output.len(), base_output.len());
+        assert!(
+            peak > 0.01,
+            "quantized decoded audio peak is too low: {peak}"
+        );
+        assert!(
+            cos > 0.90,
+            "quantized decoded audio cosine {cos:.8} <= 0.90 for {}",
+            quantized_dir.display()
+        );
+    }
+}
+
+#[test]
 fn test_decode_frames_matches_pytorch_reference() {
     let weight_dir = Path::new("weights/tokenizer");
     let reference = Path::new("weights/pt_decoder_out.npy");

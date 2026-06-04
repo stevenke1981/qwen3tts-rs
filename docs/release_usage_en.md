@@ -1,12 +1,14 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.9 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.10 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
 - `synthesize.exe`: single-utterance text-to-speech.
 - `synthesize_batch.exe`: batch text-to-speech. The model is loaded once and
   reused across multiple lines.
+- `quantize_tokenizer.exe`: quantizes converted tokenizer decoder safetensors
+  into Q8/Q4-hybrid directories.
 
 ## Important Limitations
 
@@ -84,8 +86,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.9-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.9-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.10-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.10-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -330,6 +332,65 @@ batch-output\qwen1p7b_0001.wav
 batch-output\qwen1p7b_0002.wav
 ```
 
+## Tokenizer Decoder Q8/Q4 Quantization
+
+`v0.1.10` adds `quantize_tokenizer.exe`. It reads converted Rust tokenizer
+decoder weights and writes another directory that `synthesize.exe` and
+`synthesize_batch.exe` can load directly:
+
+```powershell
+.\quantize_tokenizer.exe `
+  --input weights\tokenizer `
+  --output weights\tokenizer-q8 `
+  --format q8_0 `
+  --group-size 64 `
+  --min-cosine 0.995
+```
+
+Use the quantized weights:
+
+```powershell
+$env:QWEN3TTS_TOKENIZER_WEIGHT_DIR = "D:\qwen3tts-rs\weights\tokenizer-q8"
+.\synthesize.exe --tokens .\sample.tokens --output q8.wav
+```
+
+Quantization status:
+
+| Mode | Status | Notes |
+| --- | --- | --- |
+| `q8_0` | Recommended for testing | Local tokenizer decoder result: 99 tensors quantized, 137 preserved, about 26.6% of the original size; decoder smoke cosine vs base `0.99974333` |
+| `q4_0` | Experimental | Tensors below `--min-cosine` are automatically preserved as F32 anchors. With a 0.995 gate locally, only 12 tensors quantized, 224 preserved, about 94.7% of the original size; decoder smoke cosine vs base `0.99235672` |
+
+The tool writes:
+
+```text
+weights\tokenizer-q8\quantization_report.json
+```
+
+The report lists every tensor, whether it was quantized, cosine similarity,
+maximum absolute error, and preservation reason. To force a hard failure instead
+of auto-preserving low-cosine tensors:
+
+```powershell
+.\quantize_tokenizer.exe --format q4_0 --fail-low-cosine
+```
+
+The current loader prioritizes compatibility: it reads Q8/Q4 safetensors and
+dequantizes back to F32 tensors before calling the existing decoder. This
+reduces disk size, but it is not an int8/int4 kernel speedup yet. Vocoder /
+HiFi-GAN-style weights remain preserved by default to avoid audio quality loss.
+
+You can record the calibration/evaluation text manifest in the report so
+multiple agents compare the same sample set:
+
+```powershell
+.\quantize_tokenizer.exe `
+  --input weights\tokenizer `
+  --output weights\tokenizer-q8 `
+  --format q8_0 `
+  --calibration-texts .\calibration_texts.txt
+```
+
 ## Common Options
 
 | Option | Description |
@@ -349,6 +410,8 @@ batch-output\qwen1p7b_0002.wav
 | `--speed` | Speech speed factor, default `1.0` |
 | `--save-tokens-dir` | Batch mode token-file output directory |
 | `--no-save-tokens` | Disable batch token-file output |
+| `quantize_tokenizer.exe --format` | Tokenizer decoder quantization format: `q8_0` or `q4_0` |
+| `quantize_tokenizer.exe --min-cosine` | Tensor cosine gate, default `0.995`; low-cosine tensors are preserved as F32 anchors |
 
 ## Verify The Output Is Not Silent
 
@@ -386,6 +449,8 @@ If `rms=0` and `peak=0`, the WAV is silent.
 - `v0.1.9` adds the 9 built-in CustomVoice speaker presets, `--list-speakers`,
   and automatic instruct fallback for Base/VoiceDesign models without a speaker
   map.
+- `v0.1.10` adds `quantize_tokenizer.exe`, Q8/Q4-hybrid safetensors,
+  WeightLoader auto-dequantization, and tokenizer decoder quantization reports.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.

@@ -21,6 +21,7 @@ use safetensors::tensor::TensorView;
 use safetensors::{Dtype, SafeTensors};
 
 use crate::codec::{CausalConv1d, CausalConvConfig, CodebookLookup, ParallelCodebook};
+use crate::quantization::{has_quantized_tensor, load_quantized_f32};
 use crate::{Error, Result};
 
 /// safetensors 權重載入器
@@ -46,10 +47,7 @@ impl WeightLoader {
             .map_err(|e| Error::Weight(format!("Failed to deserialize safetensors: {e}")))?;
 
         let mut tensors = HashMap::new();
-        for (name, view) in sf.tensors() {
-            let tensor = tensor_from_view(&view, device)?;
-            tensors.insert(name.to_string(), tensor);
-        }
+        insert_safetensors_tensors(&sf, device, &mut tensors)?;
 
         Ok(Self {
             tensors,
@@ -73,10 +71,7 @@ impl WeightLoader {
                 let sf = SafeTensors::deserialize(&data).map_err(|e| {
                     Error::Weight(format!("Failed to deserialize {}: {e}", path.display()))
                 })?;
-                for (name, view) in sf.tensors() {
-                    let tensor = tensor_from_view(&view, device)?;
-                    tensors.insert(name.to_string(), tensor);
-                }
+                insert_safetensors_tensors(&sf, device, &mut tensors)?;
                 let n = sf.tensors().len();
                 log::info!("Loaded {n} tensors from {}", path.display());
             }
@@ -248,6 +243,30 @@ impl WeightLoader {
 // safetensors -> Candle Tensor 轉換
 // ---------------------------------------------------------------------------
 
+fn insert_safetensors_tensors(
+    sf: &SafeTensors<'_>,
+    device: &Device,
+    tensors: &mut HashMap<String, Tensor>,
+) -> Result<()> {
+    for (name, view) in sf.tensors() {
+        if let Some(base) = name.strip_suffix(".meta") {
+            if has_quantized_tensor(sf, base) {
+                let restored = load_quantized_f32(sf, base)?;
+                let tensor = Tensor::from_slice(&restored.values, &*restored.shape, device)
+                    .map_err(Error::from)?;
+                tensors.insert(base.to_string(), tensor);
+            }
+            continue;
+        }
+        if name.ends_with(".qweight") || name.ends_with(".scales") {
+            continue;
+        }
+        let tensor = tensor_from_view(&view, device)?;
+        tensors.insert(name.to_string(), tensor);
+    }
+    Ok(())
+}
+
 /// 將 safetensors TensorView 轉換為 Candle Tensor
 fn tensor_from_view(view: &TensorView, device: &Device) -> Result<Tensor> {
     let shape: Vec<usize> = view.shape().iter().map(|&d| d as usize).collect();
@@ -353,5 +372,35 @@ mod tests {
                 path
             );
         }
+    }
+
+    #[test]
+    fn test_from_file_dequantizes_q8_tensor() {
+        let device = test_device();
+        let values = vec![-1.0, -0.25, 0.25, 1.0, 0.5, -0.5];
+        let quantized = crate::quantization::quantize_f32_values(
+            &values,
+            &[2, 3],
+            crate::quantization::QuantizationFormat::Q8_0,
+            3,
+        )
+        .unwrap();
+        let tmp = std::env::temp_dir().join(format!(
+            "qwen3tts-weight-loader-quant-test-{}.safetensors",
+            std::process::id()
+        ));
+        crate::quantization::save_quantized_safetensors(
+            &tmp,
+            vec![("linear.weight".to_string(), quantized)],
+        )
+        .unwrap();
+
+        let loader = WeightLoader::from_file(&tmp, &device).unwrap();
+        let tensor = loader.get("linear.weight").unwrap();
+
+        assert_eq!(tensor.dims(), &[2, 3]);
+        let restored = tensor.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        assert!(crate::quantization::cosine_f32(&values, &restored).unwrap() > 0.999);
+        let _ = std::fs::remove_file(tmp);
     }
 }
