@@ -21,18 +21,22 @@ const TOKENIZER_WEIGHT_FILES: &[&str] = &[
 /// release zips.
 pub fn resolve_tokenizer_weight_dir_from(cwd: &Path, exe_path: Option<&Path>) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
-    push_unique(&mut candidates, cwd.join("weights").join("tokenizer"));
-
-    if let Some(exe_path) = exe_path {
-        if let Some(exe_dir) = exe_path.parent() {
-            push_unique(&mut candidates, exe_dir.join("weights").join("tokenizer"));
-        }
-    }
 
     if let Ok(path) = std::env::var("QWEN3TTS_TOKENIZER_WEIGHT_DIR") {
         push_unique(&mut candidates, PathBuf::from(path));
     }
 
+    push_tokenizer_weight_candidates(&mut candidates, cwd);
+
+    if let Some(exe_path) = exe_path {
+        if let Some(exe_dir) = exe_path.parent() {
+            push_tokenizer_weight_candidates(&mut candidates, exe_dir);
+        }
+    }
+
+    if let Some(cache_dir) = default_tokenizer_q8_cache_dir() {
+        push_unique(&mut candidates, cache_dir);
+    }
     if let Some(cache_dir) = default_tokenizer_cache_dir() {
         push_unique(&mut candidates, cache_dir);
     }
@@ -256,26 +260,32 @@ fn push_unique(candidates: &mut Vec<PathBuf>, path: PathBuf) {
     }
 }
 
+fn push_tokenizer_weight_candidates(candidates: &mut Vec<PathBuf>, root: &Path) {
+    let weights = root.join("weights");
+    push_unique(candidates, weights.join("tokenizer-q8"));
+    push_unique(candidates, weights.join("tokenizer"));
+}
+
+fn default_tokenizer_q8_cache_dir() -> Option<PathBuf> {
+    default_tokenizer_cache_root().map(|root| root.join("tokenizer-12hz-q8"))
+}
+
 fn default_tokenizer_cache_dir() -> Option<PathBuf> {
+    default_tokenizer_cache_root().map(|root| root.join("tokenizer-12hz"))
+}
+
+fn default_tokenizer_cache_root() -> Option<PathBuf> {
     if let Ok(path) = std::env::var("QWEN3TTS_TOKENIZER_CACHE_DIR") {
-        return Some(PathBuf::from(path).join("tokenizer-12hz"));
+        return Some(PathBuf::from(path));
     }
     if let Ok(path) = std::env::var("LOCALAPPDATA") {
-        return Some(
-            PathBuf::from(path)
-                .join("qwen3tts-rs")
-                .join("tokenizer-12hz"),
-        );
+        return Some(PathBuf::from(path).join("qwen3tts-rs"));
     }
     std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .ok()
         .map(PathBuf::from)
-        .map(|home| {
-            home.join(".cache")
-                .join("qwen3tts-rs")
-                .join("tokenizer-12hz")
-        })
+        .map(|home| home.join(".cache").join("qwen3tts-rs"))
 }
 
 #[cfg(test)]
@@ -287,14 +297,16 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn resolves_cwd_tokenizer_weights_before_exe_relative_weights() {
+    fn resolves_q8_tokenizer_weights_before_f32_weights() {
         let candidates = resolve_tokenizer_weight_dir_from(
             Path::new("C:/run"),
             Some(Path::new("C:/app/qwen3tts.exe")),
         );
 
-        assert_eq!(candidates[0], Path::new("C:/run/weights/tokenizer"));
-        assert_eq!(candidates[1], Path::new("C:/app/weights/tokenizer"));
+        assert_eq!(candidates[0], Path::new("C:/run/weights/tokenizer-q8"));
+        assert_eq!(candidates[1], Path::new("C:/run/weights/tokenizer"));
+        assert_eq!(candidates[2], Path::new("C:/app/weights/tokenizer-q8"));
+        assert_eq!(candidates[3], Path::new("C:/app/weights/tokenizer"));
     }
 
     #[test]
@@ -304,7 +316,8 @@ mod tests {
             Some(Path::new("C:/app/synthesize.exe")),
         );
 
-        assert_eq!(candidates[0], Path::new("C:/app/weights/tokenizer"));
+        assert_eq!(candidates[0], Path::new("C:/app/weights/tokenizer-q8"));
+        assert_eq!(candidates[1], Path::new("C:/app/weights/tokenizer"));
         assert_eq!(
             candidates
                 .iter()

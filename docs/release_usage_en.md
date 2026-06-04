@@ -1,6 +1,6 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.11 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.12 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
@@ -86,8 +86,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.11-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.11-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.12-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.12-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:
@@ -446,6 +446,20 @@ $env:QWEN3TTS_TOKENIZER_WEIGHT_DIR = "D:\qwen3tts-rs\weights\tokenizer-q8"
 .\synthesize.exe --tokens .\sample.tokens --output q8.wav
 ```
 
+Starting in `v0.1.12`, Q8 tokenizer decoder weights are automatically preferred
+over F32 weights. Put them in either location and no environment variable is
+needed:
+
+```text
+weights\tokenizer-q8
+%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz-q8
+```
+
+Search order is: explicit `QWEN3TTS_TOKENIZER_WEIGHT_DIR`, current directory
+`weights\tokenizer-q8`, current directory `weights\tokenizer`, executable
+directory `weights\tokenizer-q8`, executable directory `weights\tokenizer`,
+global Q8 cache, then global F32 cache.
+
 Quantization status:
 
 | Mode | Status | Notes |
@@ -549,6 +563,9 @@ If `rms=0` and `peak=0`, the WAV is silent.
 - `v0.1.11` adds the model capability catalog, `--list-models`, `--mode`,
   `--reference-audio`, and explicit CustomVoice / VoiceDesign / VoiceClone
   capability validation.
+- `v0.1.12` automatically prefers `weights\tokenizer-q8` and
+  `%LOCALAPPDATA%\qwen3tts-rs\tokenizer-12hz-q8`, so validated Q8 tokenizer
+  decoder weights no longer need a per-run environment variable.
 - Decoder capacity now expands from the actual frame count, or from batch
   `--max-new-tokens`, fixing the `narrow` crash above 64 frames.
 - Batch mode avoids reloading the model for every sentence.

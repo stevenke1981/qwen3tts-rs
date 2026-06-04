@@ -61,6 +61,11 @@
   - `--mode voice-design` now requires a 1.7B VoiceDesign model plus `--instruct` or `--instruct-file`.
   - `--mode voice-clone` now validates Base model plus `--reference-audio`, then returns a clear pending-implementation error because native reference-audio conditioning is not implemented yet.
   - Release guides now document the model table, supported languages, streaming status, and Rust CLI equivalents for upstream `generate_custom_voice`, `generate_voice_design`, and `generate_voice_clone`.
+- 2026-06-04 v0.1.12 Q8 auto-preference update:
+  - Tokenizer decoder path resolution now checks `weights/tokenizer-q8` before `weights/tokenizer` beside both the current directory and the executable directory.
+  - Global cache lookup now checks `%LOCALAPPDATA%/qwen3tts-rs/tokenizer-12hz-q8` before the F32 `%LOCALAPPDATA%/qwen3tts-rs/tokenizer-12hz` cache.
+  - `QWEN3TTS_TOKENIZER_WEIGHT_DIR` remains the explicit override and is searched first.
+  - Q4 remains experimental because the local 0.995 cosine gate only quantized 12/236 tensors; Q8 is the practical default candidate.
 
 ## TODO
 
