@@ -25,15 +25,21 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use candle_core::Device;
+use candle_core::{Device, Tensor};
 use tokenizers::Tokenizer;
 
+use crate::paths::ensure_tokenizer_weight_dir;
 use crate::talker::sampling::{Sampler, SamplingOptions as TalkerSamplingOptions};
 use crate::talker::{
     InputBuilder, TalkerConfig, TalkerForConditionalGeneration, TalkerWeightLoader,
 };
 use crate::text_frontend::speaker_presets;
 use crate::text_frontend::token_parser::TokenParser;
+use crate::text_frontend::voice_clone::speaker_encoder::{
+    NativeSpeakerEncoder, upstream_mel_spectrogram,
+};
+use crate::text_frontend::voice_clone::speech_tokenizer::NativeSpeechTokenizerEncoder;
+use crate::text_frontend::voice_clone::{NativeVoiceCloneCondition, NativeVoiceClonePlan};
 use crate::text_frontend::{SynthesisOptions, TextFrontend, TokenStream};
 use crate::{Error, Result};
 
@@ -178,6 +184,68 @@ impl CandleLLM {
             .map_err(|e| Error::Config(format!("Tokenizer encode error: {e}")))?;
         Ok(encoding.get_ids().to_vec())
     }
+
+    fn build_reference_text_ids(&self, reference_text: &str) -> Result<Vec<u32>> {
+        let prompt = format!("<|im_start|>user\n{reference_text}<|im_end|>\n");
+        let encoding = self
+            .tokenizer
+            .encode(prompt.as_str(), false)
+            .map_err(|e| Error::Config(format!("Tokenizer encode error: {e}")))?;
+        let ids = encoding.get_ids();
+        if ids.len() <= 5 {
+            return Err(Error::Config(
+                "--reference-text produced an empty native voice-clone prompt".into(),
+            ));
+        }
+        Ok(ids[3..ids.len() - 2].to_vec())
+    }
+
+    fn build_native_voice_clone_condition(
+        &self,
+        plan: &NativeVoiceClonePlan,
+    ) -> Result<NativeVoiceCloneCondition> {
+        let reference_text = plan
+            .reference_text
+            .as_deref()
+            .ok_or_else(|| Error::Config("native voice clone requires reference_text".into()))?;
+        let reference_text_ids = self.build_reference_text_ids(reference_text)?;
+        let waveform = load_reference_wav_24k(&plan.reference_audio, &self.device)?;
+
+        let tokenizer_dir = ensure_tokenizer_weight_dir()?;
+        let tokenizer_encoder_dir = find_tokenizer_encoder_dir(&tokenizer_dir).ok_or_else(|| {
+            Error::Config(format!(
+                "Native voice clone tokenizer encoder weights not found. Checked {} and fallback cache locations; expected encoder.safetensors",
+                tokenizer_dir.display()
+            ))
+        })?;
+        let speech_tokenizer =
+            NativeSpeechTokenizerEncoder::from_dir(&tokenizer_encoder_dir, &self.device)?;
+        let reference_codes = speech_tokenizer.encode_waveform(&waveform)?;
+
+        let speaker_path = find_speaker_encoder_weights().ok_or_else(|| {
+            Error::Config(
+                "Native voice clone speaker encoder weights not found. Expected \
+                 QWEN3TTS_SPEAKER_ENCODER_PATH or %LOCALAPPDATA%/qwen3tts-rs/speaker-encoder/speaker_encoder.safetensors"
+                    .into(),
+            )
+        })?;
+        let speaker_encoder = NativeSpeakerEncoder::from_safetensors(&speaker_path, &self.device)?;
+        let mels = upstream_mel_spectrogram(&waveform, &self.device)?;
+        let speaker_embedding = speaker_encoder.forward_mels(&mels)?;
+
+        log::info!(
+            "Native voice clone condition: ref_frames={} ref_text_tokens={} speaker_dim={}",
+            reference_codes.num_frames(),
+            reference_text_ids.len(),
+            speaker_embedding.dims().last().copied().unwrap_or(0)
+        );
+
+        Ok(NativeVoiceCloneCondition::new(
+            reference_text_ids,
+            reference_codes,
+            speaker_embedding,
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +257,8 @@ impl TextFrontend for CandleLLM {
         if text.is_empty() {
             return Err(Error::Config("text cannot be empty".into()));
         }
+
+        let native_voice_clone = NativeVoiceClonePlan::from_options(options)?;
 
         // ── 1. 文字 → token 序列 ──
         let prompt_ids = self.build_prompt_ids(text)?;
@@ -214,14 +284,31 @@ impl TextFrontend for CandleLLM {
 
         // ── 2. 構建 talker 輸入 ──
         let builder = InputBuilder::new(&self.talker, &self.device);
-        let (inputs_embeds, attention_mask, trailing_text_hidden, tts_pad_embed) = builder
-            .build(
-                &prompt_ids,
-                instruct_ids.as_deref(),
-                &options.language,
-                effective_speaker,
-            )
-            .map_err(map_candle_err)?;
+        let voice_clone_condition = native_voice_clone
+            .as_ref()
+            .map(|plan| self.build_native_voice_clone_condition(plan))
+            .transpose()?;
+        let (inputs_embeds, attention_mask, trailing_text_hidden, tts_pad_embed) =
+            if let Some(condition) = &voice_clone_condition {
+                builder
+                    .build_voice_clone(
+                        &prompt_ids,
+                        instruct_ids.as_deref(),
+                        &options.language,
+                        effective_speaker,
+                        &condition.as_talker_prompt(),
+                    )
+                    .map_err(map_candle_err)?
+            } else {
+                builder
+                    .build(
+                        &prompt_ids,
+                        instruct_ids.as_deref(),
+                        &options.language,
+                        effective_speaker,
+                    )
+                    .map_err(map_candle_err)?
+            };
 
         // ── 3. 自迴歸生成 codec tokens ──
         let max_new_tokens = options.max_new_tokens as usize;
@@ -392,6 +479,104 @@ fn locate_hf_model_snapshot(model_id: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn find_speaker_encoder_weights() -> Option<PathBuf> {
+    if let Ok(path) = std::env::var("QWEN3TTS_SPEAKER_ENCODER_PATH") {
+        let path = PathBuf::from(path);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    if let Ok(dir) = std::env::var("QWEN3TTS_SPEAKER_ENCODER_DIR") {
+        let path = PathBuf::from(dir).join("speaker_encoder.safetensors");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    let mut candidates = Vec::new();
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        candidates.push(
+            PathBuf::from(local)
+                .join("qwen3tts-rs")
+                .join("speaker-encoder")
+                .join("speaker_encoder.safetensors"),
+        );
+    }
+    candidates.push(
+        PathBuf::from("weights")
+            .join("speaker")
+            .join("speaker_encoder.safetensors"),
+    );
+    candidates.into_iter().find(|path| path.exists())
+}
+
+fn find_tokenizer_encoder_dir(selected_decoder_dir: &Path) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(path) = std::env::var("QWEN3TTS_TOKENIZER_ENCODER_DIR") {
+        candidates.push(PathBuf::from(path));
+    }
+    candidates.push(selected_decoder_dir.to_path_buf());
+    if let Some(name) = selected_decoder_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+    {
+        if let Some(base) = name.strip_suffix("-q8") {
+            candidates.push(selected_decoder_dir.with_file_name(base));
+        }
+        if let Some(base) = name.strip_suffix("-q4") {
+            candidates.push(selected_decoder_dir.with_file_name(base));
+        }
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        let root = PathBuf::from(local).join("qwen3tts-rs");
+        candidates.push(root.join("tokenizer-12hz-q8"));
+        candidates.push(root.join("tokenizer-12hz"));
+    }
+    candidates.push(PathBuf::from("weights").join("tokenizer"));
+    candidates
+        .into_iter()
+        .find(|path| path.join("encoder.safetensors").exists())
+}
+
+fn load_reference_wav_24k(path: &Path, device: &Device) -> Result<Tensor> {
+    let mut reader = hound::WavReader::open(path)
+        .map_err(|err| Error::Config(format!("Failed to open reference WAV {path:?}: {err}")))?;
+    let spec = reader.spec();
+    if spec.sample_rate != 24_000 {
+        return Err(Error::Config(format!(
+            "Native voice clone currently expects 24 kHz WAV reference audio, got {} Hz",
+            spec.sample_rate
+        )));
+    }
+    let channels = spec.channels.max(1) as usize;
+    let mut mono = Vec::new();
+    match spec.sample_format {
+        hound::SampleFormat::Float => {
+            let samples = reader
+                .samples::<f32>()
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|err| Error::Config(format!("Failed to read reference WAV: {err}")))?;
+            for chunk in samples.chunks(channels) {
+                mono.push(chunk.iter().copied().sum::<f32>() / chunk.len() as f32);
+            }
+        }
+        hound::SampleFormat::Int => {
+            let scale = ((1_i64 << (spec.bits_per_sample.saturating_sub(1) as u32)) - 1) as f32;
+            let samples = reader
+                .samples::<i32>()
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|err| Error::Config(format!("Failed to read reference WAV: {err}")))?;
+            for chunk in samples.chunks(channels) {
+                let sum = chunk.iter().map(|&v| v as f32 / scale).sum::<f32>();
+                mono.push(sum / chunk.len() as f32);
+            }
+        }
+    }
+    if mono.is_empty() {
+        return Err(Error::Config("reference WAV contains no samples".into()));
+    }
+    Tensor::from_slice(&mono, (1, mono.len()), device).map_err(Into::into)
 }
 
 fn map_candle_err(e: candle_core::Error) -> Error {

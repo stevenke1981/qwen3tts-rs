@@ -39,7 +39,7 @@ pub mod weight_loader;
 
 pub use code_predictor::CodePredictor;
 pub use config::{CodePredictorConfig, TalkerConfig};
-pub use input_builder::InputBuilder;
+pub use input_builder::{InputBuilder, VoiceClonePrompt};
 pub use model::TalkerModel;
 pub use talker::TalkerForConditionalGeneration;
 pub use weight_loader::TalkerWeightLoader;

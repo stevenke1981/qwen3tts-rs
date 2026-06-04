@@ -79,6 +79,58 @@
   - `convert_tokenizer.exe` now writes `encoder.safetensors` and `quantizer.safetensors` in addition to the existing decoder files.
   - Added `convert_speaker_encoder.exe` to extract Base-model `speaker_encoder.*` tensors into `weights/speaker/speaker_encoder.safetensors`.
   - This keeps the target on zero Python runtime dependency; the remaining work is Rust forward implementations, not Python process optimization.
+- 2026-06-04 native Voice Clone Candle wiring update:
+  - Added `text_frontend::voice_clone::NativeVoiceClonePlan` and `NativeReferenceCodes` to validate native ICL clone inputs.
+  - Native Candle voice-clone now requires `--reference-text`; x-vector-only mode remains Python-reference-only and is not treated as the quality target.
+  - Added `InputBuilder::build_voice_clone` and `VoiceClonePrompt` to insert an external speaker embedding and append reference-text/reference-code ICL embeddings before generation.
+  - Added `NativeVoiceCloneCondition` as the handoff type from native encoder forward modules into the talker ICL builder.
+  - Candle CLI no longer exits before the backend for `--backend candle --mode voice-clone`; the backend now validates the native plan and reports the exact missing Rust forward modules.
+  - Added `tests/voice_clone_native_test.rs` for native plan validation, reference codec token bounds, and reference-prefix trim math.
+- 2026-06-04 native Voice Clone forward update:
+  - `WeightLoader` now converts BF16/F16 safetensors payloads into F32 tensors, which unblocks Base-model `speaker_encoder.safetensors`.
+  - Added `NativeSpeakerEncoder` with TDNN/Res2Net/SE/attentive-statistics-pooling forward over `[batch, frames, 128]` mel-like features.
+  - Added `NativeSpeechTokenizerEncoder` with waveform convolutional downsample and RVQ nearest-code encode path, producing 16-codebook `NativeReferenceCodes`.
+  - Candle backend now builds `NativeVoiceCloneCondition` from `--reference-audio` + `--reference-text` and routes it into `InputBuilder::build_voice_clone`.
+  - Native voice-clone tokenizer lookup now falls back from decoder-only Q8 dirs to a tokenizer directory containing `encoder.safetensors`.
+  - Added `tests/native_voice_forward_test.rs`; on this machine it loads real cached tokenizer/speaker weights and validates both native forwards.
+  - Smoke passed: `cargo run --example synthesize --features candle-llm -- --backend candle --mode voice-clone --model Qwen/Qwen3-TTS-12Hz-0.6B-Base --text "你好" --reference-audio cn_candle_1.7b_hello.wav --reference-text "hello" --max-new-tokens 2 --text-only --output native_vc_smoke.wav` produced 2 token frames through the Rust-native voice-clone condition path.
+  - Precision work queued at this point: replace the simple Rust log-spectral speaker frontend with exact upstream mel extraction, add tokenizer encoder transformer layers, and export PyTorch fixtures for speaker embedding/ref_code cosine or exact-token alignment.
+- 2026-06-04 native Voice Clone PyTorch fixture alignment update:
+  - Added upstream-compatible Rust mel extraction for speaker references: reflect pad, Hann STFT, Slaney mel filterbank, magnitude floor, and log compression.
+  - Replaced the backend's simplified log-spectral mel frontend with the upstream-compatible mel path.
+  - Fixed speaker Res2Net dilation to match PyTorch speaker blocks: block dilations 2, 3, and 4.
+  - Reworked `NativeSpeechTokenizerEncoder` to match upstream Mimi encoder order: ELU conv stack, residual ELU placement, encoder transformer layers, RoPE causal self-attention, LayerNorm with bias, GELU MLP, and replicate padding on the downsample conv.
+  - Added PyTorch fixture checks in `tests/native_voice_forward_test.rs`:
+    - mel extraction: cosine `1.00000000`, max_abs `0.00111103`.
+    - speaker embedding: cosine `1.00000000`, max_abs `0.00000095`.
+    - speech tokenizer ref_code: exact 13-frame x 16-codebook token match.
+  - Verification passed:
+    - `cargo test --test native_voice_forward_test --features candle-llm -- --nocapture`
+    - `cargo test --test native_voice_forward_test --features candle-llm -- --ignored --nocapture`
+    - `cargo test --features candle-llm`
+  - Next step: run real `--backend candle --mode voice-clone` WAV generation and compare reference-prefix trim/audio quality against upstream PyTorch, then optimize the new Rust mel/STFT path if reference processing time is noticeable.
+- 2026-06-04 native Voice Clone real WAV comparison update:
+  - Rebuilt current `target/release/examples/synthesize.exe` with `--features candle-llm`.
+  - Short-reference smoke with `cn_candle_1.7b_hello.wav`:
+    - Native Candle output: `native_vc_real_v016_56.wav`, 37 frames, 2.960s, elapsed `26.89s`.
+    - Upstream Python output: `upstream_vc_real_v016_56.wav`, 3.440s, elapsed `36.78s`.
+    - Reference-prefix correlation stayed low for both paths, so the output WAV did not contain a copied reference prefix.
+  - Known-transcript 4.16s reference run:
+    - Generated `vc_reference_known_norm.wav` from text `這是一段參考語音，請記住這個聲音。` and normalized it to peak -3 dB.
+    - Native Candle voice clone: `native_vc_known_ref.wav`, 50 frames, 4.000s, RMS `-22.21 dB`, elapsed `36.02s`.
+    - Upstream Python voice clone: `upstream_vc_known_ref.wav`, 4.560s, RMS `-22.32 dB`, elapsed `37.97s`.
+    - Reference-prefix correlation remained low:
+      - native first 500ms corr `0.0736`, full reference-window corr `0.0202`.
+      - upstream first 500ms corr `0.0295`, full reference-window corr `0.0095`.
+    - Conclusion: current Rust CLI decodes only generated frames, not `reference + generated`, so reference-prefix trimming is not needed in the WAV output path. The existing `reference_prefix_samples` helper remains useful only if a future decode path concatenates reference and generated codec frames.
+  - Performance note: native 1.7B CPU release was slightly faster than the Python bridge in these small runs, but total time is still dominated by talker generation. The new Rust STFT/mel extraction is not the first optimization target unless profiling shows reference preprocessing is significant for long references.
+- 2026-06-04 native Voice Clone ASR/release-readiness update:
+  - Ran CUDA ASR (`faster-whisper large-v3-turbo`, CUDA/float16) on the real native and upstream voice-clone WAVs.
+  - Native transcript: `现在开始测试ROST原声语音克隆`.
+  - Upstream transcript: `现在开始测试ROST原声语音克隆`.
+  - Target text was `現在開始測試 Rust 原生語音克隆。`; both paths are intelligible and have the same ASR substitution for the English word `Rust`.
+  - Release docs and CLI help now state that Candle/Rust native Voice Clone is available, with Python kept as an alignment/reference path.
+  - Release version bumped to `0.1.16`.
 
 ## TODO
 
@@ -187,6 +239,12 @@
    - Load tokenizer and talker safetensors without Python.
    - Keep PythonBridge as a reference/fallback path until native tests pass.
    - Expose backend selection in the CLI.
+   - Voice Clone status: native plan validation and talker ICL prompt builder are implemented.
+   - Voice Clone status: first Rust/Candle forwards for tokenizer `encoder.safetensors` and Base-model `speaker_encoder.safetensors` are implemented and wired into `CandleLLM`.
+   - Voice Clone status: PyTorch fixture alignment now passes for upstream mel extraction, speaker embedding, and tokenizer reference codes.
+   - Voice Clone status: real native/upstream WAV comparison passed basic non-silence/loudness checks and confirmed no reference prefix is copied into the output WAV.
+   - Voice Clone status: CUDA ASR intelligibility check passed for native and upstream comparison WAVs with equivalent transcripts.
+   - Voice Clone next step: profile talker generation before optimizing Rust STFT/mel, then add a dedicated release smoke command for `--mode voice-clone`.
 
 8. Performance cleanup after correctness.
    - Remove hot-path allocations.

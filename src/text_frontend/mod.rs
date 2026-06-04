@@ -36,6 +36,7 @@ pub mod model_catalog;
 mod python_bridge;
 pub mod speaker_presets;
 mod token_parser;
+pub mod voice_clone;
 
 #[cfg(feature = "candle-llm")]
 pub mod candle_backend;

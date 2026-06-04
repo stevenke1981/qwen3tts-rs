@@ -273,22 +273,93 @@ fn tensor_from_view(view: &TensorView, device: &Device) -> Result<Tensor> {
     let dtype = safetensors_dtype_to_candle(view.dtype())?;
     let data = view.data().to_vec();
 
-    // Candle 的 Tensor::from_slice 需要 f32 slice
+    // Keep native inference tensors in F32 for the existing decoder/talker code.
     match dtype {
         candle_core::DType::F32 => {
-            // 直接解讀為 f32
-            let bytes = &data;
-            let n = bytes.len() / 4;
-            let mut floats = Vec::with_capacity(n);
-            for chunk in bytes.chunks_exact(4) {
-                floats.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
-            }
+            let floats = f32_values_from_le_bytes(&data)?;
+            Tensor::from_slice(&floats, &*shape, device).map_err(Into::into)
+        }
+        candle_core::DType::BF16 => {
+            let floats = bf16_values_to_f32(&data)?;
+            Tensor::from_slice(&floats, &*shape, device).map_err(Into::into)
+        }
+        candle_core::DType::F16 => {
+            let floats = f16_values_to_f32(&data)?;
             Tensor::from_slice(&floats, &*shape, device).map_err(Into::into)
         }
         other => Err(Error::Weight(format!(
             "Unsupported dtype for tensor conversion: {other:?}"
         ))),
     }
+}
+
+fn f32_values_from_le_bytes(data: &[u8]) -> Result<Vec<f32>> {
+    if data.len() % 4 != 0 {
+        return Err(Error::Weight(format!(
+            "Invalid F32 tensor byte length {}",
+            data.len()
+        )));
+    }
+    Ok(data
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect())
+}
+
+fn bf16_values_to_f32(data: &[u8]) -> Result<Vec<f32>> {
+    if data.len() % 2 != 0 {
+        return Err(Error::Weight(format!(
+            "Invalid BF16 tensor byte length {}",
+            data.len()
+        )));
+    }
+    Ok(data
+        .chunks_exact(2)
+        .map(|chunk| {
+            let bits = u16::from_le_bytes([chunk[0], chunk[1]]) as u32;
+            f32::from_bits(bits << 16)
+        })
+        .collect())
+}
+
+fn f16_values_to_f32(data: &[u8]) -> Result<Vec<f32>> {
+    if data.len() % 2 != 0 {
+        return Err(Error::Weight(format!(
+            "Invalid F16 tensor byte length {}",
+            data.len()
+        )));
+    }
+    Ok(data
+        .chunks_exact(2)
+        .map(|chunk| f16_bits_to_f32(u16::from_le_bytes([chunk[0], chunk[1]])))
+        .collect())
+}
+
+fn f16_bits_to_f32(bits: u16) -> f32 {
+    let sign = ((bits & 0x8000) as u32) << 16;
+    let exp = ((bits >> 10) & 0x1f) as i32;
+    let frac = (bits & 0x03ff) as u32;
+    let f32_bits = if exp == 0 {
+        if frac == 0 {
+            sign
+        } else {
+            let mut frac_norm = frac;
+            let mut exp_norm = -14;
+            while (frac_norm & 0x0400) == 0 {
+                frac_norm <<= 1;
+                exp_norm -= 1;
+            }
+            frac_norm &= 0x03ff;
+            let exp_bits = ((exp_norm + 127) as u32) << 23;
+            sign | exp_bits | (frac_norm << 13)
+        }
+    } else if exp == 0x1f {
+        sign | 0x7f80_0000 | (frac << 13)
+    } else {
+        let exp_bits = ((exp - 15 + 127) as u32) << 23;
+        sign | exp_bits | (frac << 13)
+    };
+    f32::from_bits(f32_bits)
 }
 
 /// 從 safetensors dtype 映射到 Candle dtype
@@ -320,6 +391,48 @@ mod tests {
         let device = test_device();
         let result = WeightLoader::from_file("nonexistent.safetensors", &device);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_file_converts_bf16_tensor_to_f32() {
+        #[derive(Debug)]
+        struct TestTensor {
+            dtype: Dtype,
+            shape: Vec<usize>,
+            data: Vec<u8>,
+        }
+        impl safetensors::tensor::View for TestTensor {
+            fn dtype(&self) -> Dtype {
+                self.dtype
+            }
+            fn shape(&self) -> &[usize] {
+                &self.shape
+            }
+            fn data(&self) -> std::borrow::Cow<'_, [u8]> {
+                std::borrow::Cow::Borrowed(&self.data)
+            }
+            fn data_len(&self) -> usize {
+                self.data.len()
+            }
+        }
+
+        let tmp = std::env::temp_dir().join(format!(
+            "qwen3tts-bf16-loader-test-{}.safetensors",
+            std::process::id()
+        ));
+        let tensor = TestTensor {
+            dtype: Dtype::BF16,
+            shape: vec![2],
+            data: vec![0x80, 0x3f, 0x00, 0x40], // 1.0, 2.0 in BF16 little-endian.
+        };
+        safetensors::serialize_to_file(vec![("bf16_weight".to_string(), tensor)], None, &tmp)
+            .unwrap();
+
+        let loader = WeightLoader::from_file(&tmp, &test_device()).unwrap();
+        let values = loader.get("bf16_weight").unwrap().to_vec1::<f32>().unwrap();
+
+        assert_eq!(values, vec![1.0, 2.0]);
+        let _ = std::fs::remove_file(tmp);
     }
 
     #[test]
