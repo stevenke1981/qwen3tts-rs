@@ -181,16 +181,24 @@ impl NativeSpeechTokenizerEncoder {
 
     fn forward_transformer(&self, input: &Tensor) -> Result<Tensor> {
         let mut h = input.clone();
+        let seq_len = input.dim(1)?;
+        let (cos, sin) = precompute_rope(seq_len, TRANSFORMER_HEAD_DIM, input.device())?;
         for layer_idx in 0..TRANSFORMER_LAYERS {
-            h = self.transformer_layer(&h, layer_idx)?;
+            h = self.transformer_layer(&h, layer_idx, &cos, &sin)?;
         }
         Ok(h)
     }
 
-    fn transformer_layer(&self, input: &Tensor, layer_idx: usize) -> Result<Tensor> {
+    fn transformer_layer(
+        &self,
+        input: &Tensor,
+        layer_idx: usize,
+        cos: &Tensor,
+        sin: &Tensor,
+    ) -> Result<Tensor> {
         let prefix = format!("encoder.encoder_transformer.layers.{layer_idx}");
         let normed = self.layer_norm(input, &format!("{prefix}.input_layernorm"))?;
-        let attn = self.self_attention(&normed, &format!("{prefix}.self_attn"))?;
+        let attn = self.self_attention(&normed, &format!("{prefix}.self_attn"), cos, sin)?;
         let attn_scale = self
             .weights
             .get(&format!("{prefix}.self_attn_layer_scale.scale"))?
@@ -223,7 +231,13 @@ impl NativeSpeechTokenizerEncoder {
             .map_err(Into::into)
     }
 
-    fn self_attention(&self, input: &Tensor, prefix: &str) -> Result<Tensor> {
+    fn self_attention(
+        &self,
+        input: &Tensor,
+        prefix: &str,
+        cos: &Tensor,
+        sin: &Tensor,
+    ) -> Result<Tensor> {
         let (batch, seq_len, _hidden) = input.dims3()?;
         let q = linear(input, self.weights.get(&format!("{prefix}.q_proj.weight"))?)?;
         let k = linear(input, self.weights.get(&format!("{prefix}.k_proj.weight"))?)?;
@@ -242,7 +256,6 @@ impl NativeSpeechTokenizerEncoder {
             .permute((0, 2, 1, 3))?
             .contiguous()?;
 
-        let (cos, sin) = precompute_rope(seq_len, TRANSFORMER_HEAD_DIM, input.device())?;
         let q = apply_rope_half(&q, &cos, &sin)?;
         let k = apply_rope_half(&k, &cos, &sin)?;
 
@@ -272,12 +285,17 @@ enum PadMode {
 }
 
 fn elu(input: &Tensor) -> Result<Tensor> {
-    let values = input.flatten_all()?.to_vec1::<f32>()?;
-    let out: Vec<f32> = values
-        .into_iter()
-        .map(|x| if x > 0.0 { x } else { x.exp() - 1.0 })
-        .collect();
-    Tensor::from_slice(&out, input.dims(), input.device()).map_err(Into::into)
+    let positive = relu(input)?;
+    let one = Tensor::new(&[1.0f32], input.device())?;
+    let one_minus_exp = one.broadcast_sub(&input.exp()?)?;
+    let negative = relu(&one_minus_exp)?;
+    (positive - negative).map_err(Into::into)
+}
+
+fn relu(input: &Tensor) -> Result<Tensor> {
+    input
+        .broadcast_maximum(&Tensor::new(&[0.0f32], input.device())?)
+        .map_err(Into::into)
 }
 
 fn precompute_rope(seq_len: usize, head_dim: usize, device: &Device) -> Result<(Tensor, Tensor)> {
@@ -450,4 +468,23 @@ fn nearest_code(vector: &[f32], codebook: &[f32]) -> usize {
         }
     }
     best
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn elu_matches_reference_values() {
+        let device = Device::Cpu;
+        let input = Tensor::from_slice(&[-2.0f32, -1.0, 0.0, 0.5, 2.0], (1, 5), &device).unwrap();
+        let output = elu(&input).unwrap().to_vec2::<f32>().unwrap();
+        let expected = [(-2.0f32).exp() - 1.0, (-1.0f32).exp() - 1.0, 0.0, 0.5, 2.0];
+        for (actual, expected) in output[0].iter().zip(expected) {
+            assert!(
+                (actual - expected).abs() < 1e-6,
+                "actual={actual} expected={expected}"
+            );
+        }
+    }
 }

@@ -125,21 +125,22 @@ impl TalkerForConditionalGeneration {
 
         // 28 layers
         let mut kv_caches = vec![None; self.config.num_hidden_layers];
-        let (hidden, new_caches) = self.model.forward(
+        let hidden = self.model.forward(
             inputs_embeds,
             &cos,
             &sin,
             Some(&causal_mask),
             &mut kv_caches,
         )?;
-        kv_caches = new_caches;
 
         // hidden: [batch, seq_len, hidden]
         // 取最後一個位置
         let mut last_hidden = hidden.narrow(1, seq_len - 1, 1)?; // [batch, 1, hidden]
 
         // ── Generation Loop ──
-        let mut all_codes: Vec<Vec<u16>> = Vec::new();
+        let mut flat_codes: Vec<u32> =
+            Vec::with_capacity(max_new_tokens * self.config.num_code_groups);
+        let mut num_frames = 0usize;
 
         let tts_pad = tts_pad_embed.cloned().unwrap_or_else(|| {
             Tensor::zeros(&[1, 1, self.config.hidden_size], DType::F32, device).unwrap()
@@ -169,13 +170,9 @@ impl TalkerForConditionalGeneration {
                 self.code_predictor
                     .generate(&last_hidden, &c0_emb, &mut cp_kv_caches, device)?;
 
-            // 組合 [c0, c1, ..., c15]
-            let full_codes = Tensor::cat(&[c0_2d.clone(), codes_1_15.clone()], 1)?; // [batch, 16]
-
-            // 儲存結果
-            let codes_flat = full_codes.squeeze(0)?.to_vec1::<u32>()?;
-            let frame: Vec<u16> = codes_flat.iter().map(|&x| x as u16).collect();
-            all_codes.push(frame);
+            flat_codes.push(c0_val as u32);
+            flat_codes.extend(codes_1_15.squeeze(0)?.to_vec1::<u32>()?);
+            num_frames += 1;
 
             // Step C: 檢查 EOS
             if c0_val as u32 == self.config.codec_eos_token_id {
@@ -202,23 +199,18 @@ impl TalkerForConditionalGeneration {
             let next_input = (sum_emb + text_add)?;
 
             // Run the next generated frame through the talker transformer.
-            let position_ids = self.generation_position_ids(seq_len + gen_step, batch, device)?;
-            let (cos, sin) = self.rope.forward(&next_input, &position_ids)?;
-            let (hidden, new_caches) =
-                self.model
-                    .forward(&next_input, &cos, &sin, None, &mut kv_caches)?;
-            kv_caches = new_caches;
+            let (cos, sin) =
+                self.rope
+                    .forward_single_position((seq_len + gen_step) as u32, batch, device)?;
+            let hidden = self
+                .model
+                .forward(&next_input, &cos, &sin, None, &mut kv_caches)?;
             last_hidden = hidden;
             gen_step += 1;
         }
 
         // 轉換為 [num_frames, 16]
-        let n = all_codes.len();
-        let flat_u32: Vec<u32> = all_codes
-            .iter()
-            .flat_map(|frame| frame.iter().map(|&x| x as u32))
-            .collect();
-        let result = Tensor::from_slice(&flat_u32, (n, 16), device)?;
+        let result = Tensor::from_slice(&flat_codes, (num_frames, 16), device)?;
         Ok(result)
     }
 
@@ -244,17 +236,18 @@ impl TalkerForConditionalGeneration {
         let (cos, sin) = self.rope.forward(inputs_embeds, &position_ids)?;
 
         let mut kv_caches = vec![None; self.config.num_hidden_layers];
-        let (hidden, new_caches) = self.model.forward(
+        let hidden = self.model.forward(
             inputs_embeds,
             &cos,
             &sin,
             Some(&causal_mask),
             &mut kv_caches,
         )?;
-        kv_caches = new_caches;
         let mut last_hidden = hidden.narrow(1, seq_len - 1, 1)?;
 
-        let mut all_codes: Vec<Vec<u16>> = Vec::new();
+        let mut flat_codes: Vec<u32> =
+            Vec::with_capacity(max_new_tokens * self.config.num_code_groups);
+        let mut num_frames = 0usize;
         let tts_pad = tts_pad_embed.cloned().unwrap_or_else(|| {
             Tensor::zeros(&[1, 1, self.config.hidden_size], DType::F32, device).unwrap()
         });
@@ -286,10 +279,9 @@ impl TalkerForConditionalGeneration {
                 sampling,
             )?;
 
-            let full_codes = Tensor::cat(&[c0_2d.clone(), codes_1_15.clone()], 1)?;
-            let codes_flat = full_codes.squeeze(0)?.to_vec1::<u32>()?;
-            let frame: Vec<u16> = codes_flat.iter().map(|&x| x as u16).collect();
-            all_codes.push(frame);
+            flat_codes.push(c0_val as u32);
+            flat_codes.extend(codes_1_15.squeeze(0)?.to_vec1::<u32>()?);
+            num_frames += 1;
 
             if c0_val as u32 == self.config.codec_eos_token_id {
                 break;
@@ -309,37 +301,16 @@ impl TalkerForConditionalGeneration {
             };
             let next_input = (sum_emb + text_add)?;
 
-            let position_ids = self.generation_position_ids(seq_len + gen_step, batch, device)?;
-            let (cos, sin) = self.rope.forward(&next_input, &position_ids)?;
-            let (hidden, new_caches) =
-                self.model
-                    .forward(&next_input, &cos, &sin, None, &mut kv_caches)?;
-            kv_caches = new_caches;
+            let (cos, sin) =
+                self.rope
+                    .forward_single_position((seq_len + gen_step) as u32, batch, device)?;
+            let hidden = self
+                .model
+                .forward(&next_input, &cos, &sin, None, &mut kv_caches)?;
             last_hidden = hidden;
             gen_step += 1;
         }
 
-        let n = all_codes.len();
-        let flat_u32: Vec<u32> = all_codes
-            .iter()
-            .flat_map(|frame| frame.iter().map(|&x| x as u32))
-            .collect();
-        Tensor::from_slice(&flat_u32, (n, 16), device)
-    }
-
-    fn generation_position_ids(
-        &self,
-        position: usize,
-        batch: usize,
-        device: &Device,
-    ) -> Result<Tensor> {
-        let pos = position as u32;
-        let mut data = Vec::with_capacity(3 * batch);
-        for _ in 0..3 {
-            for _ in 0..batch {
-                data.push(pos);
-            }
-        }
-        Tensor::from_slice(&data, (3, batch, 1), device)
+        Tensor::from_slice(&flat_codes, (num_frames, 16), device)
     }
 }

@@ -131,6 +131,31 @@
   - Target text was `現在開始測試 Rust 原生語音克隆。`; both paths are intelligible and have the same ASR substitution for the English word `Rust`.
   - Release docs and CLI help now state that Candle/Rust native Voice Clone is available, with Python kept as an alignment/reference path.
   - Release version bumped to `0.1.16`.
+- 2026-06-04 Candle-oriented optimization update:
+  - `candle-rs` skill was not available in this Codex session, so optimization followed the same Candle principles from `AGENTS.md`: keep tensor math on the active device, reduce repeated Tensor/trig construction, and preserve PyTorch fixture alignment.
+  - Replaced the speech-tokenizer ELU helper's `flatten_all().to_vec1()` host round-trip with a pure Tensor formula: `relu(x) - relu(1 - exp(x))`.
+  - Reused Mimi tokenizer encoder transformer RoPE tensors across all 8 encoder transformer layers instead of recomputing the same cos/sin per layer.
+  - Reused CodePredictor sub-codebook RoPE tensors across codebook steps within each generated frame instead of recomputing per step.
+  - Validation stayed aligned:
+    - `cargo test --test native_voice_forward_test --features candle-llm -- --ignored --nocapture`
+    - code predictor PyTorch fixture exact token match.
+    - `cargo test --features candle-llm`
+  - Real 1.7B CPU release voice-clone smoke stayed non-silent and produced the same 50 frames / 4.000s WAV; elapsed time improved from the prior `36.02s` run to `34.55s` on the same prompt/reference/seed. The earlier `40.94s` run before the CodePredictor optimization appears to have been noise/regression from the first ELU-only change.
+- 2026-06-05 Candle skill follow-up optimization:
+  - Loaded the local `candle-rs` skill and kept validation narrow before broadening, per its workflow.
+  - Reworked `Sampler` to reuse internal candidate/probability scratch buffers and use top-k partial selection before sorting. This keeps the default `top_k=50` path from sorting the whole codec vocabulary on every sampled token.
+  - Added a deterministic tie-breaker by token id so the optimized sampler remains stable when logits tie, plus a reference-behavior unit test for top-k/top-p sampling.
+  - Flattened talker generated-token collection from `Vec<Vec<u16>>` plus per-frame `Tensor::cat` into one preallocated `Vec<u32>` returned as the same `[num_frames, 16]` Tensor.
+  - Added `MultimodalRotaryEmbedding::forward_single_position` for autoregressive generation; it avoids creating a `[3, batch, 1]` position Tensor and avoids `to_vec3()` on every generated frame.
+  - Changed `TalkerModel::forward` to mutate KV caches in place and return only the hidden state, removing the repeated `kv_caches.to_vec()` clone in the main generation loop.
+  - Validation stayed aligned:
+    - sampler unit tests pass.
+    - single-position RoPE fast path matches the general RoPE path.
+    - code predictor first-step fixture remains `cosine=1.0`, `next=[1965]`.
+    - code predictor greedy fixture remains exact: `[1965, 1043, 1172, 1911, 95, 898, 555, 1013, 1986, 1371, 215, 695, 329, 560, 1527]`.
+    - native speaker/ref_code fixtures remain aligned.
+    - full `cargo test --features candle-llm` passes.
+  - Real 1.7B CPU release voice-clone smoke stayed bit-identical at the token level to the prior opt2 run (`sha256=635a1f9bded3986e10d38b1207d0bebb7b11947a7483703d34860c014d45afb9`), with the same 50 frames / 4.000s WAV and RMS `-22.21 dB`. Elapsed time was `36.39s` in the final warm run, so these cleanups reduce avoidable work but do not yet provide a stable end-to-end speedup over the earlier `34.55s` measurement.
 
 ## TODO
 

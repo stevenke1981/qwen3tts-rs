@@ -146,6 +146,7 @@ pub fn apply_rotary_pos_emb(
 #[allow(dead_code)]
 pub struct MultimodalRotaryEmbedding {
     inv_freq: Tensor,
+    inv_freq_values: Vec<f32>,
     max_seq_len: usize,
     theta: f64,
     mrope_section: Vec<usize>,
@@ -155,12 +156,13 @@ pub struct MultimodalRotaryEmbedding {
 impl MultimodalRotaryEmbedding {
     pub fn new(config: &TalkerConfig, device: &Device) -> Result<Self> {
         let dim = config.head_dim / 2;
-        let inv_freq: Vec<f32> = (0..dim)
+        let inv_freq_values: Vec<f32> = (0..dim)
             .map(|i| 1.0 / config.rope_theta.powf(i as f64 / dim as f64) as f32)
             .collect();
-        let inv_freq = Tensor::from_slice(&inv_freq, dim, device)?;
+        let inv_freq = Tensor::from_slice(&inv_freq_values, dim, device)?;
         Ok(Self {
             inv_freq,
+            inv_freq_values,
             max_seq_len: config.max_position_embeddings,
             theta: config.rope_theta,
             mrope_section: config.mrope_section.clone(),
@@ -178,7 +180,7 @@ impl MultimodalRotaryEmbedding {
         let seq_len = ids[0][0].len();
         debug_assert_eq!(axes, 3);
 
-        let inv_freq = self.inv_freq.to_vec1::<f32>()?;
+        let inv_freq = &self.inv_freq_values;
         let half_dim = inv_freq.len();
         let head_dim = half_dim * 2;
         let mut cos = vec![0.0f32; batch * seq_len * head_dim];
@@ -199,6 +201,35 @@ impl MultimodalRotaryEmbedding {
 
         let cos = Tensor::from_slice(&cos, (batch, 1, seq_len, head_dim), position_ids.device())?;
         let sin = Tensor::from_slice(&sin, (batch, 1, seq_len, head_dim), position_ids.device())?;
+        Ok((cos, sin))
+    }
+
+    /// Fast path for autoregressive generation where all three M-RoPE axes use
+    /// the same single position.
+    pub fn forward_single_position(
+        &self,
+        position: u32,
+        batch: usize,
+        device: &Device,
+    ) -> Result<(Tensor, Tensor)> {
+        let inv_freq = &self.inv_freq_values;
+        let half_dim = inv_freq.len();
+        let head_dim = half_dim * 2;
+        let mut cos = vec![0.0f32; batch * head_dim];
+        let mut sin = vec![0.0f32; batch * head_dim];
+
+        for b in 0..batch {
+            for d in 0..head_dim {
+                let freq_idx = d % half_dim;
+                let angle = position as f32 * inv_freq[freq_idx];
+                let out_idx = b * head_dim + d;
+                cos[out_idx] = angle.cos();
+                sin[out_idx] = angle.sin();
+            }
+        }
+
+        let cos = Tensor::from_slice(&cos, (batch, 1, 1, head_dim), device)?;
+        let sin = Tensor::from_slice(&sin, (batch, 1, 1, head_dim), device)?;
         Ok((cos, sin))
     }
 
@@ -351,4 +382,41 @@ pub fn create_causal_mask(seq_len: usize, device: &Device) -> Result<Tensor> {
         .flat_map(|i| (0..seq_len).map(move |j| if j <= i { 0.0f32 } else { f32::NEG_INFINITY }))
         .collect();
     Tensor::from_slice(&mask, (seq_len, seq_len), device)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn single_position_rope_matches_general_forward() {
+        let device = Device::Cpu;
+        let rope = MultimodalRotaryEmbedding::new(&TalkerConfig::default(), &device).unwrap();
+        let batch = 2usize;
+        let position = 37u32;
+        let position_ids = Tensor::from_slice(
+            &[position, position, position, position, position, position],
+            (3, batch, 1),
+            &device,
+        )
+        .unwrap();
+        let x = Tensor::zeros((batch, 1, 1024), DType::F32, &device).unwrap();
+
+        let (general_cos, general_sin) = rope.forward(&x, &position_ids).unwrap();
+        let (fast_cos, fast_sin) = rope
+            .forward_single_position(position, batch, &device)
+            .unwrap();
+
+        assert_tensors_close(&general_cos, &fast_cos, 1e-6);
+        assert_tensors_close(&general_sin, &fast_sin, 1e-6);
+    }
+
+    fn assert_tensors_close(a: &Tensor, b: &Tensor, tolerance: f32) {
+        let a = a.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        let b = b.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        assert_eq!(a.len(), b.len());
+        for (idx, (a, b)) in a.iter().zip(b.iter()).enumerate() {
+            assert!((a - b).abs() <= tolerance, "idx={idx} left={a} right={b}");
+        }
+    }
 }

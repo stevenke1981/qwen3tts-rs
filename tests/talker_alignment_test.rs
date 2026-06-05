@@ -439,7 +439,7 @@ fn talker_model_prefill_matches_pytorch_fixture() {
     let (cos, sin) = talker.rope.forward(&hidden, &position_ids).expect("rope");
     let mask = create_causal_mask(seq_len, &device).expect("mask");
     let mut caches = vec![None; talker.config.num_hidden_layers];
-    let (output, _cache) = talker
+    let output = talker
         .model
         .forward(&hidden, &cos, &sin, Some(&mask), &mut caches)
         .expect("model forward");

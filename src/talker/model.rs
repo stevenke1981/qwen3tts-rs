@@ -37,7 +37,7 @@ impl TalkerModel {
         sin: &Tensor,
         attention_mask: Option<&Tensor>,
         kv_caches: &mut [Option<(Tensor, Tensor)>],
-    ) -> Result<(Tensor, Vec<Option<(Tensor, Tensor)>>)> {
+    ) -> Result<Tensor> {
         let mut h = hidden_states.clone();
 
         for (i, layer) in self.layers.iter().enumerate() {
@@ -56,6 +56,6 @@ impl TalkerModel {
         // Final norm
         let h = self.norm.forward(&h)?;
 
-        Ok((h, kv_caches.to_vec()))
+        Ok(h)
     }
 }

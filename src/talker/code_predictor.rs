@@ -69,13 +69,15 @@ impl CodePredictor {
         let mut next_val = next_token.to_vec1::<u32>()?[0];
         generated_ids.push(next_val);
 
+        let step_positions: Vec<u32> = (2..self.config.num_code_groups as u32).collect();
+        let (step_cos, step_sin) = self.compute_rope_for_positions(&step_positions, device)?;
         for step in 1..(self.config.num_code_groups - 1) {
             let emb_weight = &self.codec_embeddings[step - 1];
             let next_input_ids = Tensor::from_slice(&[next_val], (1, 1), device)?;
             let next_input = embedding_lookup(emb_weight, &next_input_ids)?;
             let next_input = self.project_input(&next_input)?;
-            let pos = (step + 1) as u32;
-            let (cos, sin) = self.compute_rope_for_positions(&[pos], device)?;
+            let cos = step_cos.narrow(2, step - 1, 1)?;
+            let sin = step_sin.narrow(2, step - 1, 1)?;
             let h = self.forward_layers(&next_input, &cos, &sin, None, kv_caches)?;
             let logits = linear(&h, &self.lm_heads[step])?.squeeze(1)?;
             let next_token = logits.argmax(1)?;
@@ -102,13 +104,15 @@ impl CodePredictor {
         let mut next_val = sampler.sample(&logits, sampling, None, None)?;
         generated_ids.push(next_val);
 
+        let step_positions: Vec<u32> = (2..self.config.num_code_groups as u32).collect();
+        let (step_cos, step_sin) = self.compute_rope_for_positions(&step_positions, device)?;
         for step in 1..(self.config.num_code_groups - 1) {
             let emb_weight = &self.codec_embeddings[step - 1];
             let next_input_ids = Tensor::from_slice(&[next_val], (1, 1), device)?;
             let next_input = embedding_lookup(emb_weight, &next_input_ids)?;
             let next_input = self.project_input(&next_input)?;
-            let pos = (step + 1) as u32;
-            let (cos, sin) = self.compute_rope_for_positions(&[pos], device)?;
+            let cos = step_cos.narrow(2, step - 1, 1)?;
+            let sin = step_sin.narrow(2, step - 1, 1)?;
             let h = self.forward_layers(&next_input, &cos, &sin, None, kv_caches)?;
             let logits = linear(&h, &self.lm_heads[step])?.squeeze(1)?;
             next_val = sampler.sample(&logits, sampling, None, None)?;
