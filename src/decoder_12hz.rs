@@ -1,8 +1,8 @@
 use candle_core::{Device, Tensor};
 
 use crate::codec::{
-    CausalConvNet, CodebookLookup, DecoderBlock, ParallelCodebook, PreTransformer,
-    PreTransformerConfig, UpsampleBlock, snake_beta,
+    snake_beta, CausalConvNet, CodebookLookup, DecoderBlock, ParallelCodebook, PreTransformer,
+    PreTransformerConfig, UpsampleBlock,
 };
 use crate::weights::WeightLoader;
 use crate::{DecoderConfig, Error, Result, TtsDecoder};
@@ -125,7 +125,7 @@ impl Decoder12Hz {
             frame_embeddings.push(frame_embed.to_vec1()?);
         }
 
-        // Apply speed adjustment if requested (via linear interpolation on frame embeddings)
+        // Apply speed adjustment if requested (via tensor-vectorized linear interpolation)
         let speed = self.config.speed;
         let frame_embeddings = if speed != 1.0 && num_frames > 1 {
             let new_num_frames = ((num_frames as f64) / speed).round() as usize;
@@ -134,21 +134,31 @@ impl Decoder12Hz {
             if new_num_frames == 1 {
                 interpolated.push(frame_embeddings[0].clone());
             } else {
+                let emb_dim = frame_embeddings[0].len();
                 for j in 0..new_num_frames {
                     let pos =
                         (j as f64) * ((num_frames - 1) as f64) / ((new_num_frames - 1) as f64);
                     let left = pos.floor() as usize;
                     let right = pos.ceil() as usize;
                     let weight = pos - left as f64;
-                    let left_embed = &frame_embeddings[left];
-                    let right_embed = &frame_embeddings[right];
-                    let mut mixed = Vec::with_capacity(left_embed.len());
-                    for idx in 0..left_embed.len() {
-                        mixed.push(
-                            left_embed[idx] * (1.0 - weight as f32)
-                                + right_embed[idx] * (weight as f32),
-                        );
-                    }
+                    let mixed = if right == left {
+                        frame_embeddings[left].clone()
+                    } else {
+                        // 使用張量算術進行向量化內插：left + weight × (right - left)
+                        // 避免逐元素手動迴圈，GPU 可平行，CPU 亦可 SIMD
+                        let left_t = Tensor::from_slice(
+                            &frame_embeddings[left],
+                            (1, 1, emb_dim),
+                            &self.device,
+                        )?;
+                        let right_t = Tensor::from_slice(
+                            &frame_embeddings[right],
+                            (1, 1, emb_dim),
+                            &self.device,
+                        )?;
+                        let w = Tensor::from_slice(&[weight as f32], (1, 1, 1), &self.device)?;
+                        right_t.sub(&left_t)?.mul(&w)?.add(&left_t)?.to_vec1()?
+                    };
                     interpolated.push(mixed);
                 }
             }
