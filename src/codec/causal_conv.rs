@@ -218,15 +218,18 @@ impl CausalConvState {
         self.frame_count = 0;
     }
 
-    /// 取得歷史資料用於卷積計算
+    /// 將指定通道的最近 n 個歷史值寫入 `out` slice（零分配）
     ///
-    /// 回傳緩衝區中可用的最近 max_offset 個樣本
-    pub fn get_history(&self, channel: usize, max_offset: usize) -> Vec<f32> {
+    /// `out` 的長度決定了請求的元素數。回傳實際寫入的元素數。
+    ///
+    /// # 恐慌
+    /// 當 `channel` 超出範圍時 panic（caller 應保證索引有效）
+    pub fn fill_history(&self, channel: usize, out: &mut [f32]) -> usize {
         let buf = &self.buffers[channel];
-        let n = max_offset.min(buf.len());
-        let mut out = vec![0.0_f32; n];
-        buf.last_n(n, &mut out);
-        out
+        let n = out.len().min(buf.len());
+        // last_n 僅在 out 太小時回傳 None — 這裡保證 out.len() >= n
+        let _ = buf.last_n(n, out);
+        n
     }
 }
 
@@ -246,6 +249,8 @@ pub struct CausalConv1d {
     device: Device,
     /// 狀態（環形緩衝區）
     state: CausalConvState,
+    /// 預分配步進緩衝區 (in_channels × kernel_size)，熱路徑零分配
+    step_scratch: Vec<f32>,
 }
 
 impl CausalConv1d {
@@ -263,6 +268,8 @@ impl CausalConv1d {
         state_capacity: usize,
     ) -> crate::Result<Self> {
         let device = weight.device().clone();
+        // 預分配步進緩衝區：最多 kernel_size 幀 × in_channels 通道
+        let step_scratch = vec![0.0_f32; config.in_channels * config.kernel_size];
 
         Ok(Self {
             state: CausalConvState::new(config.out_channels, config.kernel_size, state_capacity),
@@ -270,6 +277,7 @@ impl CausalConv1d {
             bias,
             config,
             device,
+            step_scratch,
         })
     }
 
@@ -315,9 +323,10 @@ impl CausalConv1d {
         Ok(output)
     }
 
-    /// 處理單幀（流式推理用）
+    /// 處理單幀（流式推理用）— O(1) per step
     ///
-    /// 使用內部環形緩衝區管理歷史狀態。
+    /// 與 `forward()` 不同，此方法使用內部環形緩衝區管理歷史狀態。
+    /// 只傳入最近 `kernel_size` 幀到 conv1d，避免歷史累積造成的 O(n) 增長。
     ///
     /// # 參數
     /// - `frame`: 當前幀，形狀 (in_channels,)
@@ -332,29 +341,33 @@ impl CausalConv1d {
 
         // 推入環形緩衝區
         self.state.push_frame(frame);
-        let total_frames = self.state.frame_count;
+        let k = self.config.kernel_size;
+        let n_frames = self.state.frame_count.min(k); // 最多 kernel_size 幀
 
-        // 構建輸入張量: (1, in_channels, total_frames)
-        // 使用所有歷史幀而非僅 kernel_size 幀
-        let mut conv_input = Vec::with_capacity(in_channels * total_frames);
+        // 使用預分配步進緩衝區，避免熱路徑分配
+        let total_len = in_channels * n_frames;
+        let conv_input = &mut self.step_scratch[..total_len];
 
         for ch in 0..in_channels {
-            let history = self.state.get_history(ch, total_frames);
-            debug_assert_eq!(history.len(), total_frames);
-            conv_input.extend_from_slice(&history);
+            let start = ch * n_frames;
+            let end = start + n_frames;
+            self.state.fill_history(ch, &mut conv_input[start..end]);
         }
 
+        // 構建輸入張量: (1, in_channels, n_frames) — Tensor::from_slice 會複製資料
         let input_tensor =
-            Tensor::from_slice(&conv_input, (1, in_channels, total_frames), &self.device)?;
+            Tensor::from_slice(conv_input, (1, in_channels, n_frames), &self.device)?;
 
         let output = self.forward(&input_tensor)?;
-        // Output: (1, out_channels, L_out)，L_out = total_frames + kernel_size - 1
-        // 因果卷積：對應最新輸入幀 (index total_frames-1) 的輸出在 position total_frames-1
-        let frame_pos = total_frames.saturating_sub(1);
+        // Output: (1, out_channels, L_out)，L_out = n_frames + kernel_size - 1
+        // 因果卷積：最新的輸入幀 (index n_frames-1) 對應輸出中相同位置
+        let frame_pos = n_frames.saturating_sub(1);
         let frame_out = output.narrow(2, frame_pos, 1)?;
-        let output_slice = frame_out.squeeze(0)?.squeeze(1)?;
-        let output_vec: Vec<f32> = output_slice.to_vec1()?;
-        Ok(output_vec)
+        frame_out
+            .squeeze(0)?
+            .squeeze(1)?
+            .to_vec1()
+            .map_err(Into::into)
     }
 
     /// 重置內部狀態
@@ -471,7 +484,10 @@ mod tests {
         let mut state = CausalConvState::new(512, 3, 16);
         assert_eq!(state.buffers.len(), 512);
         state.push_frame(&vec![1.0; 512]);
-        assert_eq!(state.get_history(0, 1).len(), 1);
+        let mut buf = [0.0f32; 1];
+        let n = state.fill_history(0, &mut buf);
+        assert_eq!(n, 1);
+        assert_eq!(buf[0], 1.0);
     }
 
     /// 數值對齊測試：使用已知輸入比對 CausalConv1d::step 與 PyTorch 參考
