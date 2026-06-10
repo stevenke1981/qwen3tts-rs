@@ -36,7 +36,7 @@ use crate::talker::{
 use crate::text_frontend::speaker_presets;
 use crate::text_frontend::token_parser::TokenParser;
 use crate::text_frontend::voice_clone::speaker_encoder::{
-    NativeSpeakerEncoder, upstream_mel_spectrogram,
+    upstream_mel_spectrogram, NativeSpeakerEncoder,
 };
 use crate::text_frontend::voice_clone::speech_tokenizer::NativeSpeechTokenizerEncoder;
 use crate::text_frontend::voice_clone::{NativeVoiceCloneCondition, NativeVoiceClonePlan};

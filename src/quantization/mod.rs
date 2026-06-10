@@ -12,8 +12,8 @@ use std::path::Path;
 use std::str::FromStr;
 
 use candle_core::{Device, Tensor};
-use safetensors::SafeTensors;
 use safetensors::tensor::{Dtype, View};
+use safetensors::SafeTensors;
 use serde::Serialize;
 
 /// Supported safetensors quantization formats.

@@ -148,6 +148,11 @@ pub struct DecoderConfig {
     /// Upsample 核大小
     pub upsample_kernel: usize,
 
+    /// Streaming sliding window 幀數（12Hz 模式）。
+    /// 控制前向緩衝區的最大歷史幀數，限制每幀處理量 O(Kn) 而非 O(n²)。
+    /// `0` 表示自動推導為 `sliding_window + 24`。
+    pub stream_window: usize,
+
     /// SnakeBeta 參數
     pub snake_beta: f64,
 
@@ -184,6 +189,7 @@ impl Default for DecoderConfig {
             transformer_layers: 8,
             sliding_window: 72,
             upsample_kernel: 8,
+            stream_window: 0, // 0 = auto-derive as sliding_window + 24
             snake_beta: 1.0,
             dit_hidden_dim: 1024,
             dit_num_heads: 16,

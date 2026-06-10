@@ -161,7 +161,7 @@ impl<'a> InputBuilder<'a> {
             {
                 let spk_t = Tensor::new(&[[*spk_id as u32]], &self.device)?;
                 let spk_emb = self.talker.embed_codec(&spk_t)?; // [1, 1, hidden]
-                // Insert between codec_prefill and codec_pad_bos
+                                                                // Insert between codec_prefill and codec_pad_bos
                 let c_pre = codec_emb.narrow(1, 0, codec_prefill.len())?;
                 let c_post = codec_emb.narrow(1, codec_prefill.len(), 2)?;
                 codec_emb = Tensor::cat(&[c_pre, spk_emb, c_post], 1)?;

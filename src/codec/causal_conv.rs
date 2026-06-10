@@ -85,6 +85,10 @@ impl RingBuffer {
 
     /// 以切片形式取得最近 N 個元素（按時間順序：最舊到最新）
     ///
+    /// # 重要
+    /// 當 `n < self.len` 時，回傳 **最後** n 個元素（最接近最新的），
+    /// 而不是前 n 個。這與因果卷積的需求一致：只需要最近 `kernel_size` 幀。
+    ///
     /// 使用自定義暫存避免分配
     pub fn last_n(&self, n: usize, out: &mut [f32]) -> Option<usize> {
         let n = n.min(self.len);
@@ -92,14 +96,18 @@ impl RingBuffer {
             return None;
         }
 
-        // 從最舊到最新填充
+        // 從最舊到最新填充（最近 n 個元素）
+        let oldest = if self.len < self.capacity {
+            // 緩衝區未滿：有效資料在 data[0..len]，
+            // 最近 n 個從 data[len-n] 開始
+            self.len - n
+        } else {
+            // 緩衝區已滿：有效資料環繞，最舊的頭部在 self.head，
+            // 最近 n 個從 (head + capacity - n) 開始
+            (self.head + self.capacity - n) % self.capacity
+        };
+
         for i in 0..n {
-            // 最舊元素位置
-            let oldest = if self.len < self.capacity {
-                0_usize
-            } else {
-                self.head
-            };
             let idx = (oldest + i) % self.capacity;
             out[i] = self.data[idx];
         }
@@ -523,6 +531,52 @@ mod tests {
         let n = buf.last_n(5, &mut out).unwrap();
         assert_eq!(n, 5);
         assert_eq!(out, [0.0, 1.0, 2.0, 3.0, 4.0]);
+    }
+
+    /// 關鍵回歸測試：last_n 在 n < len 時必須回傳最後 n 個元素，而非前 n 個。
+    /// 先前 bug：`oldest` 始終為 0，導致回傳 data[0..n] 而非 data[len-n..len]。
+    /// 這直接影響 step_tensor：當 frame_count > kernel_size 時餵錯歷史給 conv。
+    #[test]
+    fn test_ring_buffer_last_n_partial() {
+        let mut buf = RingBuffer::new(8);
+        // 推入 5 個元素
+        for i in 0..5 {
+            buf.push(i as f32);
+        }
+        // 請求最後 3 個：應為 [2.0, 3.0, 4.0]
+        let mut out = [0.0_f32; 3];
+        let n = buf.last_n(3, &mut out).unwrap();
+        assert_eq!(n, 3);
+        assert_eq!(
+            out,
+            [2.0, 3.0, 4.0],
+            "last_n(3) should return the 3 most recent (indices 2..5), got {out:?}"
+        );
+    }
+
+    /// 纏繞模式下 last_n 正確性（已滿緩衝區）
+    #[test]
+    fn test_ring_buffer_last_n_wrapped() {
+        let mut buf = RingBuffer::new(4);
+        for i in 0..6 {
+            buf.push(i as f32);
+        }
+        // 已推入 6 個，capacity=4，所以僅保留 [2, 3, 4, 5]，head=2
+        assert_eq!(buf.len, 4);
+        // 最後 2 個：應為 [4.0, 5.0]
+        let mut out = [0.0_f32; 2];
+        let n = buf.last_n(2, &mut out).unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(
+            out,
+            [4.0, 5.0],
+            "wrapped last_n(2) should return [4.0, 5.0], got {out:?}"
+        );
+        // 全部 4 個：應為 [2.0, 3.0, 4.0, 5.0]
+        let mut out2 = [0.0_f32; 4];
+        let n2 = buf.last_n(4, &mut out2).unwrap();
+        assert_eq!(n2, 4);
+        assert_eq!(out2, [2.0, 3.0, 4.0, 5.0], "wrapped last_n(4) failed");
     }
 
     #[test]

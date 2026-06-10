@@ -182,7 +182,7 @@ fn cmp_logit_desc(a: &(usize, f32), b: &(usize, f32)) -> Ordering {
 
 #[cfg(test)]
 mod tests {
-    use super::{SamplingOptions, sample_logits};
+    use super::{sample_logits, SamplingOptions};
 
     #[test]
     fn greedy_returns_highest_finite_logit() {

@@ -250,8 +250,8 @@ fn normalize_model_key(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        GenerationMode, InstructionControl, model_capability, model_table,
-        validate_generation_request,
+        model_capability, model_table, validate_generation_request, GenerationMode,
+        InstructionControl,
     };
 
     #[test]
@@ -307,38 +307,32 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_or_incomplete_modes() {
-        assert!(
-            validate_generation_request(
-                "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
-                GenerationMode::CustomVoice,
-                Some("Vivian"),
-                Some("用開心語氣"),
-                None,
-            )
-            .is_err()
-        );
+        assert!(validate_generation_request(
+            "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+            GenerationMode::CustomVoice,
+            Some("Vivian"),
+            Some("用開心語氣"),
+            None,
+        )
+        .is_err());
 
-        assert!(
-            validate_generation_request(
-                "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
-                GenerationMode::VoiceDesign,
-                None,
-                None,
-                None,
-            )
-            .is_err()
-        );
+        assert!(validate_generation_request(
+            "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+            GenerationMode::VoiceDesign,
+            None,
+            None,
+            None,
+        )
+        .is_err());
 
-        assert!(
-            validate_generation_request(
-                "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
-                GenerationMode::VoiceClone,
-                None,
-                None,
-                None,
-            )
-            .is_err()
-        );
+        assert!(validate_generation_request(
+            "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+            GenerationMode::VoiceClone,
+            None,
+            None,
+            None,
+        )
+        .is_err());
     }
 
     #[test]

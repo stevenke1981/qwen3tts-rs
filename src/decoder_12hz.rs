@@ -92,12 +92,20 @@ impl Decoder12Hz {
         let fs_a = loader.get("5.alpha")?.clone();
         let fs_b = loader.get("5.beta")?.clone();
 
-        // Snapshot config values before moving config into Self
+        log::info!(
+            "Decoder12Hz loaded from safetensors: {} tensors",
+            loader.len(),
+        );
+
         let cap = config.ring_buffer_capacity * config.latent_dim;
 
         log::info!(
             "Decoder12Hz loaded from safetensors: {} tensors",
             loader.len(),
+        );
+        log::info!(
+            "Decoder12Hz streaming buffer capacity = {} frames (no trim – O(n²) for streaming, use batch decode_frames for bulk)",
+            config.ring_buffer_capacity,
         );
 
         Ok(Self {
@@ -220,8 +228,11 @@ impl Decoder12Hz {
         let x = self.pre_conv.step_tensor(&frame_embed)?; // (1, latent_dim, 1)
 
         // Step 2: Append pre_conv output to streaming buffer.
-        // This accumulates ALL frames seen so far, so pre_transformer
-        // and downstream blocks can process the full sequence context.
+        // NOTE: We accumulate ALL frames because the pipeline is not frame-independent.
+        // ConvTranspose1d + dilated convs in downstream layers create inter-frame overlap
+        // that prevents simple buffer trimming. Trimming would change the output length,
+        // breaking the output_offset tail extraction. For O(n²) mitigation, use batch
+        // decode_frames() for bulk decoding or GPU (CUDA) for hardware acceleration.
         // Buffer stores frame-major: [f0_ch0..f0_chC-1, f1_ch0..f1_chC-1, ...]
         let x_vec = x.squeeze(0)?.squeeze(1)?.to_vec1()?; // (latent_dim,)
         self.pre_conv_buffer.extend(&x_vec);
