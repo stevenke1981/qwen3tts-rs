@@ -201,15 +201,11 @@ impl Decoder12Hz {
     }
 
     fn decode_chunk_inner(&mut self, tokens: &[u16]) -> Result<Vec<f32>> {
-        let device = &self.device;
-
         let embeddings = self.codebook.decode(tokens)?;
         let frame_embed = embeddings.sum(0)?;
 
-        let frame_vec: Vec<f32> = frame_embed.to_vec1()?;
-        let pre_conv_out = self.pre_conv.step(&frame_vec)?;
-
-        let x = Tensor::from_slice(&pre_conv_out, (1, self.config.latent_dim, 1), device)?;
+        // 使用 step_tensor 保持張量路徑，消除 `to_vec1` + `Tensor::from_slice` 往返
+        let x = self.pre_conv.step_tensor(&frame_embed)?;
 
         let h = self.pre_transformer.forward(&x)?;
 

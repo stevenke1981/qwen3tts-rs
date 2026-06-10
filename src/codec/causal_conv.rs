@@ -370,6 +370,51 @@ impl CausalConv1d {
             .map_err(Into::into)
     }
 
+    /// **Tensor 版本 step** — 直接接受/回傳張量，避免 CPU-GPU 往返
+    ///
+    /// 與 `step()` 相同，但省去 caller 端的 `to_vec1()` + `Tensor::from_slice()`。
+    ///
+    /// # 參數
+    /// - `frame`: 當前幀，形狀 `(in_channels,)` 或 `(1, in_channels, 1)`
+    ///
+    /// # 回傳值
+    /// 形狀 `(1, out_channels, 1)` 的輸出張量
+    pub fn step_tensor(&mut self, frame: &Tensor) -> crate::Result<Tensor> {
+        let in_channels = self.config.in_channels;
+
+        // 接受多種 shape 約定
+        let frame_slice = match frame.shape().dims() {
+            &[c] if c == in_channels => frame.to_vec1()?,
+            &[1, c, 1] if c == in_channels => frame.squeeze(0)?.squeeze(1)?.to_vec1()?,
+            shape => {
+                return Err(Error::Config(format!(
+                    "Expected frame shape ({in_channels},) or (1, {in_channels}, 1), got {shape:?}"
+                )))
+            }
+        };
+
+        // 推入環形緩衝區
+        self.state.push_frame(&frame_slice);
+        let k = self.config.kernel_size;
+        let n_frames = self.state.frame_count.min(k);
+
+        // 使用預分配步進緩衝區
+        let total_len = in_channels * n_frames;
+        let conv_input = &mut self.step_scratch[..total_len];
+
+        for ch in 0..in_channels {
+            let start = ch * n_frames;
+            let end = start + n_frames;
+            self.state.fill_history(ch, &mut conv_input[start..end]);
+        }
+
+        let input_tensor =
+            Tensor::from_slice(conv_input, (1, in_channels, n_frames), &self.device)?;
+        let output = self.forward(&input_tensor)?;
+        let frame_pos = n_frames.saturating_sub(1);
+        Ok(output.narrow(2, frame_pos, 1)?) // (1, out_channels, 1)
+    }
+
     /// 重置內部狀態
     pub fn reset_state(&mut self) {
         self.state.reset();
