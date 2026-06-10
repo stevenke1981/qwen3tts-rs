@@ -635,14 +635,18 @@ fn test_text_to_speech_end_to_end() {
     }
     eprintln!("  ... first 3 frames shown");
 
-    // ── 4. Decode all frames → PCM (batch decode, not streaming) ──
-    // decode_frames processes all frames at once through pre_transformer
-    // and upsampling/decoder blocks, matching the PyTorch reference path.
-    // Per-frame decode_chunk (streaming) has a known bug: the transformer
-    // and upsampling stages lack cross-frame state accumulation.
-    let all_pcm = decoder
-        .decode_frames(&stream.frames)
-        .expect("batch decode frames");
+    // ── 4. Decode each frame → PCM (streaming decode) ──
+    // Each frame is processed through pre_conv.step_tensor which maintains
+    // causal convolution state. The pre_conv outputs are accumulated and
+    // fed through the full pipeline (transformer → upsample → decoder)
+    // to maintain cross-frame context.
+    let mut all_pcm: Vec<f32> = Vec::new();
+    for frame in &stream.frames {
+        let chunk = decoder
+            .decode_chunk(frame.as_slice())
+            .expect("decode chunk");
+        all_pcm.extend(chunk);
+    }
 
     // ── 5. Verify PCM is valid ──
     let sample_rate = 24000;

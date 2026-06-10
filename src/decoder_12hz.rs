@@ -25,6 +25,11 @@ pub struct Decoder12Hz {
     final_snake_b: Tensor,
 
     temperature: f64,
+
+    // Streaming state: accumulated pre_conv outputs (latent_dim per frame)
+    pre_conv_buffer: Vec<f32>,
+    /// Number of audio samples produced so far (for extracting only new samples)
+    output_offset: usize,
 }
 
 impl Decoder12Hz {
@@ -87,6 +92,9 @@ impl Decoder12Hz {
         let fs_a = loader.get("5.alpha")?.clone();
         let fs_b = loader.get("5.beta")?.clone();
 
+        // Snapshot config values before moving config into Self
+        let cap = config.ring_buffer_capacity * config.latent_dim;
+
         log::info!(
             "Decoder12Hz loaded from safetensors: {} tensors",
             loader.len(),
@@ -105,6 +113,8 @@ impl Decoder12Hz {
             final_snake_a: fs_a,
             final_snake_b: fs_b,
             temperature: 1.0,
+            pre_conv_buffer: Vec::with_capacity(cap),
+            output_offset: 0,
         })
     }
 
@@ -206,10 +216,26 @@ impl Decoder12Hz {
         let embeddings = self.codebook.decode(tokens)?;
         let frame_embed = embeddings.sum(0)?;
 
-        // 使用 step_tensor 保持張量路徑，消除 `to_vec1` + `Tensor::from_slice` 往返
-        let x = self.pre_conv.step_tensor(&frame_embed)?;
+        // Step 1: pre_conv step — maintains ring buffer state across frames
+        let x = self.pre_conv.step_tensor(&frame_embed)?; // (1, latent_dim, 1)
 
-        let h = self.pre_transformer.forward(&x)?;
+        // Step 2: Append pre_conv output to streaming buffer.
+        // This accumulates ALL frames seen so far, so pre_transformer
+        // and downstream blocks can process the full sequence context.
+        let x_vec = x.squeeze(0)?.squeeze(1)?.to_vec1()?; // (latent_dim,)
+        self.pre_conv_buffer.extend(&x_vec);
+        let total_frames = self.pre_conv_buffer.len() / self.config.latent_dim;
+
+        // Step 3: Build accumulated tensor from buffer
+        // Shape: (1, latent_dim, total_frames)
+        let h_tensor = Tensor::from_slice(
+            &self.pre_conv_buffer,
+            (1, self.config.latent_dim, total_frames),
+            &self.device,
+        )?;
+
+        // Step 4: Full pipeline on accumulated history
+        let h = self.pre_transformer.forward(&h_tensor)?;
 
         let mut h = h;
         for ub in &self.upsample_blocks {
@@ -225,10 +251,20 @@ impl Decoder12Hz {
 
         let h = snake_beta(&h, &self.final_snake_a, &self.final_snake_b)?;
 
-        let h = self.final_conv.forward(&h)?;
+        let h = self.final_conv.forward(&h)?; // (1, 1, total_output_samples)
 
-        let output: Vec<f32> = h.squeeze(0)?.squeeze(0)?.to_vec1()?;
-        Ok(output)
+        // Step 5: Extract only the NEW audio samples for this frame
+        let all_output: Vec<f32> = h.squeeze(0)?.squeeze(0)?.to_vec1()?;
+        let prev_offset = self.output_offset;
+        self.output_offset = all_output.len();
+
+        if prev_offset == 0 {
+            // First frame: return everything (no baseline to subtract)
+            Ok(all_output)
+        } else {
+            // Subsequent frames: return only the newly produced tail
+            Ok(all_output[prev_offset..].to_vec())
+        }
     }
 }
 
@@ -253,5 +289,7 @@ impl TtsDecoder for Decoder12Hz {
 
     fn reset_state(&mut self) {
         self.pre_conv.reset_state();
+        self.pre_conv_buffer.clear();
+        self.output_offset = 0;
     }
 }
