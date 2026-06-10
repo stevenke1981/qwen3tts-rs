@@ -1,8 +1,9 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use qwen3tts::{
     codec::{snake_beta, CausalConv1d, CausalConvConfig, DecoderBlock},
     talker::weight_loader::TalkerWeightLoader,
+    text_frontend::{CandleLLM, SynthesisOptions, TextFrontend},
     weights::WeightLoader,
     Decoder12Hz, DecoderConfig, TtsDecoder,
 };
@@ -527,4 +528,147 @@ fn test_talker_build_and_forward_smoke() {
     let embed_dims = text_embeds.dims().to_vec();
     let hidden_dims = hidden.dims().to_vec();
     println!("Talker smoke test passed: embeddings={embed_dims:?}, hidden={hidden_dims:?}");
+}
+
+// ---------------------------------------------------------------------------
+// 端到端測試：文字 → 語音
+// ---------------------------------------------------------------------------
+
+/// Find the HuggingFace cache directory containing model.safetensors + tokenizer.json
+fn find_model_dir() -> Option<PathBuf> {
+    // Try environment variable first
+    if let Ok(dir) = std::env::var("QWEN3_TTS_MODEL_DIR") {
+        let p = PathBuf::from(dir);
+        if p.join("model.safetensors").exists() {
+            return Some(p);
+        }
+    }
+
+    // HuggingFace cache
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    let cache_dir = Path::new(&home)
+        .join(".cache/huggingface/hub/models--Qwen--Qwen3-TTS-12Hz-0.6B-Base/snapshots");
+    if let Ok(entries) = std::fs::read_dir(&cache_dir) {
+        for entry in entries.flatten() {
+            let candidate = entry.path();
+            if candidate.join("model.safetensors").exists() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+#[test]
+fn test_text_to_speech_end_to_end() {
+    let weight_dir = Path::new("weights/tokenizer");
+    if !weight_dir.join("codebook.safetensors").exists() {
+        eprintln!("Skipping: codec weights not found at {weight_dir:?}");
+        return;
+    }
+
+    let model_dir = match find_model_dir() {
+        Some(d) => d,
+        None => {
+            eprintln!("Skipping: Qwen3-TTS model dir not found");
+            return;
+        }
+    };
+
+    // Check tokenizer.json exists
+    if !model_dir.join("tokenizer.json").exists() {
+        eprintln!("Skipping: tokenizer.json not found in {model_dir:?}");
+        eprintln!("Run: python -c \"from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('{}').save_pretrained('{}')\"", model_dir.display(), model_dir.display());
+        return;
+    }
+
+    let device = candle_core::Device::Cpu;
+
+    // ── 1. Load talker (text → codec tokens) ──
+    eprintln!("Loading CandleLLM from {model_dir:?}...");
+    let llm = CandleLLM::from_pretrained_dir(&model_dir, &device).expect("should load CandleLLM");
+
+    // ── 2. Load codec decoder + vocoder (tokens → PCM) ──
+    eprintln!("Loading Decoder12Hz from {weight_dir:?}...");
+    let config = DecoderConfig::realtime();
+    let mut decoder = Decoder12Hz::from_safetensors(config, weight_dir, &device)
+        .expect("should load Decoder12Hz");
+
+    // ── 3. Synthesize text → codec tokens ──
+    // 用極短文字減少生成時間（CPU 上每幀約需 1-2 秒）
+    let text = "你好。";
+    let options = SynthesisOptions {
+        language: "Chinese".into(),
+        max_new_tokens: 64, // 短文本 8-12 幀足夠
+        ..Default::default()
+    };
+    eprintln!(
+        "Synthesizing: {text:?} (max_new_tokens={})...",
+        options.max_new_tokens
+    );
+    let stream = llm.synthesize(text, &options).expect("synthesize");
+    let num_frames = stream.num_frames();
+    eprintln!(
+        "Generated {num_frames} frames (~{:.1}s audio)",
+        num_frames as f64 / 12.5
+    );
+    assert!(num_frames > 0, "should generate at least 1 frame");
+
+    // ── 4. Decode each frame → PCM ──
+    let mut all_pcm: Vec<f32> = Vec::new();
+    for frame in &stream.frames {
+        let chunk = decoder
+            .decode_chunk(frame.as_slice())
+            .expect("decode chunk");
+        all_pcm.extend(chunk);
+    }
+
+    // ── 5. Verify PCM is valid ──
+    let sample_rate = 24000;
+    let expected_len = (num_frames as f64 / 12.5 * sample_rate as f64) as usize;
+    eprintln!(
+        "PCM: {} samples (expected ~{}), {:.1}s @ {}Hz",
+        all_pcm.len(),
+        expected_len,
+        all_pcm.len() as f64 / sample_rate as f64,
+        sample_rate
+    );
+    assert!(all_pcm.len() > 100, "PCM should have more than 100 samples");
+
+    // Check PCM is non-zero (audio, not silence)
+    let max_abs = all_pcm.iter().map(|&x| x.abs()).fold(0.0f32, f32::max);
+    eprintln!("PCM max amplitude: {max_abs}");
+    assert!(
+        max_abs > 0.001,
+        "PCM should not be silence (max_abs={max_abs})"
+    );
+
+    // ── 6. Save WAV file ──
+    let wav_path = Path::new("target/test_output_e2e.wav");
+    if let Some(parent) = wav_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    // Write WAV: f32 samples → i16
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 24000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(&wav_path, spec).expect("create wav");
+    for &sample in &all_pcm {
+        let clamped = sample.clamp(-1.0, 1.0);
+        let i16_sample = (clamped * i16::MAX as f32) as i16;
+        writer.write_sample(i16_sample).expect("write sample");
+    }
+    writer.finalize().expect("finalize wav");
+    eprintln!("WAV saved to {wav_path:?}");
+
+    println!(
+        "✅ End-to-end test passed: text → {num_frames} frames → {} samples → WAV",
+        all_pcm.len()
+    );
 }
