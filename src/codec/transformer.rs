@@ -67,9 +67,31 @@ struct Attention {
     num_heads: usize,
     num_kv_heads: usize,
     head_dim: usize,
-    sliding_window: usize,
     cos: Tensor,
     sin: Tensor,
+    /// 預先快取的 sliding window mask，形狀 (1, 1, max_seq_len, max_seq_len)
+    sliding_mask: Tensor,
+}
+
+/// 在建構時預先建立 sliding window attention mask
+///
+/// 回傳形狀 (1, 1, max_seq_len, max_seq_len) 的張量，
+/// 可見位置為 0.0，遮罩位置為 -1e9。
+fn build_sliding_mask(max_seq_len: usize, window: usize, device: &Device) -> Result<Tensor> {
+    let n = max_seq_len;
+    let mut mask = Vec::with_capacity(n * n);
+    for q in 0..n {
+        let ws = if window == 0 {
+            0_usize
+        } else {
+            (q + 1).saturating_sub(window)
+        };
+        for k in 0..n {
+            let visible = k <= q && k >= ws;
+            mask.push(if visible { 0.0_f32 } else { -1.0e9_f32 });
+        }
+    }
+    Tensor::from_slice(&mask, (1, 1, n, n), device)
 }
 
 impl Attention {
@@ -102,6 +124,7 @@ impl Attention {
         let ob = Self::get_bias(w, &format!("{prefix}.o_proj.bias"))?;
 
         let (cos, sin) = precompute_rope(max_seq_len, head_dim, rope_theta, device)?;
+        let sliding_mask = build_sliding_mask(max_seq_len, sliding_window, device)?;
 
         Ok(Self {
             q_proj: Linear::new(qw, qb),
@@ -111,9 +134,9 @@ impl Attention {
             num_heads,
             num_kv_heads,
             head_dim,
-            sliding_window,
             cos,
             sin,
+            sliding_mask,
         })
     }
 
@@ -154,7 +177,12 @@ impl Attention {
         let scale = (self.head_dim as f64).sqrt().recip();
         let k_t = k_e.transpose(2, 3)?.contiguous()?;
         let attn = (q_rot.matmul(&k_t)? * scale)?;
-        let attn = apply_sliding_window_mask(&attn, seq_len, self.sliding_window)?;
+        // 使用預先快取的 sliding mask，僅 narrow 到當前 seq_len，零分配
+        let mask = self
+            .sliding_mask
+            .narrow(2, 0, seq_len)?
+            .narrow(3, 0, seq_len)?;
+        let attn = attn.broadcast_add(&mask)?;
         let attn = candle_nn::ops::softmax(&attn, 3)?;
         let attn = attn.matmul(&v_e)?;
 
@@ -212,26 +240,6 @@ fn precompute_rope(
     let cos = f.cos()?; // (T, H/2) — Candle rope internally handles half-dim duplication
     let sin = f.sin()?; // (T, H/2)
     Ok((cos, sin))
-}
-
-fn apply_sliding_window_mask(attn: &Tensor, seq_len: usize, window: usize) -> Result<Tensor> {
-    let mut mask = Vec::with_capacity(seq_len * seq_len);
-    for q in 0..seq_len {
-        let window_start = if window == 0 {
-            0
-        } else {
-            (q + 1).saturating_sub(window)
-        };
-        for k in 0..seq_len {
-            let visible = k <= q && k >= window_start;
-            mask.push(if visible { 0.0f32 } else { -1.0e9f32 });
-        }
-    }
-
-    let mask = Tensor::from_slice(&mask, (seq_len, seq_len), attn.device())?
-        .unsqueeze(0)?
-        .unsqueeze(0)?;
-    attn.broadcast_add(&mask)
 }
 
 struct Ffn {
