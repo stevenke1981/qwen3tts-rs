@@ -1,9 +1,14 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(feature = "candle-llm")]
+use std::path::PathBuf;
 
+#[cfg(feature = "candle-llm")]
+use qwen3tts::text_frontend::CandleLLM;
+#[cfg(feature = "candle-llm")]
+use qwen3tts::text_frontend::{SynthesisOptions, TextFrontend};
 use qwen3tts::{
     codec::{snake_beta, CausalConv1d, CausalConvConfig, DecoderBlock},
     talker::weight_loader::TalkerWeightLoader,
-    text_frontend::{CandleLLM, SynthesisOptions, TextFrontend},
     weights::WeightLoader,
     Decoder12Hz, DecoderConfig, TtsDecoder,
 };
@@ -535,6 +540,7 @@ fn test_talker_build_and_forward_smoke() {
 // ---------------------------------------------------------------------------
 
 /// Find the HuggingFace cache directory containing model.safetensors + tokenizer.json
+#[cfg(feature = "candle-llm")]
 fn find_model_dir() -> Option<PathBuf> {
     // Try environment variable first
     if let Ok(dir) = std::env::var("QWEN3_TTS_MODEL_DIR") {
@@ -562,6 +568,7 @@ fn find_model_dir() -> Option<PathBuf> {
 }
 
 #[test]
+#[cfg(feature = "candle-llm")]
 fn test_text_to_speech_end_to_end() {
     let weight_dir = Path::new("weights/tokenizer");
     if !weight_dir.join("codebook.safetensors").exists() {
@@ -616,14 +623,26 @@ fn test_text_to_speech_end_to_end() {
     );
     assert!(num_frames > 0, "should generate at least 1 frame");
 
-    // ── 4. Decode each frame → PCM ──
-    let mut all_pcm: Vec<f32> = Vec::new();
-    for frame in &stream.frames {
-        let chunk = decoder
-            .decode_chunk(frame.as_slice())
-            .expect("decode chunk");
-        all_pcm.extend(chunk);
+    // Debug: dump first 3 frames of tokens
+    for (i, frame) in stream.frames.iter().take(3).enumerate() {
+        let valid = frame.iter().filter(|&&t| t < 2048).count();
+        let min_t = frame.iter().min().copied().unwrap_or(0);
+        let max_t = frame.iter().max().copied().unwrap_or(0);
+        eprintln!(
+            "  frame[{i}]: tokens=[{},{},{},{},...] range=[{min_t},{max_t}] valid_in_range={valid}/16",
+            frame[0], frame[1], frame[2], frame[3]
+        );
     }
+    eprintln!("  ... first 3 frames shown");
+
+    // ── 4. Decode all frames → PCM (batch decode, not streaming) ──
+    // decode_frames processes all frames at once through pre_transformer
+    // and upsampling/decoder blocks, matching the PyTorch reference path.
+    // Per-frame decode_chunk (streaming) has a known bug: the transformer
+    // and upsampling stages lack cross-frame state accumulation.
+    let all_pcm = decoder
+        .decode_frames(&stream.frames)
+        .expect("batch decode frames");
 
     // ── 5. Verify PCM is valid ──
     let sample_rate = 24000;
