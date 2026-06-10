@@ -63,3 +63,6 @@ required-features = ["candle-llm"]
 
 [[example]]
 name = "quantize_tokenizer"
+
+[patch.crates-io]
+candle-kernels = { path = "patches/candle-kernels" }
