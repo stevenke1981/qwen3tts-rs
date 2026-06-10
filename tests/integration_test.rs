@@ -52,6 +52,148 @@ fn cosine_sim(a: &[f32], b: &[f32]) -> f64 {
     dot / (na * nb + 1e-12)
 }
 
+/// Verify that streaming decode_chunk (called N times) produces the same
+/// output as batch decode_frames for the same N frames.
+/// This validates the streaming buffer + transpose logic.
+#[test]
+fn test_streaming_decode_matches_batch_decode() {
+    let weight_dir = Path::new("weights/tokenizer");
+    if !weight_dir.join("codebook.safetensors").exists() {
+        eprintln!("Skipping: real weights not found at {weight_dir:?}");
+        return;
+    }
+
+    let config = DecoderConfig::realtime();
+    let device = candle_core::Device::Cpu;
+
+    // Build 3 frames of realistic-looking tokens
+    let frames: Vec<[u16; 16]> = vec![
+        [
+            42, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500,
+        ],
+        [
+            100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 42,
+        ],
+        [
+            200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 42, 100,
+        ],
+    ];
+
+    // Batch decode (reference)
+    let mut batch_decoder =
+        Decoder12Hz::from_safetensors(config.clone(), weight_dir, &device).unwrap();
+    let batch_output = batch_decoder.decode_frames(&frames).unwrap();
+
+    // Streaming decode (decode_chunk per frame)
+    let mut streaming_decoder = Decoder12Hz::from_safetensors(config, weight_dir, &device).unwrap();
+    let mut streamed: Vec<f32> = Vec::new();
+    for frame in &frames {
+        let chunk = streaming_decoder
+            .decode_chunk(frame.as_slice())
+            .expect("decode_chunk should succeed");
+        streamed.extend(chunk);
+    }
+
+    // Compare: total length must match
+    assert_eq!(
+        batch_output.len(),
+        streamed.len(),
+        "batch and streaming should produce same total samples"
+    );
+
+    // Compare: per-sample differences must be very small
+    let max_diff: f32 = batch_output
+        .iter()
+        .zip(streamed.iter())
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f32, f32::max);
+    let mse: f32 = batch_output
+        .iter()
+        .zip(streamed.iter())
+        .map(|(a, b)| (a - b).powi(2))
+        .sum::<f32>()
+        / batch_output.len() as f32;
+
+    println!(
+        "Streaming vs batch: max_diff={:.10}, mse={:.10}",
+        max_diff, mse
+    );
+    println!(
+        "Batch len={}, Streamed len={}",
+        batch_output.len(),
+        streamed.len()
+    );
+
+    // With correct data layout, the outputs should be near-identical
+    // (tiny differences from floating-point accumulation order)
+    assert!(
+        max_diff < 1e-4,
+        "Streaming must match batch decode (max_diff={max_diff})"
+    );
+    assert!(mse < 1e-8, "Streaming must match batch decode (mse={mse})");
+}
+
+/// Verify streaming matches batch for 13 frames with varied tokens.
+/// This catches a layout bug that only manifests with >3 frames.
+#[test]
+fn test_streaming_13_frames_matches_batch() {
+    let weight_dir = Path::new("weights/tokenizer");
+    if !weight_dir.join("codebook.safetensors").exists() {
+        eprintln!("Skipping: real weights not found at {weight_dir:?}");
+        return;
+    }
+    let config = DecoderConfig::realtime();
+    let device = candle_core::Device::Cpu;
+
+    // Generate 13 frames of deterministic tokens
+    let mut frames: Vec<[u16; 16]> = Vec::with_capacity(13);
+    for i in 0..13u16 {
+        let mut f = [0u16; 16];
+        for j in 0..16u16 {
+            f[j as usize] = ((i * 42 + j * 137 + 100) % 2048) as u16;
+        }
+        frames.push(f);
+    }
+
+    let mut batch_decoder =
+        Decoder12Hz::from_safetensors(config.clone(), weight_dir, &device).unwrap();
+    let batch_output = batch_decoder.decode_frames(&frames).unwrap();
+
+    let mut streaming_decoder = Decoder12Hz::from_safetensors(config, weight_dir, &device).unwrap();
+    let mut streamed: Vec<f32> = Vec::new();
+    for frame in &frames {
+        let chunk = streaming_decoder
+            .decode_chunk(frame.as_slice())
+            .expect("decode_chunk");
+        streamed.extend(chunk);
+    }
+
+    assert_eq!(
+        batch_output.len(),
+        streamed.len(),
+        "total samples must match"
+    );
+    let max_diff: f32 = batch_output
+        .iter()
+        .zip(streamed.iter())
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f32, f32::max);
+    let mse: f32 = batch_output
+        .iter()
+        .zip(streamed.iter())
+        .map(|(a, b)| (a - b).powi(2))
+        .sum::<f32>()
+        / batch_output.len() as f32;
+    println!(
+        "13-frame streaming vs batch: max_diff={:.10}, mse={:.10}",
+        max_diff, mse
+    );
+    assert!(
+        max_diff < 1e-4,
+        "13-frame streaming must match batch (max_diff={max_diff})"
+    );
+}
+
 #[test]
 fn test_decoder_12hz_with_real_weights() {
     let weight_dir = Path::new("weights/tokenizer");
@@ -600,7 +742,7 @@ fn test_text_to_speech_end_to_end() {
     // ── 2. Load codec decoder + vocoder (tokens → PCM) ──
     eprintln!("Loading Decoder12Hz from {weight_dir:?}...");
     let config = DecoderConfig::realtime();
-    let mut decoder = Decoder12Hz::from_safetensors(config, weight_dir, &device)
+    let mut decoder = Decoder12Hz::from_safetensors(config.clone(), weight_dir, &device)
         .expect("should load Decoder12Hz");
 
     // ── 3. Synthesize text → codec tokens ──
@@ -635,18 +777,12 @@ fn test_text_to_speech_end_to_end() {
     }
     eprintln!("  ... first 3 frames shown");
 
-    // ── 4. Decode each frame → PCM (streaming decode) ──
-    // Each frame is processed through pre_conv.step_tensor which maintains
-    // causal convolution state. The pre_conv outputs are accumulated and
-    // fed through the full pipeline (transformer → upsample → decoder)
-    // to maintain cross-frame context.
-    let mut all_pcm: Vec<f32> = Vec::new();
-    for frame in &stream.frames {
-        let chunk = decoder
-            .decode_chunk(frame.as_slice())
-            .expect("decode chunk");
-        all_pcm.extend(chunk);
-    }
+    // ── 4. Decode all frames → PCM (batch decode) ──
+    // Using batch decode_frames (O(n)) for this test since streaming
+    // decode_chunk re-processes all accumulated frames per call (O(n²)).
+    let all_pcm = decoder
+        .decode_frames(&stream.frames)
+        .expect("batch decode frames");
 
     // ── 5. Verify PCM is valid ──
     let sample_rate = 24000;

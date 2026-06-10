@@ -222,17 +222,25 @@ impl Decoder12Hz {
         // Step 2: Append pre_conv output to streaming buffer.
         // This accumulates ALL frames seen so far, so pre_transformer
         // and downstream blocks can process the full sequence context.
+        // Buffer stores frame-major: [f0_ch0..f0_chC-1, f1_ch0..f1_chC-1, ...]
         let x_vec = x.squeeze(0)?.squeeze(1)?.to_vec1()?; // (latent_dim,)
         self.pre_conv_buffer.extend(&x_vec);
         let total_frames = self.pre_conv_buffer.len() / self.config.latent_dim;
 
-        // Step 3: Build accumulated tensor from buffer
-        // Shape: (1, latent_dim, total_frames)
+        // Step 3: Build accumulated tensor in channel-major order.
+        // Candle's C-order for shape (1, C, T) expects:
+        //   [ch0_t0, ch0_t1, ..., ch0_tT-1, ch1_t0, ..., ch1_tT-1, ...]
+        // Our buffer is frame-major:
+        //   [t0_ch0, t0_ch1, ..., t0_chC-1, t1_ch0, ..., t1_chC-1, ...]
+        // So we build with shape (1, T, C) and transpose to (1, C, T).
+        let latent_dim = self.config.latent_dim;
         let h_tensor = Tensor::from_slice(
             &self.pre_conv_buffer,
-            (1, self.config.latent_dim, total_frames),
+            (1, total_frames, latent_dim),
             &self.device,
-        )?;
+        )?
+        .transpose(1, 2)?
+        .contiguous()?;
 
         // Step 4: Full pipeline on accumulated history
         let h = self.pre_transformer.forward(&h_tensor)?;
