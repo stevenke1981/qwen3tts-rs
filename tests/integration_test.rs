@@ -2,6 +2,7 @@ use std::path::Path;
 
 use qwen3tts::{
     codec::{snake_beta, CausalConv1d, CausalConvConfig, DecoderBlock},
+    talker::weight_loader::TalkerWeightLoader,
     weights::WeightLoader,
     Decoder12Hz, DecoderConfig, TtsDecoder,
 };
@@ -387,4 +388,143 @@ fn test_decoder_final_stage_matches_pytorch_reference() {
         "decoder final snake cosine {snake_cos:.8} <= 0.999"
     );
     assert!(cos > 0.999, "decoder final conv cosine {cos:.8} <= 0.999");
+}
+
+// ---------------------------------------------------------------------------
+// Talker 整合測試
+// ---------------------------------------------------------------------------
+
+/// Try to find `model.safetensors` in common locations.
+fn find_model_safetensors() -> Option<std::path::PathBuf> {
+    // 1. Local weights directory
+    let local = Path::new("weights/tokenizer/model.safetensors");
+    if local.exists() {
+        return Some(local.to_path_buf());
+    }
+
+    // 2. HuggingFace cache
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    let cache_dir = Path::new(&home)
+        .join(".cache/huggingface/hub/models--Qwen--Qwen3-TTS-12Hz-0.6B-Base/snapshots");
+    if let Ok(entries) = std::fs::read_dir(&cache_dir) {
+        for entry in entries.flatten() {
+            let candidate = entry.path().join("model.safetensors");
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
+}
+
+#[test]
+fn test_talker_weight_loader_infer_config() {
+    let path = match find_model_safetensors() {
+        Some(p) => p,
+        None => {
+            eprintln!("Skipping: model.safetensors not found");
+            return;
+        }
+    };
+
+    let device = candle_core::Device::Cpu;
+    let loader = TalkerWeightLoader::from_safetensors(&path, &device)
+        .expect("should load model.safetensors");
+    let cfg = loader.infer_config().expect("should infer config");
+
+    // Verify against known 0.6B-Base values
+    assert_eq!(cfg.hidden_size, 1024);
+    assert_eq!(cfg.intermediate_size, 3072);
+    assert_eq!(cfg.num_attention_heads, 16);
+    assert_eq!(cfg.num_key_value_heads, 8);
+    assert_eq!(cfg.head_dim, 128);
+    assert_eq!(cfg.num_hidden_layers, 28);
+    assert_eq!(cfg.text_hidden_size, 2048);
+    assert_eq!(cfg.vocab_size, 3072);
+    assert_eq!(cfg.code_predictor.hidden_size, 1024);
+    assert_eq!(cfg.code_predictor.intermediate_size, 3072);
+    assert_eq!(cfg.code_predictor.num_hidden_layers, 5);
+
+    println!("TalkerConfig: {cfg:?}");
+}
+
+#[test]
+fn test_talker_build_and_forward_smoke() {
+    let path = match find_model_safetensors() {
+        Some(p) => p,
+        None => {
+            eprintln!("Skipping: model.safetensors not found");
+            return;
+        }
+    };
+
+    let device = candle_core::Device::Cpu;
+    let loader = TalkerWeightLoader::from_safetensors(&path, &device)
+        .expect("should load model.safetensors");
+    let cfg = loader.infer_config().expect("should infer config");
+
+    // Build the full talker
+    let talker = loader
+        .build_talker(&cfg)
+        .expect("should build TalkerForConditionalGeneration");
+
+    // Verify shapes by running a tiny prefill
+    // Input: [batch=1, seq_len=1] with a single BOS token
+    let input_ids = candle_core::Tensor::new(&[cfg.tts_bos_token_id as u32], &device)
+        .expect("bos tensor")
+        .unsqueeze(0)
+        .expect("add batch");
+    let attention_mask =
+        candle_core::Tensor::ones(&[1, 1], candle_core::DType::I64, &device).expect("mask");
+
+    // Text embedding + projection
+    let text_embeds = talker.embed_text(&input_ids).expect("text embedding");
+    assert_eq!(
+        text_embeds.dims(),
+        &[1, 1, cfg.hidden_size],
+        "text_embeds shape must match hidden_size"
+    );
+
+    // Compute position IDs + RoPE
+    let (position_ids, _) = talker
+        .compute_position_ids(&attention_mask)
+        .expect("position ids");
+    let (cos, sin) = talker
+        .rope
+        .forward(&text_embeds, &position_ids)
+        .expect("rope");
+
+    // Run through 28-layer model
+    let mut kv_caches = vec![None; cfg.num_hidden_layers];
+    let causal_mask =
+        qwen3tts::talker::primitives::create_causal_mask(1, &device).expect("causal mask");
+    let hidden = talker
+        .model
+        .forward(&text_embeds, &cos, &sin, Some(&causal_mask), &mut kv_caches)
+        .expect("talker model forward");
+    assert_eq!(
+        hidden.dims(),
+        &[1, 1, cfg.hidden_size],
+        "model output shape"
+    );
+
+    // Verify text embedding + projection gives non-zero results
+    let text_flat = text_embeds.flatten_all().expect("flatten");
+    let text_sum: f64 = text_flat
+        .to_vec1::<f32>()
+        .expect("to vec")
+        .iter()
+        .map(|&x| x as f64)
+        .sum();
+    assert!(
+        text_sum.abs() > 0.001,
+        "text embeddings should not be all zero (sum={text_sum})"
+    );
+
+    let embed_dims = text_embeds.dims().to_vec();
+    let hidden_dims = hidden.dims().to_vec();
+    println!("Talker smoke test passed: embeddings={embed_dims:?}, hidden={hidden_dims:?}");
 }

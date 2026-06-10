@@ -7,7 +7,6 @@ mod causal_conv;
 mod codebook;
 mod decoder_blocks;
 mod flow_matching;
-mod mtp;
 mod transformer;
 
 pub use activation::snake;
@@ -18,5 +17,4 @@ pub use flow_matching::{
     DiTBackbone, DiTConfig, DiTTimestepEmbedding, FlowMatchingDecoder, OdeSolver, OdeSolverConfig,
     OdeSolverType,
 };
-pub use mtp::{MtpConfig, MtpDecoder, MtpOutput};
 pub use transformer::{PreTransformer, PreTransformerConfig, RMSNorm, TransformerBlock};
