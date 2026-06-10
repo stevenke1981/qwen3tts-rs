@@ -27,6 +27,7 @@ mod decoder_25hz;
 
 pub use decoder_12hz::Decoder12Hz;
 pub use decoder_25hz::Decoder25Hz;
+pub use vocoder::{HifiGanVocoder, Vocoder, VocoderConfig};
 
 use std::fmt;
 
