@@ -1,0 +1,375 @@
+
+********
+Warning: flash-attn is not installed. Will only run the manual PyTorch version. Please install flash-attn for faster inference.
+********
+ 
+
+### generate_voice_clone (self, text: str | List[str], language: str | List[str] = None, ref_audio: str | numpy.ndarray | Tuple[numpy.ndarray, int] | List[str | numpy.ndarray | Tuple[numpy.ndarray, int]] | None = None, ref_text: str | List[str | None] | None = None, x_vector_only_mode: bool | List[bool] = False, voice_clone_prompt: Dict[str, Any] | List[qwen_tts.inference.qwen3_tts_model.VoiceClonePromptItem] | None = None, non_streaming_mode: bool = False, **kwargs) -> Tuple[List[numpy.ndarray], int]
+    @torch.no_grad()
+    def generate_voice_clone(
+        self,
+        text: Union[str, List[str]],
+        language: Union[str, List[str]] = None,
+        ref_audio: Optional[Union[AudioLike, List[AudioLike]]] = None,
+        ref_text: Optional[Union[str, List[Optional[str]]]] = None,
+        x_vector_only_mode: Union[bool, List[bool]] = False,
+        voice_clone_prompt: Optional[Union[Dict[str, Any], List[VoiceClonePromptItem]]] = None,
+        non_streaming_mode: bool = False,
+        **kwargs,
+    ) -> Tuple[List[np.ndarray], int]:
+        """
+        Voice clone speech using the Base model.
+
+        You can provide either:
+          - (ref_audio, ref_text, x_vector_only_mode) and let this method build the prompt, OR
+          - `VoiceClonePromptItem` returned by `create_voice_clone_prompt`, OR
+          - a list of `VoiceClonePromptItem` returned by `create_voice_clone_prompt`.
+        
+        `ref_audio` Supported forms:
+        - str: wav path / URL / base64 audio string
+        - (np.ndarray, sr): waveform + sampling rate
+        - list of the above
+
+        Input flexibility:
+          - text/language can be scalar or list.
+          - prompt can be single or batch.
+          - If batch mode (len(text)>1), lengths must match.
+
+        Args:
+            text:
+                Text(s) to synthesize.
+            language:
+                Language(s) for each sample.
+            ref_audio:
+                Reference audio(s) for prompt building. Required if voice_clone_prompt is not provided.
+            ref_text:
+                Reference text(s) used for ICL mode (required when x_vector_only_mode=False).
+            x_vector_only_mode:
+                If True, only speaker embedding is used (ignores ref_text/ref_code).
+                If False, ICL mode is used automatically.
+            voice_clone_prompt:
+                list[VoiceClonePromptItem] from `create_voice_clone_prompt`.
+            non_streaming_mode:
+                Using non-streaming text input, this option currently only simulates streaming text input when set to `false`, 
+                rather than enabling true streaming input or streaming generation.
+            do_sample:
+                Whether to use sampling, recommended to be set to `true` for most use cases.
+            top_k:
+                Top-k sampling parameter.
+            top_p:
+                Top-p sampling parameter.
+            temperature:
+                Sampling temperature; higher => more random.
+            repetition_penalty:
+                Penalty to reduce repeated tokens/codes.
+            subtalker_dosample:
+                Sampling switch for the sub-talker (only valid for qwen3-tts-tokenizer-v2) if applicable.
+            subtalker_top_k:
+                Top-k for sub-talker sampling (only valid for qwen3-tts-tokenizer-v2).
+            subtalker_top_p:
+                Top-p for sub-talker sampling (only valid for qwen3-tts-tokenizer-v2).
+            subtalker_temperature:
+                Temperature for sub-talker sampling (only valid for qwen3-tts-tokenizer-v2).
+            max_new_tokens:
+                Maximum number of new codec tokens to generate.
+            **kwargs:
+                Any other keyword arguments supported by HuggingFace Transformers `generate()` can be passed.
+                They will be forwarded to the underlying `Qwen3TTSForConditionalGeneration.generate(...)`.
+
+        Returns:
+            Tuple[List[np.ndarray], int]:
+                (wavs, sample_rate)
+
+        Raises:
+            ValueError:
+                If batch sizes mismatch or required prompt inputs are missing.
+        """
+        if self.model.tts_model_type != "base":
+            raise ValueError(
+                f"model with \ntokenizer_type: {self.model.tokenizer_type}\n"
+                f"tts_model_size: {self.model.tts_model_size}\n"
+                f"tts_model_type: {self.model.tts_model_type}\n"
+                "does not support generate_voice_clone, Please check Model Card or Readme for more details."
+            )
+        
+        texts = self._ensure_list(text)
+        languages = self._ensure_list(language) if isinstance(language, list) else ([language] * len(texts) if language is not None else ["Auto"] * len(texts))
+        if len(languages) == 1 and len(texts) > 1:
+            languages = languages * len(texts)
+        if len(texts) != len(languages):
+            raise ValueError(f"Batch size mismatch: text={len(texts)}, language={len(languages)}")
+
+        self._validate_languages(languages)
+
+        if voice_clone_prompt is None:
+            if ref_audio is None:
+                raise ValueError("Either `voice_clone_prompt` or `ref_audio` must be provided.")
+            prompt_items = self.create_voice_clone_prompt(ref_audio=ref_audio, ref_text=ref_text, x_vector_only_mode=x_vector_only_mode)
+            if len(prompt_items) == 1 and len(texts) > 1:
+                prompt_items = prompt_items * len(texts)
+            if len(prompt_items) != len(texts):
+                raise ValueError(f"Batch size mismatch: prompt={len(prompt_items)}, text={len(texts)}")
+            voice_clone_prompt_dict = self._prompt_items_to_voice_clone_prompt(prompt_items)
+            ref_texts_for_ids = [it.ref_text for it in prompt_items]
+        else:
+            if isinstance(voice_clone_prompt, list):
+                prompt_items = voice_clone_prompt
+                if len(prompt_items) == 1 and len(texts) > 1:
+                    prompt_items = prompt_items * len(texts)
+                if len(prompt_items) != len(texts):
+                    raise ValueError(f"Batch size mismatch: prompt={len(prompt_items)}, text={len(texts)}")
+                voice_clone_prompt_dict = self._prompt_items_to_voice_clone_prompt(prompt_items)
+                ref_texts_for_ids = [it.ref_text for it in prompt_items]
+            else:
+                voice_clone_prompt_dict = voice_clone_prompt
+                ref_texts_for_ids = None
+
+        input_texts = [self._build_assistant_text(t) for t in texts]
+        input_ids = self._tokenize_texts(input_texts)
+
+        ref_ids = None
+        if ref_texts_for_ids is not None:
+            ref_ids = []
+            for i, rt in enumerate(ref_texts_for_ids):
+                if rt is None or rt == "":
+                    ref_ids.append(None)
+                else:
+                    ref_tok = self._tokenize_texts([self._build_ref_text(rt)])[0]
+                    ref_ids.append(ref_tok)
+
+        gen_kwargs = self._merge_generate_kwargs(**kwargs)
+
+        talker_codes_list, _ = self.model.generate(
+            input_ids=input_ids,
+            ref_ids=ref_ids,
+            voice_clone_prompt=voice_clone_prompt_dict,
+            languages=languages,
+            non_streaming_mode=non_streaming_mode,
+            **gen_kwargs,
+        )
+
+        codes_for_decode = []
+        for i, codes in enumerate(talker_codes_list):
+            ref_code_list = voice_clone_prompt_dict.get("ref_code", None)
+            if ref_code_list is not None and ref_code_list[i] is not None:
+                codes_for_decode.append(torch.cat([ref_code_list[i].to(codes.device), codes], dim=0))
+            else:
+                codes_for_decode.append(codes)
+
+        wavs_all, fs = self.model.speech_tokenizer.decode([{"audio_codes": c} for c in codes_for_decode])
+
+        wavs_out: List[np.ndarray] = []
+        for i, wav in enumerate(wavs_all):
+            ref_code_list = voice_clone_prompt_dict.get("ref_code", None)
+            if ref_code_list is not None and ref_code_list[i] is not None:
+                ref_len = int(ref_code_list[i].shape[0])
+                total_len = int(codes_for_decode[i].shape[0])
+                cut = int(ref_len / max(total_len, 1) * wav.shape[0])
+                wavs_out.append(wav[cut:])
+            else:
+                wavs_out.append(wav)
+
+        return wavs_out, fs
+
+
+### create_voice_clone_prompt (self, ref_audio: str | numpy.ndarray | Tuple[numpy.ndarray, int] | List[str | numpy.ndarray | Tuple[numpy.ndarray, int]], ref_text: str | List[str | None] | None = None, x_vector_only_mode: bool | List[bool] = False) -> List[qwen_tts.inference.qwen3_tts_model.VoiceClonePromptItem]
+    @torch.inference_mode()
+    def create_voice_clone_prompt(
+        self,
+        ref_audio: Union[AudioLike, List[AudioLike]],
+        ref_text: Optional[Union[str, List[Optional[str]]]] = None,
+        x_vector_only_mode: Union[bool, List[bool]] = False,
+    ) -> List[VoiceClonePromptItem]:
+        """
+        Build voice-clone prompt items from reference audio (and optionally reference text) using Base model.
+
+        Modes:
+          - x_vector_only_mode=True:
+              Only speaker embedding is used to clone voice; ref_text/ref_code are ignored.
+              This is mutually exclusive with ICL.
+          - x_vector_only_mode=False:
+              ICL mode is enabled automatically (icl_mode=True). In this case ref_text is required,
+              because the model continues/conditions on the reference text + reference speech codes.
+
+        Batch behavior:
+          - ref_audio can be a single item or a list.
+          - ref_text and x_vector_only_mode can be scalars or lists.
+          - If any of them are lists with length > 1, lengths must match.
+
+        Audio input:
+          - str: local wav path / URL / base64
+          - (np.ndarray, sr): waveform + sampling rate
+
+        Args:
+            ref_audio:
+                Reference audio(s) used to extract:
+                  - ref_code via `model.speech_tokenizer.encode(...)`
+                  - ref_spk_embedding via `model.extract_speaker_embedding(...)` (resampled to 24k)
+            ref_text:
+                Reference transcript(s). Required when x_vector_only_mode=False (ICL mode).
+            x_vector_only_mode:
+                Whether to use speaker embedding only. If False, ICL mode will be used.
+
+        Returns:
+            List[VoiceClonePromptItem]:
+                List of prompt items that can be converted into `voice_clone_prompt` dict.
+
+        Raises:
+            ValueError:
+                - If x_vector_only_mode=False but ref_text is missing.
+                - If batch lengths mismatch.
+        """
+        if self.model.tts_model_type != "base":
+            raise ValueError(
+                f"model with \ntokenizer_type: {self.model.tokenizer_type}\n"
+                f"tts_model_size: {self.model.tts_model_size}\n"
+                f"tts_model_type: {self.model.tts_model_type}\n"
+                "does not support create_voice_clone_prompt, Please check Model Card or Readme for more details."
+            )
+        
+        ref_audio_list = self._ensure_list(ref_audio)
+        ref_text_list = self._ensure_list(ref_text) if isinstance(ref_text, list) else ([ref_text] * len(ref_audio_list))
+        xvec_list = self._ensure_list(x_vector_only_mode) if isinstance(x_vector_only_mode, list) else ([x_vector_only_mode] * len(ref_audio_list))
+
+        if len(ref_text_list) != len(ref_audio_list) or len(xvec_list) != len(ref_audio_list):
+            raise ValueError(
+                f"Batch size mismatch: ref_audio={len(ref_audio_list)}, ref_text={len(ref_text_list)}, x_vector_only_mode={len(xvec_list)}"
+            )
+
+        normalized = self._normalize_audio_inputs(ref_audio_list)
+
+        ref_wavs_for_code: List[np.ndarray] = []
+        ref_sr_for_code: List[int] = []
+        for wav, sr in normalized:
+            ref_wavs_for_code.append(wav)
+            ref_sr_for_code.append(sr)
+
+        if len(set(ref_sr_for_code)) == 1:
+            enc = self.model.speech_tokenizer.encode(ref_wavs_for_code, sr=ref_sr_for_code[0])
+            ref_codes = enc.audio_codes
+        else:
+            ref_codes = []
+            for wav, sr in normalized:
+                ref_codes.append(self.model.speech_tokenizer.encode(wav, sr=sr).audio_codes[0])
+
+        items: List[VoiceClonePromptItem] = []
+        for i, ((wav, sr), code, rtext, xvec_only) in enumerate(zip(normalized, ref_codes, ref_text_list, xvec_list)):
+            if not xvec_only:
+                if rtext is None or rtext == "":
+                    raise ValueError(f"ref_text is required when x_vector_only_mode=False (ICL mode). Bad index={i}")
+
+            wav_resample = wav
+            if sr != self.model.speaker_encoder_sample_rate:
+                wav_resample = librosa.resample(y=wav_resample.astype(np.float32), 
+                                           orig_sr=int(sr), 
+                                           target_sr=self.model.speaker_encoder_sample_rate)
+
+            spk_emb = self.model.extract_speaker_embedding(audio=wav_resample,
+                                                           sr=self.model.speaker_encoder_sample_rate)
+
+            items.append(
+                VoiceClonePromptItem(
+                    ref_code=None if xvec_only else code,
+                    ref_spk_embedding=spk_emb,
+                    x_vector_only_mode=bool(xvec_only),
+                    icl_mode=bool(not xvec_only),
+                    ref_text=rtext,
+                )
+            )
+        return items
+
+
+### _prompt_items_to_voice_clone_prompt (self, items: List[qwen_tts.inference.qwen3_tts_model.VoiceClonePromptItem]) -> Dict[str, Any]
+    def _prompt_items_to_voice_clone_prompt(self, items: List[VoiceClonePromptItem]) -> Dict[str, Any]:
+        return dict(
+            ref_code=[it.ref_code for it in items],
+            ref_spk_embedding=[it.ref_spk_embedding for it in items],
+            x_vector_only_mode=[it.x_vector_only_mode for it in items],
+            icl_mode=[it.icl_mode for it in items],
+        )
+
+
+### _merge_generate_kwargs (self, do_sample: bool | None = None, top_k: int | None = None, top_p: float | None = None, temperature: float | None = None, repetition_penalty: float | None = None, subtalker_dosample: bool | None = None, subtalker_top_k: int | None = None, subtalker_top_p: float | None = None, subtalker_temperature: float | None = None, max_new_tokens: int | None = None, **kwargs) -> Dict[str, Any]
+    def _merge_generate_kwargs(
+        self,
+        do_sample: Optional[bool] = None,
+        top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
+        temperature: Optional[float] = None,
+        repetition_penalty: Optional[float] = None,
+        subtalker_dosample: Optional[bool] = None,
+        subtalker_top_k: Optional[int] = None,
+        subtalker_top_p: Optional[float] = None,
+        subtalker_temperature: Optional[float] = None,
+        max_new_tokens: Optional[int] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """
+        Merge user-provided generation arguments with defaults from `generate_config.json`.
+
+        Rule:
+          - If the user explicitly passes a value (not None), use it.
+          - Otherwise, use the value from generate_config.json if present.
+          - Otherwise, fall back to the hard defaults.
+
+        Args:
+            do_sample, top_k, top_p, temperature, repetition_penalty,
+            subtalker_dosample, subtalker_top_k, subtalker_top_p, subtalker_temperature, max_new_tokens:
+                Common generation parameters.
+            **kwargs:
+                Other arguments forwarded to model.generate().
+
+        Returns:
+            Dict[str, Any]: Final kwargs to pass into model.generate().
+        """
+        hard_defaults = dict(
+            do_sample=True,
+            top_k=50,
+            top_p=1.0,
+            temperature=0.9,
+            repetition_penalty=1.05,
+            subtalker_dosample=True,
+            subtalker_top_k=50,
+            subtalker_top_p=1.0,
+            subtalker_temperature=0.9,
+            max_new_tokens=2048,
+        )
+
+        def pick(name: str, user_val: Any) -> Any:
+            if user_val is not None:
+                return user_val
+            if name in self.generate_defaults:
+                return self.generate_defaults[name]
+            return hard_defaults[name]
+
+        merged = dict(kwargs)
+        merged.update(
+            do_sample=pick("do_sample", do_sample),
+            top_k=pick("top_k", top_k),
+            top_p=pick("top_p", top_p),
+            temperature=pick("temperature", temperature),
+            repetition_penalty=pick("repetition_penalty", repetition_penalty),
+            subtalker_dosample=pick("subtalker_dosample", subtalker_dosample),
+            subtalker_top_k=pick("subtalker_top_k", subtalker_top_k),
+            subtalker_top_p=pick("subtalker_top_p", subtalker_top_p),
+            subtalker_temperature=pick("subtalker_temperature", subtalker_temperature),
+            max_new_tokens=pick("max_new_tokens", max_new_tokens),
+        )
+        return merged
+
+
+### _build_assistant_text (self, text: str) -> str
+    def _build_assistant_text(self, text: str) -> str:
+        return f"<|im_start|>assistant\n{text}<|im_end|>\n<|im_start|>assistant\n"
+
+
+### _tokenize_texts (self, texts: List[str]) -> List[torch.Tensor]
+    def _tokenize_texts(self, texts: List[str]) -> List[torch.Tensor]:
+        input_ids = []
+        for text in texts:
+            input = self.processor(text=text, return_tensors="pt", padding=True)
+            input_id = input["input_ids"].to(self.device)
+            input_id = input_id.unsqueeze(0) if input_id.dim() == 1 else input_id
+            input_ids.append(input_id)
+        return input_ids
+

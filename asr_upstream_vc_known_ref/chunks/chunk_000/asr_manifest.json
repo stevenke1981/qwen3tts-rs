@@ -1,0 +1,16 @@
+{
+  "created_at": "2026-06-04T14:01:04.729544+00:00",
+  "engine": "faster-whisper",
+  "model": "large-v3-turbo",
+  "device": "cuda",
+  "compute_type": "float16",
+  "audio": "D:\\qwen3tts-rs\\asr_upstream_vc_known_ref\\chunks\\chunk_000.wav",
+  "language": "zh",
+  "language_probability": 0.998046875,
+  "duration": 4.56,
+  "outputs": {
+    "segments": "D:\\qwen3tts-rs\\asr_upstream_vc_known_ref\\chunks\\chunk_000\\segments.raw.json",
+    "transcript": "D:\\qwen3tts-rs\\asr_upstream_vc_known_ref\\chunks\\chunk_000\\transcript.txt",
+    "srt": "D:\\qwen3tts-rs\\asr_upstream_vc_known_ref\\chunks\\chunk_000\\subtitles.srt"
+  }
+}

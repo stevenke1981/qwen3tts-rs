@@ -1,0 +1,107 @@
+[
+  {
+    "id": 1,
+    "seek": 0,
+    "start": 0.18,
+    "end": 3.8,
+    "text": "现在开始测试ROST原声语音克隆",
+    "tokens": [
+      50365,
+      25040,
+      45213,
+      11038,
+      233,
+      5233,
+      243,
+      49,
+      28067,
+      19683,
+      32045,
+      5233,
+      255,
+      18034,
+      24881,
+      10673,
+      228,
+      50546
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.17310855576866552,
+    "compression_ratio": 0.7843137254901961,
+    "no_speech_prob": 0.0,
+    "words": [
+      {
+        "start": 0.18,
+        "end": 0.82,
+        "word": "现在",
+        "probability": 0.939453125
+      },
+      {
+        "start": 0.82,
+        "end": 1.26,
+        "word": "开始",
+        "probability": 0.99658203125
+      },
+      {
+        "start": 1.26,
+        "end": 1.56,
+        "word": "测",
+        "probability": 0.99853515625
+      },
+      {
+        "start": 1.56,
+        "end": 1.9,
+        "word": "试",
+        "probability": 0.99951171875
+      },
+      {
+        "start": 1.9,
+        "end": 2.1,
+        "word": "R",
+        "probability": 0.6875
+      },
+      {
+        "start": 2.1,
+        "end": 2.38,
+        "word": "OST",
+        "probability": 0.8037109375
+      },
+      {
+        "start": 2.38,
+        "end": 2.74,
+        "word": "原",
+        "probability": 0.96728515625
+      },
+      {
+        "start": 2.74,
+        "end": 3.0,
+        "word": "声",
+        "probability": 0.474609375
+      },
+      {
+        "start": 3.0,
+        "end": 3.2,
+        "word": "语",
+        "probability": 0.998291015625
+      },
+      {
+        "start": 3.2,
+        "end": 3.36,
+        "word": "音",
+        "probability": 0.99951171875
+      },
+      {
+        "start": 3.36,
+        "end": 3.52,
+        "word": "克",
+        "probability": 0.970703125
+      },
+      {
+        "start": 3.52,
+        "end": 3.8,
+        "word": "隆",
+        "probability": 0.91064453125
+      }
+    ]
+  }
+]

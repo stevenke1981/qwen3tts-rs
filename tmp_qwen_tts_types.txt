@@ -1,0 +1,24 @@
+
+********
+Warning: flash-attn is not installed. Will only run the manual PyTorch version. Please install flash-attn for faster inference.
+********
+ 
+file C:\Users\steven\AppData\Roaming\Python\Python314\site-packages\qwen_tts\inference\qwen3_tts_model.py
+
+### AudioLike str | numpy.ndarray | typing.Tuple[numpy.ndarray, int]
+no source module, class, method, function, traceback, frame, or code object was expected, got Union
+
+### VoiceClonePromptItem <class 'qwen_tts.inference.qwen3_tts_model.VoiceClonePromptItem'>
+@dataclass
+class VoiceClonePromptItem:
+    """
+    Container for one sample's voice-clone prompt information that can be fed to the model.
+
+    Fields are aligned with `Qwen3TTSForConditionalGeneration.generate(..., voice_clone_prompt=...)`.
+    """
+    ref_code: Optional[torch.Tensor]                 # (T, Q) or (T,) depending on tokenizer 25Hz/12Hz
+    ref_spk_embedding: torch.Tensor                  # (D,)
+    x_vector_only_mode: bool
+    icl_mode: bool
+    ref_text: Optional[str] = None
+

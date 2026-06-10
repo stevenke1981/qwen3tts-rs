@@ -1,8 +1,8 @@
 use candle_core::{Device, Tensor};
 
 use crate::codec::{
-    snake_beta, CausalConvNet, CodebookLookup, DecoderBlock, ParallelCodebook, PreTransformer,
-    PreTransformerConfig, UpsampleBlock,
+    snake_beta, CausalConv1d, CausalConvConfig, CodebookLookup, DecoderBlock, ParallelCodebook,
+    PreTransformer, PreTransformerConfig, UpsampleBlock,
 };
 use crate::weights::WeightLoader;
 use crate::{DecoderConfig, Error, Result, TtsDecoder};
@@ -13,14 +13,14 @@ pub struct Decoder12Hz {
 
     codebook: ParallelCodebook,
 
-    pre_conv: crate::codec::CausalConv1d,
+    pre_conv: CausalConv1d,
     pre_transformer: PreTransformer,
 
     upsample_blocks: Vec<UpsampleBlock>,
 
-    decoder_start: CausalConvNet,
+    decoder_start: CausalConv1d,
     decoder_blocks: Vec<DecoderBlock>,
-    final_conv: CausalConvNet,
+    final_conv: CausalConv1d,
     final_snake_a: Tensor,
     final_snake_b: Tensor,
 
@@ -40,14 +40,14 @@ impl Decoder12Hz {
         let codebook = ParallelCodebook::new(codebook);
 
         let (pw, pb) = loader.conv1d_pair("pre_conv")?;
-        let pre_conv_cfg = crate::codec::CausalConvConfig {
+        let pre_conv_cfg = CausalConvConfig {
             in_channels: config.embedding_dim,
             out_channels: config.latent_dim,
             kernel_size: 3,
             dilation: 1,
+            groups: 1,
         };
-        let pre_conv =
-            crate::codec::CausalConv1d::new(pw, pb, pre_conv_cfg, config.ring_buffer_capacity)?;
+        let pre_conv = CausalConv1d::new(pw, pb, pre_conv_cfg, config.ring_buffer_capacity)?;
 
         let pt_cfg = PreTransformerConfig {
             input_dim: config.latent_dim,
@@ -72,7 +72,8 @@ impl Decoder12Hz {
         }
 
         let (sw, sb) = loader.conv1d_pair("0.conv")?;
-        let decoder_start = CausalConvNet::new(sw, sb, 1, 1, 1);
+        let ds_cfg = CausalConvConfig::from_weight(&sw, 1, 1);
+        let decoder_start = CausalConv1d::new(sw, sb, ds_cfg, config.ring_buffer_capacity)?;
 
         let mut decoder_blocks = Vec::new();
         for i in 1..=4 {
@@ -80,7 +81,8 @@ impl Decoder12Hz {
         }
 
         let (fw, fb) = loader.conv1d_pair("6.conv")?;
-        let final_conv = CausalConvNet::new(fw, fb, 1, 1, 1);
+        let fc_cfg = CausalConvConfig::from_weight(&fw, 1, 1);
+        let final_conv = CausalConv1d::new(fw, fb, fc_cfg, config.ring_buffer_capacity)?;
 
         let fs_a = loader.get("5.alpha")?.clone();
         let fs_b = loader.get("5.beta")?.clone();

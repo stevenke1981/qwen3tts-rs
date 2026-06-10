@@ -1,0 +1,17 @@
+{
+  "created_at": "2026-06-04T14:00:50.147169+00:00",
+  "engine": "faster-whisper",
+  "model": "large-v3-turbo",
+  "mode": "chunked",
+  "chunk_seconds": 600.0,
+  "audio": "D:\\qwen3tts-rs\\asr_native_vc_known_ref\\audio_for_asr.wav",
+  "chunks_root": "D:\\qwen3tts-rs\\asr_native_vc_known_ref\\chunks",
+  "chunk_count": 1,
+  "segment_count": 1,
+  "gpu_required": true,
+  "outputs": {
+    "segments": "D:\\qwen3tts-rs\\asr_native_vc_known_ref\\segments.raw.json",
+    "transcript": "D:\\qwen3tts-rs\\asr_native_vc_known_ref\\transcript.txt",
+    "srt": "D:\\qwen3tts-rs\\asr_native_vc_known_ref\\subtitles.srt"
+  }
+}

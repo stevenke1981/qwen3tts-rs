@@ -10,8 +10,8 @@ use std::path::Path;
 
 use candle_core::Module;
 use qwen3tts::{
-    Decoder12Hz, DecoderConfig, TtsDecoder,
     codec::{CausalConv1d, CodebookLookup, DecoderBlock, PreTransformer},
+    Decoder12Hz, DecoderConfig, TtsDecoder,
 };
 
 // ---------------------------------------------------------------------------
@@ -211,6 +211,7 @@ fn debug_per_layer_compare() {
         out_channels: config.latent_dim,
         kernel_size: 3,
         dilation: 1,
+        groups: 1,
     };
     let mut pre_conv = CausalConv1d::new(pw, pb, pre_conv_cfg, 64).expect("pre_conv");
 

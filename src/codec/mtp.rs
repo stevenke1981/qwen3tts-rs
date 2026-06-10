@@ -1,12 +1,38 @@
 //! # MTP (Multi-Token Prediction) 模組 (12Hz)
 //!
 //! 多 Token 預測模組，從碼本嵌入產生聲學碼本 Token 序列。
+//!
+//! ## 初始化方式
+//!
+//! | 方法 | 用途 | 權重來源 |
+//! |------|------|----------|
+//! | [`MtpDecoder::new()`] | 單元測試（全零張量） | 無，輸出為零 |
+//! | [`MtpDecoder::from_loader()`] | 生產推理 | safetensors 真實權重 |
+//!
+//! **警告**: `new()` 使用 `VarBuilder::dummy()`，所有權重為零，
+//! `forward()` 永遠輸出全零 logits。僅用於形狀驗證測試。
+//!
+//! ## 權重命名約定（對應 `from_loader`）
+//!
+//! ```text
+//! mtp.input_proj.weight          → (hidden_dim, embedding_dim)
+//! mtp.input_proj.bias            → (hidden_dim,)
+//! mtp.blocks.{i}.norm.weight     → (hidden_dim,)
+//! mtp.blocks.{i}.norm.bias       → (hidden_dim,)
+//! mtp.blocks.{i}.ffn.weight      → (hidden_dim * 4, hidden_dim)
+//! mtp.blocks.{i}.ffn.bias        → (hidden_dim * 4,)
+//! mtp.blocks.{i}.ffn_out.weight  → (hidden_dim, hidden_dim * 4)
+//! mtp.blocks.{i}.ffn_out.bias    → (hidden_dim,)
+//! mtp.output.{l}.weight          → (codebook_size, hidden_dim)
+//! mtp.output.{l}.bias            → (codebook_size,)
+//! ```
 
 use candle_core::{Device, Module, Tensor};
 use candle_nn as nn;
 
-use crate::Error;
 use crate::quantization::VarBuilder;
+use crate::weights::WeightLoader;
+use crate::Error;
 
 /// MTP 解碼器輸出
 pub struct MtpOutput {
@@ -46,6 +72,7 @@ struct TransformerBlock {
 }
 
 impl TransformerBlock {
+    /// 從 VarBuilder 建立（全零張量，僅測試用）
     fn new(hidden_dim: usize, vb: &VarBuilder) -> Self {
         let weight = vb.get("norm_weight", hidden_dim);
         let bias = vb.get("norm_bias", hidden_dim);
@@ -60,6 +87,28 @@ impl TransformerBlock {
         let ffn_out = nn::Linear::new(w2, Some(b2));
 
         Self { norm, ffn, ffn_out }
+    }
+
+    /// 從 safetensors 載入真實權重
+    ///
+    /// # 參數
+    /// - `loader`: 權重載入器
+    /// - `prefix`: 命名空間前綴，例如 `"mtp.blocks.0"`
+    /// - `hidden_dim`: 隱藏維度
+    fn from_loader(loader: &WeightLoader, prefix: &str, _hidden_dim: usize) -> crate::Result<Self> {
+        let nw = loader.get(&format!("{prefix}.norm.weight"))?.clone();
+        let nb = loader.get(&format!("{prefix}.norm.bias"))?.clone();
+        let norm = nn::LayerNorm::new(nw, nb, 1e-5);
+
+        let fw = loader.get(&format!("{prefix}.ffn.weight"))?.clone();
+        let fb = loader.get(&format!("{prefix}.ffn.bias"))?.clone();
+        let ffn = nn::Linear::new(fw, Some(fb));
+
+        let fow = loader.get(&format!("{prefix}.ffn_out.weight"))?.clone();
+        let fob = loader.get(&format!("{prefix}.ffn_out.bias"))?.clone();
+        let ffn_out = nn::Linear::new(fow, Some(fob));
+
+        Ok(Self { norm, ffn, ffn_out })
     }
 
     fn forward(&self, x: &Tensor) -> crate::Result<Tensor> {
@@ -81,7 +130,10 @@ pub struct MtpDecoder {
 }
 
 impl MtpDecoder {
-    /// 建立 MTP 解碼器
+    /// 建立 MTP 解碼器（測試用，全零權重）
+    ///
+    /// **警告**: 所有權重為零，`forward()` 輸出全零 logits。
+    /// 生產環境請使用 [`MtpDecoder::from_loader()`]。
     pub fn new(config: MtpConfig, _device: &Device) -> Self {
         let vb = VarBuilder::dummy();
 
@@ -113,6 +165,45 @@ impl MtpDecoder {
             blocks,
             output_projs,
         }
+    }
+
+    /// 從 safetensors 載入真實權重建立 MTP 解碼器
+    ///
+    /// # 參數
+    /// - `loader`: 已載入權重的 [`WeightLoader`]
+    /// - `config`: MTP 解碼器配置
+    ///
+    /// # 權重命名約定
+    ///
+    /// 見模組級文檔。
+    ///
+    /// # 錯誤
+    /// - 若缺少必備張量，回傳 `Error::Weight`
+    pub fn from_loader(loader: &WeightLoader, config: MtpConfig) -> crate::Result<Self> {
+        let iw = loader.get("mtp.input_proj.weight")?.clone();
+        let ib = loader.get("mtp.input_proj.bias").ok().cloned();
+        let input_proj = nn::Linear::new(iw, ib);
+
+        let mut blocks = Vec::with_capacity(config.num_blocks);
+        for i in 0..config.num_blocks {
+            let prefix = format!("mtp.blocks.{i}");
+            let block = TransformerBlock::from_loader(loader, &prefix, config.hidden_dim)?;
+            blocks.push(block);
+        }
+
+        let mut output_projs = Vec::with_capacity(config.num_layers);
+        for l in 0..config.num_layers {
+            let w = loader.get(&format!("mtp.output.{l}.weight"))?.clone();
+            let b = loader.get(&format!("mtp.output.{l}.bias"))?.clone();
+            output_projs.push(nn::Linear::new(w, Some(b)));
+        }
+
+        Ok(Self {
+            config,
+            input_proj,
+            blocks,
+            output_projs,
+        })
     }
 
     /// 前向傳播
@@ -192,5 +283,178 @@ mod tests {
         let embeddings = Tensor::zeros((16, 512), candle_core::DType::F32, &device).unwrap();
         let logits = mtp.forward(&embeddings).unwrap();
         assert_eq!(logits.dims(), &[16, 2048]);
+    }
+
+    /// 輔助測試：f32 張量視圖（所有值為 linspace 0, 0.01, 0.02, ...）
+    struct TestTensor {
+        shape: Vec<usize>,
+        data: Vec<u8>,
+    }
+
+    impl safetensors::tensor::View for TestTensor {
+        fn dtype(&self) -> safetensors::tensor::Dtype {
+            safetensors::tensor::Dtype::F32
+        }
+        fn shape(&self) -> &[usize] {
+            &self.shape
+        }
+        fn data(&self) -> std::borrow::Cow<'_, [u8]> {
+            std::borrow::Cow::Borrowed(&self.data)
+        }
+        fn data_len(&self) -> usize {
+            self.data.len()
+        }
+    }
+
+    fn make_test_tensor(name: &str, shape: Vec<usize>) -> (String, TestTensor) {
+        let n: usize = shape.iter().product();
+        let mut data = Vec::with_capacity(n * 4);
+        for i in 0..n {
+            data.extend_from_slice(&((i as f32 * 0.01).to_le_bytes()));
+        }
+        (name.to_string(), TestTensor { shape, data })
+    }
+
+    /// 測試 from_loader：使用暫存 safetensors 載入真實權重
+    #[test]
+    fn test_mtp_from_loader_round_trip() {
+        let device = Device::Cpu;
+        let tmp = std::env::temp_dir().join(format!(
+            "qwen3tts-mtp-loader-test-{}.safetensors",
+            std::process::id()
+        ));
+
+        let config = MtpConfig {
+            num_layers: 2,
+            codebook_size: 8,
+            embedding_dim: 4,
+            hidden_dim: 8,
+            num_blocks: 1,
+        };
+
+        let tensors = vec![
+            make_test_tensor(
+                "mtp.input_proj.weight",
+                vec![config.hidden_dim, config.embedding_dim],
+            ),
+            make_test_tensor("mtp.input_proj.bias", vec![config.hidden_dim]),
+            make_test_tensor("mtp.blocks.0.norm.weight", vec![config.hidden_dim]),
+            make_test_tensor("mtp.blocks.0.norm.bias", vec![config.hidden_dim]),
+            make_test_tensor(
+                "mtp.blocks.0.ffn.weight",
+                vec![config.hidden_dim * 4, config.hidden_dim],
+            ),
+            make_test_tensor("mtp.blocks.0.ffn.bias", vec![config.hidden_dim * 4]),
+            make_test_tensor(
+                "mtp.blocks.0.ffn_out.weight",
+                vec![config.hidden_dim, config.hidden_dim * 4],
+            ),
+            make_test_tensor("mtp.blocks.0.ffn_out.bias", vec![config.hidden_dim]),
+            make_test_tensor(
+                "mtp.output.0.weight",
+                vec![config.codebook_size, config.hidden_dim],
+            ),
+            make_test_tensor("mtp.output.0.bias", vec![config.codebook_size]),
+            make_test_tensor(
+                "mtp.output.1.weight",
+                vec![config.codebook_size, config.hidden_dim],
+            ),
+            make_test_tensor("mtp.output.1.bias", vec![config.codebook_size]),
+        ];
+
+        safetensors::serialize_to_file(tensors, None, &tmp).unwrap();
+        let loader = crate::weights::WeightLoader::from_file(&tmp, &device).unwrap();
+        let mtp = MtpDecoder::from_loader(&loader, config.clone()).unwrap();
+
+        assert_eq!(mtp.blocks.len(), 1);
+        assert_eq!(mtp.output_projs.len(), 2);
+
+        // forward 應回傳非零 logits（權重非零）
+        let embeddings =
+            Tensor::ones((2, config.embedding_dim), candle_core::DType::F32, &device).unwrap();
+        let logits = mtp.forward(&embeddings).unwrap();
+        assert_eq!(logits.dims(), &[2, config.codebook_size]);
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    /// 測試 from_loader：缺少張量時應回傳明確錯誤
+    #[test]
+    fn test_mtp_from_loader_missing_tensor() {
+        let device = Device::Cpu;
+        let tmp = std::env::temp_dir().join(format!(
+            "qwen3tts-mtp-loader-missing-test-{}.safetensors",
+            std::process::id()
+        ));
+
+        let tensors = vec![
+            make_test_tensor("mtp.input_proj.weight", vec![8, 4]),
+            make_test_tensor("mtp.input_proj.bias", vec![8]),
+        ];
+        safetensors::serialize_to_file(tensors, None, &tmp).unwrap();
+        let loader = crate::weights::WeightLoader::from_file(&tmp, &device).unwrap();
+
+        let config = MtpConfig {
+            num_layers: 2,
+            codebook_size: 8,
+            embedding_dim: 4,
+            hidden_dim: 8,
+            num_blocks: 1,
+        };
+        let result = MtpDecoder::from_loader(&loader, config);
+        match result {
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.contains("mtp.blocks.0"),
+                    "Expected missing block error, got: {msg}"
+                );
+            }
+            Ok(_) => panic!("Expected Weight error for missing tensor"),
+        }
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    /// 測試 from_loader：形狀不匹配在 forward 時應報錯
+    #[test]
+    fn test_mtp_from_loader_wrong_shape() {
+        let device = Device::Cpu;
+        let tmp = std::env::temp_dir().join(format!(
+            "qwen3tts-mtp-loader-shape-test-{}.safetensors",
+            std::process::id()
+        ));
+
+        // 所有張量名稱齊全，但 input_proj.weight 形狀 [8,8] 而非預期 [8,4]
+        let tensors = vec![
+            make_test_tensor("mtp.input_proj.weight", vec![8, 8]),
+            make_test_tensor("mtp.input_proj.bias", vec![8]),
+            make_test_tensor("mtp.blocks.0.norm.weight", vec![8]),
+            make_test_tensor("mtp.blocks.0.norm.bias", vec![8]),
+            make_test_tensor("mtp.blocks.0.ffn.weight", vec![32, 8]),
+            make_test_tensor("mtp.blocks.0.ffn.bias", vec![32]),
+            make_test_tensor("mtp.blocks.0.ffn_out.weight", vec![8, 32]),
+            make_test_tensor("mtp.blocks.0.ffn_out.bias", vec![8]),
+            make_test_tensor("mtp.output.0.weight", vec![8, 8]),
+            make_test_tensor("mtp.output.0.bias", vec![8]),
+        ];
+        safetensors::serialize_to_file(tensors, None, &tmp).unwrap();
+        let loader = crate::weights::WeightLoader::from_file(&tmp, &device).unwrap();
+
+        let config = MtpConfig {
+            num_layers: 1,
+            codebook_size: 8,
+            embedding_dim: 4,
+            hidden_dim: 8,
+            num_blocks: 1,
+        };
+        // 建構成功（Candle Linear::new 不檢查形狀）
+        let mtp = MtpDecoder::from_loader(&loader, config).unwrap();
+        // forward 時 input_proj 的 weight shape [8,8] vs embedding [2,4] 應報錯
+        let embeddings = Tensor::ones((2, 4), candle_core::DType::F32, &device).unwrap();
+        let result = mtp.forward(&embeddings);
+        assert!(result.is_err(), "Shape mismatch should cause forward error");
+
+        let _ = std::fs::remove_file(&tmp);
     }
 }

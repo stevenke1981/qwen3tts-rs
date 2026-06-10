@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use qwen3tts::{
-    Decoder12Hz, DecoderConfig, TtsDecoder,
-    codec::{CausalConvNet, DecoderBlock, snake_beta},
+    codec::{snake_beta, CausalConv1d, CausalConvConfig, DecoderBlock},
     weights::WeightLoader,
+    Decoder12Hz, DecoderConfig, TtsDecoder,
 };
 
 fn read_npy_f32(path: &str) -> Vec<f32> {
@@ -274,7 +274,8 @@ fn test_decoder_start_conv_matches_pytorch_reference() {
     let device = candle_core::Device::Cpu;
     let loader = WeightLoader::from_dir(weight_dir, &device).unwrap();
     let (w, b) = loader.conv1d_pair("0.conv").unwrap();
-    let conv = CausalConvNet::new(w, b, 1, 1, 1);
+    let cfg = CausalConvConfig::from_weight(&w, 1, 1);
+    let conv = CausalConv1d::new(w, b, cfg, 32).unwrap();
 
     let input = read_npy_f32("weights/pt_upsample_out.npy");
     let input = candle_core::Tensor::from_slice(&input, (1, 1024, 12), &device).unwrap();
@@ -367,7 +368,8 @@ fn test_decoder_final_stage_matches_pytorch_reference() {
     println!("decoder final snake cosine_vs_pt={snake_cos:.8}");
 
     let (w, b) = loader.conv1d_pair("6.conv").unwrap();
-    let conv = CausalConvNet::new(w, b, 1, 1, 1);
+    let cfg = CausalConvConfig::from_weight(&w, 1, 1);
+    let conv = CausalConv1d::new(w, b, cfg, 32).unwrap();
     let output = conv.forward(&h).unwrap();
     let output = output
         .squeeze(0)

@@ -1,0 +1,141 @@
+﻿????????????????????????????????????????
+??   Qwen3-TTS Rust ??頧???       ??????????????????????????????????????????
+??    : hi
+璅∪?    : Qwen/Qwen3-TTS-12Hz-0.6B-Base
+敺垢    : Candle
+隤?    : english
+頛詨    : D:\qwen3tts-rs\cn_candle_1.7b_hi.wav
+
+[1/3] 頛 Tokenizer 閫?Ⅳ?兩?[2/3] 頛 Candle LLM (Qwen/Qwen3-TTS-12Hz-0.6B-Base) 銝衣???Token??      model dir : "C:\\Users\\steven\\.cache\\huggingface\\hub\\models--Qwen--Qwen3-TTS-12Hz-1.7B-Base\\snapshots\\fd4b254389122332181a7c3db7f27e918eec64e3"
+synthesize.exe : [DEBUG] input_builder::build START: hidden_size=2048 text_hidden_size=2048 num_hidden_layers=28
+位於 D:\qwen3tts-rs\run_synth_log.ps1:3 字元:1
++ & 'D:\qwen3tts-rs\target\debug\examples\synthesize.exe' `
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([DEBUG] input_b...idden_layers=28:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[DEBUG] input_builder: hidden_size=2048 codec_len=6 tts_pad_embed.shape=[1, 1, 2048]
+[DEBUG] first_step_logits: talker_hidden.shape=[1, 1, 2048] codebook_0_embed.shape=[1, 1, 2048]
+[DEBUG] talker_hidden_proj.shape=[1, 1, 1024]
+
+thread 'main' (15896) panicked at examples\synthesize.rs:327:22:
+Candle LLM Token ??憭望?: Configuration error: Candle error: shape mismatch in cat for dim 2, shape for arg 1: [1, 1, 10
+24] shape for arg 2: [1, 1, 2048]
+   0: std::backtrace_rs::backtrace::win64::trace
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\..\..\backtrace\src\backtrace\win64.rs:
+85
+   1: std::backtrace_rs::backtrace::trace_unsynchronized
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+   2: std::backtrace::Backtrace::create
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\backtrace.rs:331
+   3: std::backtrace::Backtrace::capture
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\backtrace.rs:296
+   4: enum2$<candle_core::error::Error>::bt
+             at C:\Users\steven\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\candle-core-0.10.2\src\error.rs:26
+4
+   5: candle_core::tensor::Tensor::cat<candle_core::tensor::Tensor,usize>
+             at C:\Users\steven\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\candle-core-0.10.2\src\tensor_cat.
+rs:57
+   6: qwen3tts::talker::code_predictor::CodePredictor::first_step_logits
+             at .\src\talker\code_predictor.rs:56
+   7: qwen3tts::talker::code_predictor::CodePredictor::generate
+             at .\src\talker\code_predictor.rs:85
+   8: qwen3tts::talker::talker::TalkerForConditionalGeneration::generate
+             at .\src\talker\talker.rs:169
+   9: qwen3tts::text_frontend::candle_backend::impl$1::synthesize
+             at .\src\text_frontend\candle_backend.rs:200
+  10: synthesize::main
+             at .\examples\synthesize.rs:326
+  11: core::ops::function::FnOnce::call_once<void (*)(),tuple$<> >
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\ops\function.rs:250
+  12: std::sys::backtrace::__rust_begin_short_backtrace<void (*)(),tuple$<> >
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\sys\backtrace.rs:166
+  13: std::rt::lang_start::closure$0<tuple$<> >
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\rt.rs:206
+  14: std::rt::lang_start_internal::closure$0
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\rt.rs:175
+  15: std::panicking::catch_unwind::do_call
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:581
+  16: std::panicking::catch_unwind
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:544
+  17: std::panic::catch_unwind
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panic.rs:359
+  18: std::rt::lang_start_internal
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\rt.rs:171
+  19: std::rt::lang_start<tuple$<> >
+             at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\rt.rs:205
+  20: main
+  21: invoke_main
+             at D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:78
+  22: __scrt_common_main_seh
+             at D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:288
+  23: BaseThreadInitThunk
+  24: RtlUserThreadStart
+
+stack backtrace:
+   0:     0x7ff6a17c3620 - std::backtrace_rs::backtrace::win64::trace
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\..\..\backtrace\src\b
+acktrace\win64.rs:85
+   1:     0x7ff6a17c3620 - std::backtrace_rs::backtrace::trace_unsynchronized
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\..\..\backtrace\src\b
+acktrace\mod.rs:66
+   2:     0x7ff6a17c3620 - std::sys::backtrace::_print_fmt
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\sys\backtrace.rs:74
+   3:     0x7ff6a17c3620 - std::sys::backtrace::impl$0::print::impl$0::fmt
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\sys\backtrace.rs:44
+   4:     0x7ff6a17d4951 - core::fmt::write
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\fmt\mod.rs:0
+   5:     0x7ff6a17c8194 - std::io::default_write_fmt
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\io\mod.rs:639
+   6:     0x7ff6a17c8194 - std::io::Write::write_fmt<std::sys::stdio::windows::Stderr>
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\io\mod.rs:1994
+   7:     0x7ff6a17ae082 - std::sys::backtrace::BacktraceLock::print
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\sys\backtrace.rs:47
+   8:     0x7ff6a17ae082 - std::panicking::default_hook::closure$0
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:292
+   9:     0x7ff6a17bd487 - std::panicking::default_hook
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:319
+  10:     0x7ff6a17bd743 - std::panicking::panic_with_hook
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:825
+  11:     0x7ff6a17ae154 - std::panicking::panic_handler::closure$0
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:698
+  12:     0x7ff6a17abb2f - std::sys::backtrace::__rust_end_short_backtrace<std::panicking::panic_handler::closure_env$0
+,never$>
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\sys\backtrace.rs:182
+  13:     0x7ff6a17aeaae - std::panicking::panic_handler
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:689
+  14:     0x7ff6a1824bad - core::panicking::panic_fmt
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\panicking.rs:80
+  15:     0x7ff6a18248d7 - core::result::unwrap_failed
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\result.rs:1867
+  16:     0x7ff6a039291d - enum2$<core::result::Result<qwen3tts::text_frontend::TokenStream,enum2$<qwen3tts::Error> > >
+::expect<qwen3tts::text_frontend::TokenStream,enum2$<qwen3tts::Error> >
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\result.rs:1185
+  17:     0x7ff6a03887ab - synthesize::main
+                               at D:\qwen3tts-rs\examples\synthesize.rs:327
+  18:     0x7ff6a0381e7b - core::ops::function::FnOnce::call_once<void (*)(),tuple$<> >
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\ops\function.rs:250
+  19:     0x7ff6a038628e - std::sys::backtrace::__rust_begin_short_backtrace<void (*)(),tuple$<> >
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\sys\backtrace.rs:166
+  20:     0x7ff6a038fd91 - std::rt::lang_start::closure$0<tuple$<> >
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\rt.rs:206
+  21:     0x7ff6a17bbea0 - std::rt::lang_start_internal::closure$0
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\rt.rs:175
+  22:     0x7ff6a17bbea0 - std::panicking::catch_unwind::do_call
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:581
+  23:     0x7ff6a17bbea0 - std::panicking::catch_unwind
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panicking.rs:544
+  24:     0x7ff6a17bbea0 - std::panic::catch_unwind
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\panic.rs:359
+  25:     0x7ff6a17bbea0 - std::rt::lang_start_internal
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\rt.rs:171
+  26:     0x7ff6a038fd7a - std::rt::lang_start<tuple$<> >
+                               at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\rt.rs:205
+  27:     0x7ff6a038ac89 - main
+  28:     0x7ff6a1821aaf - invoke_main
+                               at D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:78
+  29:     0x7ff6a1821aaf - __scrt_common_main_seh
+                               at D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:288
+  30:     0x7fffec787374 - BaseThreadInitThunk
+  31:     0x7fffed53cc91 - RtlUserThreadStart
+      嚗?甈∟??仿? ~2-3 ??嚗???0.6B 甈? BF16?32嚗?

@@ -161,6 +161,8 @@ pub struct CausalConvConfig {
     pub kernel_size: usize,
     /// 擴張率
     pub dilation: usize,
+    /// 分組數（1 = 標準卷積, out_channels = depthwise）
+    pub groups: usize,
 }
 
 impl Default for CausalConvConfig {
@@ -170,6 +172,21 @@ impl Default for CausalConvConfig {
             out_channels: 512,
             kernel_size: 3,
             dilation: 1,
+            groups: 1,
+        }
+    }
+}
+
+impl CausalConvConfig {
+    /// 從權重張量維度推導配置（便於 CausalConvNet → CausalConv1d 遷移）
+    pub fn from_weight(weight: &Tensor, dilation: usize, groups: usize) -> Self {
+        let d = weight.dims();
+        Self {
+            in_channels: d[1],
+            out_channels: d[0],
+            kernel_size: d[2],
+            dilation,
+            groups,
         }
     }
 }
@@ -300,27 +317,31 @@ impl CausalConv1d {
         Self::new(weight, bias, config, state_capacity)
     }
 
-    /// 前向傳播
+    /// 前向傳播（左側填充，輸出長度 = 輸入長度）
+    ///
+    /// 使用 `pad_with_zeros` + `conv1d(pad=0)` 實現純左側因果填充，
+    /// 支援 dilation 與 groups。不同於 `step()` 的單幀模式，
+    /// 此方法適用於完整序列的批次推理。
     ///
     /// # 參數
     /// - `input`: 輸入張量，形狀 (batch, in_channels, time)
     ///
     /// # 回傳值
     /// 形狀 (batch, out_channels, time) 的輸出張量
-    pub fn forward(&mut self, input: &Tensor) -> crate::Result<Tensor> {
-        // 近期 Candle API：使用 conv1d 進行因果卷積
-        // 因果卷積透過在左側填充 (kernel_size - 1) 個零實現
-        let pad = self.config.kernel_size - 1;
-
-        let output = input.conv1d(&self.weight, pad, 1, self.config.dilation, 1)?;
-        let output = if let Some(ref bias) = self.bias {
-            let bias = bias.unsqueeze(0)?.unsqueeze(2)?;
-            output.broadcast_add(&bias)?
+    pub fn forward(&self, input: &Tensor) -> crate::Result<Tensor> {
+        let k = self.config.kernel_size;
+        let d = self.config.dilation;
+        let groups = self.config.groups;
+        // 左側填充量 = (kernel_size - 1) * dilation，使 conv1d 輸出長度 = 輸入長度
+        let left_pad = (k - 1) * d;
+        let padded = input.pad_with_zeros(2, left_pad, 0)?;
+        let output = padded.conv1d(&self.weight, 0, 1, d, groups)?;
+        if let Some(ref bias) = self.bias {
+            let b = bias.unsqueeze(0)?.unsqueeze(2)?;
+            Ok(output.broadcast_add(&b)?)
         } else {
-            output
-        };
-
-        Ok(output)
+            Ok(output)
+        }
     }
 
     /// 處理單幀（流式推理用）— O(1) per step
@@ -555,6 +576,7 @@ mod tests {
             out_channels: 1024,
             kernel_size: 3,
             dilation: 1,
+            groups: 1,
         };
         let mut conv = CausalConv1d::new(weight, bias, config, 16).expect("create conv");
 

@@ -1,0 +1,108 @@
+[
+  {
+    "id": 1,
+    "seek": 0,
+    "start": 0.82,
+    "end": 4.44,
+    "text": "现在开始测试ROST原声语音克隆",
+    "tokens": [
+      50365,
+      25040,
+      45213,
+      11038,
+      233,
+      5233,
+      243,
+      49,
+      28067,
+      19683,
+      32045,
+      5233,
+      255,
+      18034,
+      24881,
+      10673,
+      228,
+      50546
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.19706003289473684,
+    "compression_ratio": 0.7843137254901961,
+    "no_speech_prob": 0.0,
+    "words": [
+      {
+        "start": 0.82,
+        "end": 1.46,
+        "word": "现在",
+        "probability": 0.94287109375
+      },
+      {
+        "start": 1.46,
+        "end": 1.92,
+        "word": "开始",
+        "probability": 0.99755859375
+      },
+      {
+        "start": 1.92,
+        "end": 2.2,
+        "word": "测",
+        "probability": 0.9990234375
+      },
+      {
+        "start": 2.2,
+        "end": 2.54,
+        "word": "试",
+        "probability": 0.9990234375
+      },
+      {
+        "start": 2.54,
+        "end": 2.72,
+        "word": "R",
+        "probability": 0.72607421875
+      },
+      {
+        "start": 2.72,
+        "end": 2.98,
+        "word": "OST",
+        "probability": 0.54638671875
+      },
+      {
+        "start": 2.98,
+        "end": 3.26,
+        "word": "原",
+        "probability": 0.9873046875
+      },
+      {
+        "start": 3.26,
+        "end": 3.52,
+        "word": "声",
+        "probability": 0.71923828125
+      },
+      {
+        "start": 3.52,
+        "end": 3.72,
+        "word": "语",
+        "probability": 0.998779296875
+      },
+      {
+        "start": 3.72,
+        "end": 3.94,
+        "word": "音",
+        "probability": 0.99951171875
+      },
+      {
+        "start": 3.94,
+        "end": 4.18,
+        "word": "克",
+        "probability": 0.8525390625
+      },
+      {
+        "start": 4.18,
+        "end": 4.44,
+        "word": "隆",
+        "probability": 0.9443359375
+      }
+    ],
+    "chunk": "chunk_000"
+  }
+]

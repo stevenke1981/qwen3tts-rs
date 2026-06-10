@@ -230,6 +230,7 @@ impl WeightLoader {
             out_channels: config.embedding_dim,
             kernel_size: config.kernel_size,
             dilation: 1,
+            groups: 1,
         };
 
         // pre_conv: (1024, 512, 3) — 在完整 pipeline 中為 codebook_dim→latent_dim
