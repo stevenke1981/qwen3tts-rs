@@ -27,9 +27,10 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Qwen3-TTS 語音合成",
         options,
-        Box::new(|_cc| {
-            _cc.egui_ctx.set_visuals(egui::Visuals::dark());
-            _cc.egui_ctx.set_pixels_per_point(1.0);
+        Box::new(|cc| {
+            qwen3tts::gui::install_cjk_fonts(&cc.egui_ctx);
+            cc.egui_ctx.set_visuals(egui::Visuals::dark());
+            cc.egui_ctx.set_pixels_per_point(1.0);
             Ok(Box::new(qwen3tts::gui::TtsGuiApp::new()))
         }),
     )

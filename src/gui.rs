@@ -20,6 +20,48 @@ use crate::text_frontend::speaker_presets;
 use crate::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend};
 use crate::{Decoder12Hz, DecoderConfig};
 
+const CJK_FONT_NAME: &str = "qwen3tts_cjk";
+
+const CJK_FONT_CANDIDATES: &[&str] = &[
+    r"C:\Windows\Fonts\msjh.ttc",
+    r"C:\Windows\Fonts\msjhbd.ttc",
+    r"C:\Windows\Fonts\mingliu.ttc",
+    r"C:\Windows\Fonts\msyh.ttc",
+    r"C:\Windows\Fonts\msyhbd.ttc",
+    r"C:\Windows\Fonts\simsun.ttc",
+    r"C:\Windows\Fonts\NotoSansCJK-Regular.ttc",
+    r"C:\Windows\Fonts\NotoSansTC-Regular.otf",
+];
+
+/// Install a Windows CJK font fallback so egui can render Chinese UI text.
+pub fn install_cjk_fonts(ctx: &egui::Context) -> Option<PathBuf> {
+    let font_path = cjk_font_candidates()
+        .into_iter()
+        .find(|path| path.exists())?;
+    let font_bytes = std::fs::read(&font_path).ok()?;
+    let mut fonts = egui::FontDefinitions::default();
+
+    fonts.font_data.insert(
+        CJK_FONT_NAME.to_owned(),
+        egui::FontData::from_owned(font_bytes).into(),
+    );
+
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        fonts
+            .families
+            .entry(family)
+            .or_default()
+            .insert(0, CJK_FONT_NAME.to_owned());
+    }
+
+    ctx.set_fonts(fonts);
+    Some(font_path)
+}
+
+fn cjk_font_candidates() -> Vec<PathBuf> {
+    CJK_FONT_CANDIDATES.iter().map(PathBuf::from).collect()
+}
+
 // ---------------------------------------------------------------------------
 // 後端類型
 // ---------------------------------------------------------------------------
