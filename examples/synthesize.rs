@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
 use qwen3tts::text_frontend::model_catalog::{
-    GenerationMode, SUPPORTED_LANGUAGES, model_capability, model_table, validate_generation_request,
+    model_capability, model_table, validate_generation_request, GenerationMode, SUPPORTED_LANGUAGES,
 };
 use qwen3tts::text_frontend::speaker_presets;
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend, TokenStream};
@@ -343,7 +343,10 @@ fn main() {
     }
 
     let instruct = resolve_instruct(instruct, instruct_file);
+    #[cfg(feature = "candle-llm")]
     let validation_model = model_dir.as_deref().unwrap_or(&model_id);
+    #[cfg(not(feature = "candle-llm"))]
+    let validation_model = &model_id;
     if let Err(err) = validate_generation_request(
         validation_model,
         mode,
