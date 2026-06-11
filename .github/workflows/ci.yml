@@ -1,0 +1,115 @@
+# CI 管線 — Qwen3-TTS Rust 重寫
+#
+# 每次 push / PR 執行：
+# 1. cargo build (CPU, default features)
+# 2. cargo test --lib (單元測試)
+# 3. cargo clippy --all-targets (warnings-as-errors)
+# 4. cargo build --features cuda (CUDA 編譯驗證，僅 Linux)
+# 5. 可選基準測試（僅 main 分支）
+
+name: CI
+
+on:
+  push:
+    branches: [main, dev, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main, dev]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 構建 + 測試（CPU）
+  # ---------------------------------------------------------------------------
+  build-and-test:
+    name: Build & Test (CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: cargo build (default = CPU)
+        run: cargo build --all-targets --verbose
+
+      - name: cargo clippy (warnings as errors)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test (lib)
+        run: cargo test --lib --verbose
+
+      - name: cargo test (integration)
+        run: cargo test --test integration_test --verbose
+        continue-on-error: true  # integration tests need weight files
+
+  # ---------------------------------------------------------------------------
+  # CUDA 構建驗證（僅 Linux x86_64）
+  # ---------------------------------------------------------------------------
+  cuda-build:
+    name: Build (CUDA)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-cuda-${{ hashFiles('Cargo.lock') }}
+
+      - name: cargo build (CUDA)
+        run: cargo build --features cuda --verbose
+        env:
+          CUDA_HOME: /usr/local/cuda
+
+  # ---------------------------------------------------------------------------
+  # 基準測試（僅 main 分支）
+  # ---------------------------------------------------------------------------
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('Cargo.lock') }}
+
+      - name: cargo bench (causal_conv + codebook)
+        run: cargo bench --bench bench_causal_conv --bench bench_codebook --verbose
+        continue-on-error: true  # benches may fluctuate on CI runners

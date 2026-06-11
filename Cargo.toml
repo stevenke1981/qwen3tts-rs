@@ -74,6 +74,18 @@ required-features = ["candle-llm"]
 [[example]]
 name = "quantize_tokenizer"
 
+[[bench]]
+name = "bench_causal_conv"
+harness = false
+
+[[bench]]
+name = "bench_codebook"
+harness = false
+
+[[bench]]
+name = "bench_decoder_12hz"
+harness = false
+
 [[bin]]
 name = "qwen3tts-gui"
 path = "src/bin/qwen3tts-gui.rs"

@@ -25,6 +25,10 @@ use crate::Error;
 /// 用於儲存因果卷積的歷史狀態。
 /// - 所有記憶體在 `new()` 時預分配
 /// - 寫入操作永不觸發 realloc
+///
+/// **注意：** `CausalConvState` 現在使用扁平陣列替代此 struct；
+/// `RingBuffer` 保留僅供獨立單元測試使用。
+#[allow(dead_code)]
 pub struct RingBuffer {
     /// 底層儲存
     data: Vec<f32>,
@@ -36,6 +40,7 @@ pub struct RingBuffer {
     len: usize,
 }
 
+#[allow(dead_code)]
 impl RingBuffer {
     /// 建立新的環形緩衝區
     ///
@@ -75,7 +80,7 @@ impl RingBuffer {
             return None;
         }
         // 最新元素在 head - 1（考慮環繞）
-        let idx = if self.head >= offset + 1 {
+        let idx = if self.head > offset {
             self.head - offset - 1
         } else {
             self.capacity - (offset + 1 - self.head)
@@ -199,12 +204,24 @@ impl CausalConvConfig {
     }
 }
 
-/// 因果卷積層狀態（環形緩衝區）
+/// 扁平化環形緩衝區狀態（因果卷積用）
+///
+/// 所有通道共享同一個 head/len，儲存在連續的 `[num_channels × capacity]` 陣列中。
+/// 與舊版 `Vec<RingBuffer>` 相比：
+/// - 單次 heap 分配（而非 512 次）
+/// - 通道間連續儲存，fill_history 時 cache-friendly
+/// - reset 為單次 `fill(0.0)`（而非 512 次迴圈）
 pub struct CausalConvState {
-    /// 每通道的環形緩衝區
-    buffers: Vec<RingBuffer>,
-    /// 當前幀計數器
-    frame_count: usize,
+    /// 扁平資料: num_channels × capacity, row-major [channel][offset]
+    data: Vec<f32>,
+    /// 通道數
+    num_channels: usize,
+    /// 環形緩衝區容量
+    capacity: usize,
+    /// 下一個寫入位置 (0..capacity)
+    head: usize,
+    /// 當前有效幀數 (0..capacity)
+    len: usize,
 }
 
 impl CausalConvState {
@@ -212,35 +229,39 @@ impl CausalConvState {
     ///
     /// # 參數
     /// - `num_channels`: 通道數
-    /// - `kernel_size`: 卷積核大小
+    /// - `_kernel_size`: 卷積核大小（用於確保容量不小於核大小）
     /// - `capacity`: 環形緩衝區容量（通常為 kernel_size 的 2-3 倍）
-    pub fn new(num_channels: usize, kernel_size: usize, capacity: usize) -> Self {
-        let actual_cap = capacity.max(kernel_size);
-        let buffers = (0..num_channels)
-            .map(|_| RingBuffer::new(actual_cap))
-            .collect();
+    pub fn new(num_channels: usize, _kernel_size: usize, capacity: usize) -> Self {
+        let cap = capacity.max(_kernel_size);
         Self {
-            buffers,
-            frame_count: 0,
+            data: vec![0.0_f32; num_channels * cap],
+            num_channels,
+            capacity: cap,
+            head: 0,
+            len: 0,
         }
     }
 
     /// 推入一幀資料（所有通道）
     #[inline]
     pub fn push_frame(&mut self, frame: &[f32]) {
-        for (ch, &val) in self.buffers.iter_mut().zip(frame.iter()) {
-            ch.push(val);
+        let cap = self.capacity;
+        let head = self.head;
+        for (ch, &val) in frame.iter().enumerate() {
+            self.data[ch * cap + head] = val;
         }
-        self.frame_count += 1;
+        self.head = (head + 1) % cap;
+        if self.len < cap {
+            self.len += 1;
+        }
     }
 
     /// 重置狀態（零分配）
     #[inline]
     pub fn reset(&mut self) {
-        for buf in &mut self.buffers {
-            buf.reset();
-        }
-        self.frame_count = 0;
+        self.data.fill(0.0_f32);
+        self.head = 0;
+        self.len = 0;
     }
 
     /// 將指定通道的最近 n 個歷史值寫入 `out` slice（零分配）
@@ -250,10 +271,31 @@ impl CausalConvState {
     /// # 恐慌
     /// 當 `channel` 超出範圍時 panic（caller 應保證索引有效）
     pub fn fill_history(&self, channel: usize, out: &mut [f32]) -> usize {
-        let buf = &self.buffers[channel];
-        let n = out.len().min(buf.len());
-        // last_n 僅在 out 太小時回傳 None — 這裡保證 out.len() >= n
-        let _ = buf.last_n(n, out);
+        let n = out.len().min(self.len);
+        if n == 0 {
+            return 0;
+        }
+
+        let oldest = if self.len < self.capacity {
+            self.len - n
+        } else {
+            (self.head + self.capacity - n) % self.capacity
+        };
+
+        let base = channel * self.capacity;
+        let end = oldest + n;
+
+        if end <= self.capacity {
+            // 連續情況：單次 memcpy
+            out[..n].copy_from_slice(&self.data[base + oldest..base + end]);
+        } else {
+            // 環繞情況：尾部 + 頭部
+            // 注意：務必限制到 base + self.capacity，而非到 data 尾部！
+            let first_part = self.capacity - oldest;
+            out[..first_part].copy_from_slice(&self.data[base + oldest..base + self.capacity]);
+            let second_part = n - first_part;
+            out[first_part..n].copy_from_slice(&self.data[base..base + second_part]);
+        }
         n
     }
 }
@@ -371,16 +413,14 @@ impl CausalConv1d {
         // 推入環形緩衝區
         self.state.push_frame(frame);
         let k = self.config.kernel_size;
-        let n_frames = self.state.frame_count.min(k); // 最多 kernel_size 幀
+        let n_frames = self.state.len.min(k); // 最多 kernel_size 幀
 
         // 使用預分配步進緩衝區，避免熱路徑分配
         let total_len = in_channels * n_frames;
         let conv_input = &mut self.step_scratch[..total_len];
 
-        for ch in 0..in_channels {
-            let start = ch * n_frames;
-            let end = start + n_frames;
-            self.state.fill_history(ch, &mut conv_input[start..end]);
+        for (ch, window) in conv_input.chunks_mut(n_frames).enumerate() {
+            self.state.fill_history(ch, window);
         }
 
         // 構建輸入張量: (1, in_channels, n_frames) — Tensor::from_slice 會複製資料
@@ -425,16 +465,14 @@ impl CausalConv1d {
         // 推入環形緩衝區
         self.state.push_frame(&frame_slice);
         let k = self.config.kernel_size;
-        let n_frames = self.state.frame_count.min(k);
+        let n_frames = self.state.len.min(k);
 
         // 使用預分配步進緩衝區
         let total_len = in_channels * n_frames;
         let conv_input = &mut self.step_scratch[..total_len];
 
-        for ch in 0..in_channels {
-            let start = ch * n_frames;
-            let end = start + n_frames;
-            self.state.fill_history(ch, &mut conv_input[start..end]);
+        for (ch, window) in conv_input.chunks_mut(n_frames).enumerate() {
+            self.state.fill_history(ch, window);
         }
 
         let input_tensor =
@@ -473,8 +511,10 @@ impl fmt::Debug for CausalConv1d {
 impl fmt::Debug for CausalConvState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CausalConvState")
-            .field("frame_count", &self.frame_count)
-            .field("buffer_count", &self.buffers.len())
+            .field("num_channels", &self.num_channels)
+            .field("capacity", &self.capacity)
+            .field("head", &self.head)
+            .field("len", &self.len)
             .finish()
     }
 }
@@ -602,12 +642,21 @@ mod tests {
     #[test]
     fn test_causal_conv_state() {
         let mut state = CausalConvState::new(512, 3, 16);
-        assert_eq!(state.buffers.len(), 512);
+        assert_eq!(state.num_channels, 512);
+        assert_eq!(state.capacity, 16);
         state.push_frame(&vec![1.0; 512]);
         let mut buf = [0.0f32; 1];
         let n = state.fill_history(0, &mut buf);
         assert_eq!(n, 1);
         assert_eq!(buf[0], 1.0);
+        // 驗證 fill_history wraparound 正確性：推滿後再填應回傳最新值
+        for _ in 0..20 {
+            state.push_frame(&vec![2.0; 512]);
+        }
+        let mut buf2 = [0.0f32; 3];
+        let n2 = state.fill_history(0, &mut buf2);
+        assert_eq!(n2, 3);
+        assert_eq!(buf2, [2.0, 2.0, 2.0]);
     }
 
     /// 數值對齊測試：使用已知輸入比對 CausalConv1d::step 與 PyTorch 參考
