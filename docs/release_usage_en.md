@@ -1,9 +1,11 @@
 # Qwen3-TTS Rust Release Guide
 
-Target version: `qwen3tts-rs v0.1.16 Windows x64 / Windows x64 CUDA`
+Target version: `qwen3tts-rs v0.1.17 Windows x64 / Windows x64 CUDA`
 
 This release package contains pure Rust/Candle executables:
 
+- `qwen3tts-gui.exe`: desktop speech-synthesis UI for text, model, language,
+  speaker, Voice Clone reference audio, playback, and save-as workflows.
 - `synthesize.exe`: single-utterance text-to-speech.
 - `synthesize_batch.exe`: batch text-to-speech. The model is loaded once and
   reused across multiple lines.
@@ -110,8 +112,8 @@ Python fallback is used.
 
 ## CPU And CUDA Packages
 
-- `qwen3tts-rs-v0.1.16-windows-x64.zip`: CPU/Candle build.
-- `qwen3tts-rs-v0.1.16-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
+- `qwen3tts-rs-v0.1.17-windows-x64.zip`: CPU/Candle build.
+- `qwen3tts-rs-v0.1.17-windows-x64-cuda.zip`: CUDA/Candle build. On startup it
   first tries `CUDA:0` and falls back to CPU only if CUDA cannot initialize.
 
 Build the CUDA release package:

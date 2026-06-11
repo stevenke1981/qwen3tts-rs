@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 
 use eframe::egui;
@@ -534,7 +534,10 @@ impl TtsGuiApp {
     pub fn new() -> Self {
         let mut app = Self::default();
         app.status_log.push((
-            "Qwen3-TTS Rust 語音合成 v0.1.16 — 輸入文字後按「合成」開始".into(),
+            format!(
+                "Qwen3-TTS Rust 語音合成 v{} — 輸入文字後按「合成」開始",
+                env!("CARGO_PKG_VERSION")
+            ),
             Color32::GRAY,
         ));
         app
@@ -672,7 +675,7 @@ impl TtsGuiApp {
                                             Ok(decoder) => {
                                                 sink.append(decoder);
                                                 sink.detach(); // 播放不受 sink 生命週期限制
-                                                               // Note: `stream` must stay alive for playback
+                                                // Note: `stream` must stay alive for playback
                                                 std::mem::forget(stream);
                                             }
                                             Err(e) => {
@@ -719,7 +722,11 @@ impl eframe::App for TtsGuiApp {
                             .color(Color32::from_rgb(100, 180, 255)),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new("v0.1.16").size(12.0).color(Color32::GRAY));
+                        ui.label(
+                            RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
+                                .size(12.0)
+                                .color(Color32::GRAY),
+                        );
                     });
                 });
             });

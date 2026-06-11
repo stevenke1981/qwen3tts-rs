@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.16",
+    [string]$Version = "0.1.17",
     [switch]$Cuda,
     [string]$CudaComputeCap = "86",
     [string]$CudaToolkitRoot = "",
@@ -118,13 +118,13 @@ function Invoke-ReleaseBuild {
             Write-Host "Using cl.exe: $cl"
             Write-Host "Using CUDA toolkit: $cudaRoot"
             Write-Host "CUDA_COMPUTE_CAP=$CudaComputeCap"
-            $buildCommand = "call `"$vcvars`"$vcvarsArgs && set CUDA_COMPUTE_CAP=$CudaComputeCap&& set CUDAFORGE_THREADS=$CudaForgeThreads&& set RAYON_NUM_THREADS=$CudaForgeThreads&& set CUDA_ROOT=$cudaRoot&& set CUDA_PATH=$cudaRoot&& set NVCC=$nvcc&& set NVCC_CCBIN=$cl&& set PATH=$clDir;$cudaRoot\bin;%PATH%&& cargo build --release --features `"$FeatureList`" --example synthesize --example synthesize_batch --example convert_tokenizer --example convert_speaker_encoder --example quantize_tokenizer"
+            $buildCommand = "call `"$vcvars`"$vcvarsArgs && set CUDA_COMPUTE_CAP=$CudaComputeCap&& set CUDAFORGE_THREADS=$CudaForgeThreads&& set RAYON_NUM_THREADS=$CudaForgeThreads&& set CUDA_ROOT=$cudaRoot&& set CUDA_PATH=$cudaRoot&& set NVCC=$nvcc&& set NVCC_CCBIN=$cl&& set PATH=$clDir;$cudaRoot\bin;%PATH%&& cargo build --release --features `"$FeatureList`" --bin qwen3tts-gui --example synthesize --example synthesize_batch --example convert_tokenizer --example convert_speaker_encoder --example quantize_tokenizer"
             & cmd.exe /d /c $buildCommand
             if ($LASTEXITCODE -ne 0) {
                 throw "cargo CUDA release build failed with exit code $LASTEXITCODE"
             }
         } else {
-            cargo build --release --features $FeatureList --example synthesize --example synthesize_batch --example convert_tokenizer --example convert_speaker_encoder --example quantize_tokenizer
+            cargo build --release --features $FeatureList --bin qwen3tts-gui --example synthesize --example synthesize_batch --example convert_tokenizer --example convert_speaker_encoder --example quantize_tokenizer
         }
     } finally {
         Pop-Location
@@ -154,6 +154,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $PackageDir "tools") | Out-
 
 $exampleDir = Join-Path $RepoRoot "target\release\examples"
 $files = @(
+    @{ Source = Join-Path (Join-Path $RepoRoot "target\release") "qwen3tts-gui.exe"; Target = "qwen3tts-gui.exe" },
     @{ Source = Join-Path $exampleDir "synthesize.exe"; Target = "synthesize.exe" },
     @{ Source = Join-Path $exampleDir "synthesize_batch.exe"; Target = "synthesize_batch.exe" },
     @{ Source = Join-Path $exampleDir "convert_tokenizer.exe"; Target = "convert_tokenizer.exe" },
@@ -177,6 +178,7 @@ foreach ($file in $files) {
 qwen3tts-rs v$Version $TargetName
 
 Included:
+- qwen3tts-gui.exe
 - synthesize.exe
 - synthesize_batch.exe
 - convert_tokenizer.exe

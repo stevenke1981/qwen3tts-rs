@@ -1,9 +1,10 @@
 # Qwen3-TTS Rust Release 使用說明
 
-適用版本：`qwen3tts-rs v0.1.16 Windows x64 / Windows x64 CUDA`
+適用版本：`qwen3tts-rs v0.1.17 Windows x64 / Windows x64 CUDA`
 
 這個 release 包提供純 Rust/Candle 可執行檔：
 
+- `qwen3tts-gui.exe`：圖形化語音合成介面，可選文字、模型、語言、speaker、Voice Clone 參考音訊並播放/另存輸出。
 - `synthesize.exe`：單句文字轉語音。
 - `synthesize_batch.exe`：批次文字轉語音，模型只載入一次，適合連續測試多句。
 - `convert_tokenizer.exe`：將 12Hz tokenizer decoder/encoder/quantizer 權重轉成 Rust safetensors。
@@ -97,8 +98,8 @@ weights\tokenizer\
 
 ## CPU 與 CUDA 版本
 
-- `qwen3tts-rs-v0.1.16-windows-x64.zip`：CPU/Candle build。
-- `qwen3tts-rs-v0.1.16-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
+- `qwen3tts-rs-v0.1.17-windows-x64.zip`：CPU/Candle build。
+- `qwen3tts-rs-v0.1.17-windows-x64-cuda.zip`：CUDA/Candle build，啟動時會優先嘗試 `CUDA:0`，若 CUDA 初始化失敗才回退 CPU。
 
 建置 CUDA 版 release：
 
