@@ -1,6 +1,8 @@
 use candle_core::{Device, Module, Tensor};
 use candle_nn::{Conv1d, Conv1dConfig};
 
+const FIXTURE_DIR: &str = "tests/fixtures/depthwise";
+
 fn read_npy(path: &str) -> Vec<f32> {
     let data = std::fs::read(path).unwrap();
     let magic = &data[..6];
@@ -30,10 +32,10 @@ fn depthwise_conv_test() {
     let device = Device::Cpu;
 
     // Load test data: [C=2, T=4], [2, 1, 3], [2], [2, 4]
-    let x_data = read_npy("test_dw2_input.npy");
-    let w_data = read_npy("test_dw2_weight.npy");
-    let b_data = read_npy("test_dw2_bias.npy");
-    let pt_out = read_npy("test_dw2_output.npy");
+    let x_data = read_npy(&format!("{FIXTURE_DIR}/test_dw2_input.npy"));
+    let w_data = read_npy(&format!("{FIXTURE_DIR}/test_dw2_weight.npy"));
+    let b_data = read_npy(&format!("{FIXTURE_DIR}/test_dw2_bias.npy"));
+    let pt_out = read_npy(&format!("{FIXTURE_DIR}/test_dw2_output.npy"));
 
     let x = Tensor::from_slice(&x_data, (1, 2, 4), &device).unwrap();
     let w = Tensor::from_slice(&w_data, (2, 1, 3), &device).unwrap();
@@ -174,10 +176,10 @@ fn depthwise_conv_1024_groups() {
     let device = Device::Cpu;
 
     // Load test data: [C=1024, T=6], [1024, 1, 7], [1024], [1024, 6]
-    let x_data = read_npy("test_dw1024_input.npy");
-    let w_data = read_npy("test_dw1024_weight.npy");
-    let b_data = read_npy("test_dw1024_bias.npy");
-    let pt_out = read_npy("test_dw1024_output.npy");
+    let x_data = read_npy(&format!("{FIXTURE_DIR}/test_dw1024_input.npy"));
+    let w_data = read_npy(&format!("{FIXTURE_DIR}/test_dw1024_weight.npy"));
+    let b_data = read_npy(&format!("{FIXTURE_DIR}/test_dw1024_bias.npy"));
+    let pt_out = read_npy(&format!("{FIXTURE_DIR}/test_dw1024_output.npy"));
 
     let x = Tensor::from_slice(&x_data, (1, 1024, 6), &device).unwrap();
     let w = Tensor::from_slice(&w_data, (1024, 1, 7), &device).unwrap();

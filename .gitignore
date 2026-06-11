@@ -7,6 +7,16 @@ qwen3tts-rs-v*-windows-x64.zip
 *.wav
 *.npy
 *.bin
+!tests/fixtures/**/*.npy
 __pycache__/
 **/*.pyc
 agent_temp*.py
+
+# Root-level local run output. Keep reusable fixtures under artifacts/.
+/*.tokens
+/*.log
+/*.webm
+/tmp_*.txt
+/story*.txt
+/run_synth*.ps1
+/py_test*.py
