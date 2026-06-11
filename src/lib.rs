@@ -12,6 +12,7 @@
 //! - 純同步 `decode_chunk()` 調用，異步僅用於 I/O 邊界
 
 pub mod codec;
+pub mod gui;
 pub mod paths;
 pub mod quantization;
 pub mod speaker_converter;

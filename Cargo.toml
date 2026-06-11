@@ -43,6 +43,16 @@ log = "0.4"
 # HuggingFace tokenizer (pure-Rust BPE, used by the native talker backend)
 tokenizers = "0.22"
 
+# GUI framework
+eframe = { version = "0.31", features = ["default"] }
+egui = "0.31"
+
+# Native file dialogs
+rfd = "0.15"
+
+# Audio playback
+rodio = "0.20"
+
 [dev-dependencies]
 env_logger = "0.11"
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -63,6 +73,10 @@ required-features = ["candle-llm"]
 
 [[example]]
 name = "quantize_tokenizer"
+
+[[bin]]
+name = "qwen3tts-gui"
+path = "src/bin/qwen3tts-gui.rs"
 
 [patch.crates-io]
 candle-kernels = { path = "patches/candle-kernels" }
