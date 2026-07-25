@@ -1,0 +1,16 @@
+git status --short
+git branch --show-current
+git rev-parse HEAD
+powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -TargetRepo E:\qwen3tts-rs
+cargo fmt --all
+cargo fmt --all -- --check
+cargo check --all-targets
+cargo test --lib
+python tools/check_alignment_static.py . --report artifacts/alignment/P00/P00-T01/static-gap-report.json
+git clone https://github.com/ServeurpersoCom/qwentts.cpp.git E:\qwentts.cpp-reference
+git -C E:\qwentts.cpp-reference log -1 --format="%H|%ci|%s"
+git ls-remote https://github.com/QwenLM/Qwen3-TTS.git HEAD
+rustc -vV
+cargo --version
+nvidia-smi --query-gpu=name,driver_version,memory.total,compute_cap --format=csv,noheader
+nvcc --version

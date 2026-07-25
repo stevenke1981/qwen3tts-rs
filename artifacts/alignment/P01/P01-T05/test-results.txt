@@ -1,0 +1,16 @@
+P01-T05 root verification
+
+- python oracle help: PASS
+- python oracle check (`fixtures/alignment/p01_prompt_id_matrix.json`): PASS
+- formatting (`cargo fmt --all -- --check`): PASS
+- CPU compile gate (`cargo check --no-default-features --features cpu`): PASS
+- `prompt_id_matrix_real_test` (`--ignored --nocapture`): PASS (`1 passed`)
+- `text_frontend` library tests: PASS (`32 passed`)
+- synthesize example check: PASS
+- synthesize_batch example check: PASS
+- scoped diff: PASS (`git diff --check` with task-scoped paths)
+- independent review: PASS (`ACCEPT`)
+
+Warnings observed:
+- SoX not installed in environment, expected for `--check`-only smoke; did not fail gates.
+- Existing MSVC `LNK4098` linker warning observed; non-blocking.

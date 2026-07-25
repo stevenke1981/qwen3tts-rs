@@ -1,0 +1,33 @@
+version = 1
+generated_at = "2026-07-25"
+
+[target]
+repository = "https://github.com/stevenke1981/qwen3tts-rs"
+branch = "master"
+baseline_commit = "b08178964504d5a214565ffc4ff5ed592eb8f7ec"
+
+[reference]
+repository = "https://github.com/ServeurpersoCom/qwentts.cpp"
+branch = "master"
+baseline_commit = "82cd05b9f3a175612dc89fd6943e610fab096ef5"
+
+[thresholds]
+prompt_ids_exact = true
+token_sequence_exact_cpu_f32 = true
+embedding_cosine = 0.99999
+layer_cosine = 0.9995
+logit_cosine = 0.9990
+decoder_cosine = 0.9990
+waveform_cosine = 0.9990
+waveform_max_abs = 1.0e-4
+stream_vs_offline_max_abs = 1.0e-5
+stream_latency_ratio_max = 1.20
+q8_memory_ratio_max = 0.65
+q4_memory_ratio_max = 0.40
+
+[fixtures]
+manifest = "config/fixtures.json"
+fail_closed_release = true
+
+[evidence]
+root = "artifacts/alignment"

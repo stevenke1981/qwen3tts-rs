@@ -1,0 +1,501 @@
+version: 1
+status_values:
+  - NOT_STARTED
+  - READY
+  - IN_PROGRESS
+  - BLOCKED
+  - GATE_FAILED
+  - GATE_PASSED
+phases:
+  - id: P00
+    title: "Baseline and parity harness"
+    tasks:
+      - id: P00-T01
+        title: "Pin target/reference/upstream revisions and write baseline delta report"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P00/P00-T01
+        depends_on:
+          []
+      - id: P00-T02
+        title: "Create fixture manifest and fail-closed fixture resolver"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P00/P00-T02
+        depends_on:
+          - P00-T01
+      - id: P00-T03
+        title: "Add stage dump format and dump hooks behind a feature flag"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P00/P00-T03
+        depends_on:
+          - P00-T02
+      - id: P00-T04
+        title: "Build reference command adapters for Python and qwentts.cpp"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P00/P00-T04
+        depends_on:
+          - P00-T03
+      - id: P00-T05
+        title: "Create CPU F32 smoke corpus and baseline report"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P00/P00-T05
+        depends_on:
+          - P00-T04
+  - id: P01
+    title: "Metadata and prompt parity"
+    tasks:
+      - id: P01-T01
+        title: "Replace model-name inference with metadata/config parsing"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P01/P01-T01
+        depends_on:
+          - P00-T05
+      - id: P01-T02
+        title: "Load all special token, language, speaker and dialect tables from metadata"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P01/P01-T02
+        depends_on:
+          - P01-T01
+      - id: P01-T03
+        title: "Correct M-RoPE semantics and add exact position/rotation tests"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P01/P01-T03
+        depends_on:
+          - P01-T02
+      - id: P01-T04
+        title: "Match prompt assembly for Base, CustomVoice and VoiceDesign"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P01/P01-T04
+        depends_on:
+          - P01-T03
+      - id: P01-T05
+        title: "Gate exact prompt IDs across the model matrix"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P01/P01-T05
+        depends_on:
+          - P01-T04
+  - id: P02
+    title: "Sampling parity"
+    tasks:
+      - id: P02-T01
+        title: "Implement Philox RNG with known-vector tests"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P02/P02-T01
+        depends_on:
+          - P01-T05
+      - id: P02-T02
+        title: "Implement repetition penalty with exact operation ordering"
+        status: GATE_PASSED
+        evidence_dir: artifacts/alignment/P02/P02-T02
+        depends_on:
+          - P02-T01
+      - id: P02-T03
+        title: "Separate Talker and Code Predictor sampling configs"
+        status: READY
+        evidence_dir: artifacts/alignment/P02/P02-T03
+        depends_on:
+          - P02-T02
+      - id: P02-T04
+        title: "Match token suppression and EOS handling"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P02/P02-T04
+        depends_on:
+          - P02-T03
+      - id: P02-T05
+        title: "Gate deterministic token sequence parity"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P02/P02-T05
+        depends_on:
+          - P02-T04
+  - id: P03
+    title: "Talker and Code Predictor numerical parity"
+    tasks:
+      - id: P03-T01
+        title: "Instrument embeddings, norms, RoPE and layer outputs"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P03/P03-T01
+        depends_on:
+          - P02-T05
+      - id: P03-T02
+        title: "Verify Talker prefill and single-step KV cache"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P03/P03-T02
+        depends_on:
+          - P03-T01
+      - id: P03-T03
+        title: "Verify Code Predictor frame-local prefill and 14 decode steps"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P03/P03-T03
+        depends_on:
+          - P03-T02
+      - id: P03-T04
+        title: "Eliminate avoidable host transfers in acoustic prediction"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P03/P03-T04
+        depends_on:
+          - P03-T03
+      - id: P03-T05
+        title: "Gate stage cosine and logit ranking thresholds"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P03/P03-T05
+        depends_on:
+          - P03-T04
+  - id: P04
+    title: "Tokenizer decoder offline parity"
+    tasks:
+      - id: P04-T01
+        title: "Verify RVQ split projections and codebook policy"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P04/P04-T01
+        depends_on:
+          - P03-T05
+      - id: P04-T02
+        title: "Verify decoder transformer and sliding-window semantics"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P04/P04-T02
+        depends_on:
+          - P04-T01
+      - id: P04-T03
+        title: "Verify ConvNeXt upsample and DAC blocks"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P04/P04-T03
+        depends_on:
+          - P04-T02
+      - id: P04-T04
+        title: "Match offline waveform on short/medium/long corpora"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P04/P04-T04
+        depends_on:
+          - P04-T03
+      - id: P04-T05
+        title: "Create buffered chunk decode with left-context trimming"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P04/P04-T05
+        depends_on:
+          - P04-T04
+  - id: P05
+    title: "True stateful codec streaming"
+    tasks:
+      - id: P05-T01
+        title: "Define CodecStreamState and state ownership"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P05/P05-T01
+        depends_on:
+          - P04-T05
+      - id: P05-T02
+        title: "Implement persistent causal-convolution contexts"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P05/P05-T02
+        depends_on:
+          - P05-T01
+      - id: P05-T03
+        title: "Implement transposed-convolution overlap state"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P05/P05-T03
+        depends_on:
+          - P05-T02
+      - id: P05-T04
+        title: "Implement transformer KV ring and absolute RoPE position"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P05/P05-T04
+        depends_on:
+          - P05-T03
+      - id: P05-T05
+        title: "Implement one-frame graph/buffer reuse"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P05/P05-T05
+        depends_on:
+          - P05-T04
+      - id: P05-T06
+        title: "Implement reset, ICL prime and optional state snapshots"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P05/P05-T06
+        depends_on:
+          - P05-T05
+      - id: P05-T07
+        title: "Gate offline-equivalent output and bounded complexity"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P05/P05-T07
+        depends_on:
+          - P05-T06
+  - id: P06
+    title: "End-to-end generation streaming"
+    tasks:
+      - id: P06-T01
+        title: "Expose frame events from Talker generation"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P06/P06-T01
+        depends_on:
+          - P05-T07
+      - id: P06-T02
+        title: "Connect generated codes directly to codec stream session"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P06/P06-T02
+        depends_on:
+          - P06-T01
+      - id: P06-T03
+        title: "Add audio callback, backpressure and cancellation"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P06/P06-T03
+        depends_on:
+          - P06-T02
+      - id: P06-T04
+        title: "Update GUI to consume streaming events"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P06/P06-T04
+        depends_on:
+          - P06-T03
+      - id: P06-T05
+        title: "Gate TTFA-before-completion and long-form output"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P06/P06-T05
+        depends_on:
+          - P06-T04
+  - id: P07
+    title: "Tokenizer encoder and qwen-codec"
+    tasks:
+      - id: P07-T01
+        title: "Complete 24 kHz audio preprocessing/resampling contract"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P07/P07-T01
+        depends_on:
+          - P06-T05
+      - id: P07-T02
+        title: "Verify SEANet and encoder transformer"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P07/P07-T02
+        depends_on:
+          - P07-T01
+      - id: P07-T03
+        title: "Implement RVQ encode argmin path"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P07/P07-T03
+        depends_on:
+          - P07-T02
+      - id: P07-T04
+        title: "Define versioned RVQ code file format"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P07/P07-T04
+        depends_on:
+          - P07-T03
+      - id: P07-T05
+        title: "Implement qwen-codec encode/decode/stream CLI"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P07/P07-T05
+        depends_on:
+          - P07-T04
+      - id: P07-T06
+        title: "Gate round-trip and reference code parity"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P07/P07-T06
+        depends_on:
+          - P07-T05
+  - id: P08
+    title: "Native quantized runtime"
+    tasks:
+      - id: P08-T01
+        title: "Define quantized tensor types and protected tensor policy"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P08/P08-T01
+        depends_on:
+          - P07-T06
+      - id: P08-T02
+        title: "Implement direct Q8 linear and embedding operations"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P08/P08-T02
+        depends_on:
+          - P08-T01
+      - id: P08-T03
+        title: "Implement Q4_K_M-class block layout and kernels"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P08/P08-T03
+        depends_on:
+          - P08-T02
+      - id: P08-T04
+        title: "Add backend-resident packed weight loader"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P08/P08-T04
+        depends_on:
+          - P08-T03
+      - id: P08-T05
+        title: "Integrate quantized Talker and Code Predictor"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P08/P08-T05
+        depends_on:
+          - P08-T04
+      - id: P08-T06
+        title: "Gate memory, token and quality metrics"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P08/P08-T06
+        depends_on:
+          - P08-T05
+  - id: P09
+    title: "Model format and conversion"
+    tasks:
+      - id: P09-T01
+        title: "Define metadata-complete Rust model container strategy"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P09/P09-T01
+        depends_on:
+          - P08-T06
+      - id: P09-T02
+        title: "Implement GGUF reader compatibility or lossless converter"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P09/P09-T02
+        depends_on:
+          - P09-T01
+      - id: P09-T03
+        title: "Implement official checkpoint conversion with provenance"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P09/P09-T03
+        depends_on:
+          - P09-T02
+      - id: P09-T04
+        title: "Implement quantization command and protected tensor rules"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P09/P09-T04
+        depends_on:
+          - P09-T03
+      - id: P09-T05
+        title: "Gate five talker variants plus shared tokenizer"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P09/P09-T05
+        depends_on:
+          - P09-T04
+  - id: P10
+    title: "CLI and library product surface"
+    tasks:
+      - id: P10-T01
+        title: "Implement stable high-level Rust synthesis/session API"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P10/P10-T01
+        depends_on:
+          - P09-T05
+      - id: P10-T02
+        title: "Implement qwen-tts CLI with streaming and WAV output"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P10/P10-T02
+        depends_on:
+          - P10-T01
+      - id: P10-T03
+        title: "Add model discovery/download and cache policy"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P10/P10-T03
+        depends_on:
+          - P10-T02
+      - id: P10-T04
+        title: "Add structured logs, JSON metrics and exit codes"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P10/P10-T04
+        depends_on:
+          - P10-T03
+      - id: P10-T05
+        title: "Gate compatibility corpus and cancellation"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P10/P10-T05
+        depends_on:
+          - P10-T04
+  - id: P11
+    title: "OpenAI server and voice registry"
+    tasks:
+      - id: P11-T01
+        title: "Implement /v1/audio/speech non-streaming endpoint"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P11/P11-T01
+        depends_on:
+          - P10-T05
+      - id: P11-T02
+        title: "Implement chunked/streaming audio response"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P11/P11-T02
+        depends_on:
+          - P11-T01
+      - id: P11-T03
+        title: "Implement safe cloned-voice registry"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P11/P11-T03
+        depends_on:
+          - P11-T02
+      - id: P11-T04
+        title: "Implement request limits, cancellation and error mapping"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P11/P11-T04
+        depends_on:
+          - P11-T03
+      - id: P11-T05
+        title: "Gate API and concurrency tests"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P11/P11-T05
+        depends_on:
+          - P11-T04
+  - id: P12
+    title: "C ABI and continuous batching"
+    tasks:
+      - id: P12-T01
+        title: "Define stable opaque-handle C ABI"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P12/P12-T01
+        depends_on:
+          - P11-T05
+      - id: P12-T02
+        title: "Implement callback ownership and cancellation"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P12/P12-T02
+        depends_on:
+          - P12-T01
+      - id: P12-T03
+        title: "Implement per-session scheduler state"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P12/P12-T03
+        depends_on:
+          - P12-T02
+      - id: P12-T04
+        title: "Implement bounded multi-lane Talker/Predictor batching"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P12/P12-T04
+        depends_on:
+          - P12-T03
+      - id: P12-T05
+        title: "Implement per-slot codec streams and isolation"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P12/P12-T05
+        depends_on:
+          - P12-T04
+      - id: P12-T06
+        title: "Gate C lifecycle, 8-session isolation and throughput"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P12/P12-T06
+        depends_on:
+          - P12-T05
+  - id: P13
+    title: "Backends, CI and release"
+    tasks:
+      - id: P13-T01
+        title: "CPU/CUDA/Metal full matrix and performance report"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P13/P13-T01
+        depends_on:
+          - P12-T06
+      - id: P13-T02
+        title: "Vulkan/ROCm strategy and implementation gate"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P13/P13-T02
+        depends_on:
+          - P13-T01
+      - id: P13-T03
+        title: "Replace permissive CI with fail-closed parity workflow"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P13/P13-T03
+        depends_on:
+          - P13-T02
+      - id: P13-T04
+        title: "Generate SBOM, notices, model manifest and reproducible build notes"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P13/P13-T04
+        depends_on:
+          - P13-T03
+      - id: P13-T05
+        title: "Run final audit and produce alignment release report"
+        status: NOT_STARTED
+        evidence_dir: artifacts/alignment/P13/P13-T05
+        depends_on:
+          - P13-T04

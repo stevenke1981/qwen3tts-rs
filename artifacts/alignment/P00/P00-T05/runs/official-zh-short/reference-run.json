@@ -1,0 +1,51 @@
+{
+  "argv": [
+    "C:\\Python314\\python.exe",
+    "tools\\generate_tokens.py",
+    "--model",
+    "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    "--language",
+    "Chinese",
+    "--seed",
+    "42",
+    "--max-new-tokens",
+    "4",
+    "--top-k",
+    "50",
+    "--top-p",
+    "1.0",
+    "--temperature",
+    "0.9",
+    "--text",
+    "\u4f60\u597d\uff0c\u9019\u662f\u4e00\u6bb5\u8a9e\u97f3\u5408\u6210\u6e2c\u8a66\u3002"
+  ],
+  "artifacts": [
+    {
+      "byte_length": 853,
+      "kind": "stderr",
+      "relative_path": "logs/stderr.txt",
+      "sha256": "b9756690d2d1b0ec0a4db51f4c0c0d9db7c2d3b05ea97353549ba0946ae8315a"
+    },
+    {
+      "byte_length": 42,
+      "kind": "prompt",
+      "relative_path": "prompt.txt",
+      "sha256": "233f8c3230d55ad175a48e28340b3707f51c49ab9a66fe1326ca1702202e49c9"
+    },
+    {
+      "byte_length": 100,
+      "kind": "stdout",
+      "relative_path": "tokens.bin",
+      "sha256": "6bbc1273d7ff6ed3da42a1f50bd5b0f17f8d549b29279f44dde8165f28330543"
+    }
+  ],
+  "case_id": "zh-short",
+  "exit_status": 0,
+  "kind": "official-python",
+  "model": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+  "revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "schema_version": 1,
+  "seed": 42,
+  "source": "official-python",
+  "stages": []
+}

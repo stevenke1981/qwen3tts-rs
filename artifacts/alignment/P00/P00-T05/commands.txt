@@ -1,0 +1,14 @@
+python -m unittest tools.test_cpu_f32_smoke -v
+python tools/cpu_f32_smoke.py --help
+python -m json.tool schemas/cpu-f32-baseline.schema.json
+cmake -S . -B build-p00t05b -DGGML_BLAS=OFF -DGGML_CUDA=OFF -DGGML_VULKAN=OFF -DGGML_METAL=OFF
+cmake --build build-p00t05b --config Release --target qwen-tts --parallel 4
+PYTHONUTF8=1 C:\Python314\python.exe convert.py
+python tools/reference_adapter.py official-python --model Qwen/Qwen3-TTS-12Hz-0.6B-Base --case-id zh-short --seed 42 --max-new 4 ...
+python tools/reference_adapter.py qwentts-cpp --case-id zh-short --seed 42 --max-new 4 --greedy ...
+python tools/cpu_f32_smoke.py --repo-root E:\qwen3tts-rs --corpus config/parity-corpus.json --require-case zh-short --require-kind prompt --require-kind token --require-kind tensor --require-kind audio ...
+python tools/fixture_manifest.py config/fixtures.json --require-all
+python -m unittest tools.test_fixture_manifest tools.test_reference_adapter tools.test_cpu_f32_smoke -v
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --lib

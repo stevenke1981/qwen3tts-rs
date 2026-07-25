@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "task_id": "P00-T01",
+  "status": "GATE_PASSED",
+  "phase_gate": false,
+  "checks": {
+    "target_revision_pinned": true,
+    "qwentts_cpp_revision_pinned": true,
+    "official_revision_pinned": true,
+    "environment_recorded": true,
+    "baseline_delta_required": false,
+    "cargo_fmt_check": "PASS",
+    "cargo_check_all_targets": "PASS_WITH_EXISTING_WARNING",
+    "cargo_test_lib": {
+      "status": "PASS_WITH_LINKER_WARNING",
+      "passed": 82,
+      "failed": 0
+    },
+    "static_gap_scan": "PASS_REPORT_GENERATED",
+    "real_weight_parity_claimed": false,
+    "independent_review": "ACCEPT"
+  },
+  "known_failures": [
+    {
+      "class": "F7",
+      "summary": "bootstrap.ps1 does not fail closed on native command exit codes"
+    },
+    {
+      "class": "F8",
+      "summary": "real-weight tests contain silent skip paths"
+    }
+  ],
+  "next_task": "P00-T02"
+}

@@ -1,0 +1,15 @@
+P02-T02 verification log
+
+- `python tools/generate_repetition_penalty_vectors.py`: PASS (`REPETITION_PENALTY_VECTORS_GENERATED`)
+- `python tools/generate_repetition_penalty_vectors.py --check fixtures/alignment/p02_repetition_penalty_vectors.json`: PASS (`REPETITION_PENALTY_VECTORS_CHECK_OK`)
+- `cargo fmt --all`: PASS (auto-format only; no remaining formatting errors)
+- `cargo test --lib talker::sampling`: PASS (`10 passed`)
+- `cargo test --test repetition_penalty_test`: PASS (`5 passed`)
+- `cargo test --test philox_rng_test`: PASS (`3 passed`)
+- `cargo test --lib c0_history_capacity_targets_max_new_tokens`: PASS (`1 passed`)
+- `git diff --check -- src/talker/talker.rs src/talker/sampling.rs tests/repetition_penalty_test.rs tools/generate_repetition_penalty_vectors.py fixtures/alignment/p02_repetition_penalty_vectors.json config/fixtures.json`: PASS (`no errors, no warning`)
+- Additional warnings observed: MSVC `LNK4098` linker warning persisted in `qwen3tts-gui` and test binaries; treated non-blocking.
+- Failure recovery during task:
+  - Initial run of `repetition_penalty_test` failed on `repetition_penalty_matches_official_oracle` in case `positive-negative-repetition-history-unique` (`draw mismatch` at uniform_bits draw assertion).
+  - Root cause fixed by aligning Python generator `next_uniform` to f32-rounded expression (`f32((f32(word)+f32(0.5))*f32(inv))`) and updating fixture hash.
+  - After fix, full sampling/repetition/philox targets are green.

@@ -1,0 +1,404 @@
+{
+  "argv": [
+    "E:\\qwentts.cpp-reference\\build-p00t05b\\Release\\qwen-tts.exe",
+    "--model",
+    "E:\\qwentts.cpp-reference\\models\\qwen-talker-0.6b-base-F32.gguf",
+    "--codec",
+    "E:\\qwentts.cpp-reference\\models\\qwen-tokenizer-12hz-F32.gguf",
+    "--seed",
+    "42",
+    "--lang",
+    "Chinese",
+    "--max-new",
+    "4",
+    "--greedy",
+    "--dump",
+    "E:\\qwen3tts-rs\\artifacts\\alignment\\P00\\P00-T05\\runs\\qwentts-zh-short\\raw_tensor_dump",
+    "-o",
+    "E:\\qwen3tts-rs\\artifacts\\alignment\\P00\\P00-T05\\runs\\qwentts-zh-short\\output.wav"
+  ],
+  "artifacts": [
+    {
+      "byte_length": 4278,
+      "kind": "stderr",
+      "relative_path": "logs/stderr.txt",
+      "sha256": "f0757461c26d6f3b145a4f282be04027e2b70bc26bdaa5f199a6c53499746c2a"
+    },
+    {
+      "byte_length": 15404,
+      "kind": "audio",
+      "relative_path": "output.wav",
+      "sha256": "8b1a5ea1b00e5cfe182471a6714a5c321f34a94219183f95c88f84fecba3efa1"
+    },
+    {
+      "byte_length": 42,
+      "kind": "prompt",
+      "relative_path": "prompt.txt",
+      "sha256": "233f8c3230d55ad175a48e28340b3707f51c49ab9a66fe1326ca1702202e49c9"
+    },
+    {
+      "byte_length": 256,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/codes-full_0000.f32.bin",
+      "sha256": "4d0c58266313828a0116019e6b1bbd945d57c49063a9099fffd5f478273cd32c",
+      "shape": [
+        4,
+        16
+      ]
+    },
+    {
+      "byte_length": 64,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/codes-step0_0001.f32.bin",
+      "sha256": "8e7ec5777975a4c1c86989c58d9b6d4a3cd13a8a00c25c7ac73f62ef62feea8e",
+      "shape": [
+        16
+      ]
+    },
+    {
+      "byte_length": 4096,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/next-emb-step0_0002.f32.bin",
+      "sha256": "6918bfb9cd2e93f35339c41375e8a18cc9fdd6f59541b0d4cbf4a28945009156",
+      "shape": [
+        1024
+      ]
+    },
+    {
+      "byte_length": 30720,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/output-audio_0003.f32.bin",
+      "sha256": "8c1943d056ce078c955f54aa306d20336918a62fb9380ec6b3839fcb7c8f3740",
+      "shape": [
+        7680
+      ]
+    },
+    {
+      "byte_length": 76,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/prompt-ids_0004.f32.bin",
+      "sha256": "c7624d3570a28466e1e0805c6ad3b0309a2f6120ff63f2fa25d5a36a5e8a16c7",
+      "shape": [
+        19
+      ]
+    },
+    {
+      "byte_length": 86016,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/talker-hidden-prefill-final_0005.f32.bin",
+      "sha256": "693e6494bff36d98ead8bf27bde82b60775777cd5b58828defb4d257354a580e",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "byte_length": 86016,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/talker-hidden-prefill-l0_0006.f32.bin",
+      "sha256": "16baec5a5756f1ca5c6a5008104f817d98c9977b89734684a3428506d90cccaa",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "byte_length": 86016,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/talker-hidden-prefill-l14_0007.f32.bin",
+      "sha256": "1ea701624d2f8f2b6665e2208d8f079922492bb0edb3dc8d92bfeaf6e0e2472f",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "byte_length": 86016,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/talker-hidden-prefill-l21_0008.f32.bin",
+      "sha256": "d0f6b925655d2f133e2adab79e18fcce4bd4aedf68a1ff2253ef93bb83ba7423",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "byte_length": 86016,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/talker-hidden-prefill-l27_0009.f32.bin",
+      "sha256": "d1cfcbe85ed70fc9a72786980d24052c409ed5318fa6723af71bf3cb7d257116",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "byte_length": 86016,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/talker-hidden-prefill-l7_0010.f32.bin",
+      "sha256": "3a3e0e89ce421814d9fe54770ec7efb548ae41d542cbb99d02fa1085e2bd55d3",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "byte_length": 4096,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/talker-hidden-step1_0011.f32.bin",
+      "sha256": "7e127f47b119b1b162ecca71b654269c7ec48b3d741888eafa3473570246691f",
+      "shape": [
+        1024
+      ]
+    },
+    {
+      "byte_length": 86016,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/talker-input-embed_0012.f32.bin",
+      "sha256": "782187e25e4761cfea991049fa7192ca6eea94fff7b453cdd15848814a38bb69",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "byte_length": 12288,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/talker-logits-prefill_0013.f32.bin",
+      "sha256": "07ed3c8913c7b2c71f2b83e82da5431cd625c7f543de6f5a0e506e133b746833",
+      "shape": [
+        3072
+      ]
+    },
+    {
+      "byte_length": 4096,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/trailing-text-hidden_0014.f32.bin",
+      "sha256": "3e9d4ce3596ddeaa78e62f3ef80d69af7fb3bee9821016c22b2c9621e3ff9128",
+      "shape": [
+        1,
+        1024
+      ]
+    },
+    {
+      "byte_length": 4096,
+      "dtype": "f32",
+      "kind": "tensor",
+      "layout": "C",
+      "relative_path": "tensors/tts-pad-embed_0015.f32.bin",
+      "sha256": "3e9d4ce3596ddeaa78e62f3ef80d69af7fb3bee9821016c22b2c9621e3ff9128",
+      "shape": [
+        1024
+      ]
+    }
+  ],
+  "case_id": "zh-short",
+  "exit_status": 0,
+  "kind": "qwentts.cpp",
+  "model": "E:\\qwentts.cpp-reference\\models\\qwen-talker-0.6b-base-F32.gguf",
+  "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+  "schema_version": 1,
+  "seed": 42,
+  "source": "qwentts.cpp",
+  "stages": [
+    {
+      "dtype": "f32",
+      "file": "codes-full_0000.f32.bin",
+      "layout": "C",
+      "name": "codes-full_0000",
+      "sha256": "4d0c58266313828a0116019e6b1bbd945d57c49063a9099fffd5f478273cd32c",
+      "shape": [
+        4,
+        16
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "codes-step0_0001.f32.bin",
+      "layout": "C",
+      "name": "codes-step0_0001",
+      "sha256": "8e7ec5777975a4c1c86989c58d9b6d4a3cd13a8a00c25c7ac73f62ef62feea8e",
+      "shape": [
+        16
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "next-emb-step0_0002.f32.bin",
+      "layout": "C",
+      "name": "next-emb-step0_0002",
+      "sha256": "6918bfb9cd2e93f35339c41375e8a18cc9fdd6f59541b0d4cbf4a28945009156",
+      "shape": [
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "output-audio_0003.f32.bin",
+      "layout": "C",
+      "name": "output-audio_0003",
+      "sha256": "8c1943d056ce078c955f54aa306d20336918a62fb9380ec6b3839fcb7c8f3740",
+      "shape": [
+        7680
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "prompt-ids_0004.f32.bin",
+      "layout": "C",
+      "name": "prompt-ids_0004",
+      "sha256": "c7624d3570a28466e1e0805c6ad3b0309a2f6120ff63f2fa25d5a36a5e8a16c7",
+      "shape": [
+        19
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "talker-hidden-prefill-final_0005.f32.bin",
+      "layout": "C",
+      "name": "talker-hidden-prefill-final_0005",
+      "sha256": "693e6494bff36d98ead8bf27bde82b60775777cd5b58828defb4d257354a580e",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "talker-hidden-prefill-l0_0006.f32.bin",
+      "layout": "C",
+      "name": "talker-hidden-prefill-l0_0006",
+      "sha256": "16baec5a5756f1ca5c6a5008104f817d98c9977b89734684a3428506d90cccaa",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "talker-hidden-prefill-l14_0007.f32.bin",
+      "layout": "C",
+      "name": "talker-hidden-prefill-l14_0007",
+      "sha256": "1ea701624d2f8f2b6665e2208d8f079922492bb0edb3dc8d92bfeaf6e0e2472f",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "talker-hidden-prefill-l21_0008.f32.bin",
+      "layout": "C",
+      "name": "talker-hidden-prefill-l21_0008",
+      "sha256": "d0f6b925655d2f133e2adab79e18fcce4bd4aedf68a1ff2253ef93bb83ba7423",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "talker-hidden-prefill-l27_0009.f32.bin",
+      "layout": "C",
+      "name": "talker-hidden-prefill-l27_0009",
+      "sha256": "d1cfcbe85ed70fc9a72786980d24052c409ed5318fa6723af71bf3cb7d257116",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "talker-hidden-prefill-l7_0010.f32.bin",
+      "layout": "C",
+      "name": "talker-hidden-prefill-l7_0010",
+      "sha256": "3a3e0e89ce421814d9fe54770ec7efb548ae41d542cbb99d02fa1085e2bd55d3",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "talker-hidden-step1_0011.f32.bin",
+      "layout": "C",
+      "name": "talker-hidden-step1_0011",
+      "sha256": "7e127f47b119b1b162ecca71b654269c7ec48b3d741888eafa3473570246691f",
+      "shape": [
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "talker-input-embed_0012.f32.bin",
+      "layout": "C",
+      "name": "talker-input-embed_0012",
+      "sha256": "782187e25e4761cfea991049fa7192ca6eea94fff7b453cdd15848814a38bb69",
+      "shape": [
+        21,
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "talker-logits-prefill_0013.f32.bin",
+      "layout": "C",
+      "name": "talker-logits-prefill_0013",
+      "sha256": "07ed3c8913c7b2c71f2b83e82da5431cd625c7f543de6f5a0e506e133b746833",
+      "shape": [
+        3072
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "trailing-text-hidden_0014.f32.bin",
+      "layout": "C",
+      "name": "trailing-text-hidden_0014",
+      "sha256": "3e9d4ce3596ddeaa78e62f3ef80d69af7fb3bee9821016c22b2c9621e3ff9128",
+      "shape": [
+        1,
+        1024
+      ]
+    },
+    {
+      "dtype": "f32",
+      "file": "tts-pad-embed_0015.f32.bin",
+      "layout": "C",
+      "name": "tts-pad-embed_0015",
+      "sha256": "3e9d4ce3596ddeaa78e62f3ef80d69af7fb3bee9821016c22b2c9621e3ff9128",
+      "shape": [
+        1024
+      ]
+    }
+  ]
+}

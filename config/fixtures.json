@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "fixtures": [
+    {
+      "id": "p00-cpu-f32-baseline-report",
+      "path": "../artifacts/alignment/P00/P00-T05/cpu-f32-baseline.json",
+      "source": "qwen3tts-rs P00-T05 alignment harness",
+      "revision": "b08178964504d5a214565ffc4ff5ed592eb8f7ec",
+      "sha256": "2b5edbf451dac6ac042f58b58cee7b2737449e6f02a8122c5f01c9b12b14ddf8",
+      "license": "Apache-2.0",
+      "generated_by": "tools/cpu_f32_smoke.py",
+      "command": "python tools/cpu_f32_smoke.py --repo-root E:\\qwen3tts-rs --corpus config/parity-corpus.json --require-case zh-short --require-kind prompt --require-kind token --require-kind tensor --require-kind audio ...",
+      "required": true
+    },
+    {
+      "id": "p00-official-reference-run",
+      "path": "../artifacts/alignment/P00/P00-T05/runs/official-zh-short/reference-run.json",
+      "source": "https://github.com/QwenLM/Qwen3-TTS",
+      "revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "sha256": "f8581518aa7fee091b496b9616f68b03c8702aa90b7dd94b8c92bc779d51a888",
+      "license": "Apache-2.0",
+      "generated_by": "tools/reference_adapter.py official-python",
+      "command": "python tools/reference_adapter.py official-python --model Qwen/Qwen3-TTS-12Hz-0.6B-Base --case-id zh-short --seed 42 --max-new 4 ...",
+      "required": true
+    },
+    {
+      "id": "p00-official-prompt",
+      "path": "../artifacts/alignment/P00/P00-T05/runs/official-zh-short/prompt.txt",
+      "source": "config/parity-corpus.json zh-short",
+      "revision": "b08178964504d5a214565ffc4ff5ed592eb8f7ec",
+      "sha256": "233f8c3230d55ad175a48e28340b3707f51c49ab9a66fe1326ca1702202e49c9",
+      "license": "Apache-2.0",
+      "generated_by": "tools/reference_adapter.py official-python",
+      "command": "python tools/reference_adapter.py official-python --case-id zh-short ...",
+      "required": true
+    },
+    {
+      "id": "p00-official-token-stream",
+      "path": "../artifacts/alignment/P00/P00-T05/runs/official-zh-short/tokens.bin",
+      "source": "https://github.com/QwenLM/Qwen3-TTS",
+      "revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "sha256": "6bbc1273d7ff6ed3da42a1f50bd5b0f17f8d549b29279f44dde8165f28330543",
+      "license": "Apache-2.0",
+      "generated_by": "tools/generate_tokens.py through tools/reference_adapter.py",
+      "command": "python tools/reference_adapter.py official-python --case-id zh-short --seed 42 --max-new 4 ...",
+      "required": true
+    },
+    {
+      "id": "p00-qwentts-reference-run",
+      "path": "../artifacts/alignment/P00/P00-T05/runs/qwentts-zh-short/reference-run.json",
+      "source": "https://github.com/ServeurpersoCom/qwentts.cpp",
+      "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+      "sha256": "077d420f91ebee3f90216518f6507f98c56dd0bd54dfb197e1254446f74b971d",
+      "license": "Apache-2.0",
+      "generated_by": "tools/reference_adapter.py qwentts-cpp",
+      "command": "python tools/reference_adapter.py qwentts-cpp --case-id zh-short --seed 42 --max-new 4 --greedy ...",
+      "required": true
+    },
+    {
+      "id": "p00-qwentts-audio",
+      "path": "../artifacts/alignment/P00/P00-T05/runs/qwentts-zh-short/output.wav",
+      "source": "https://github.com/ServeurpersoCom/qwentts.cpp",
+      "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+      "sha256": "8b1a5ea1b00e5cfe182471a6714a5c321f34a94219183f95c88f84fecba3efa1",
+      "license": "Apache-2.0",
+      "generated_by": "qwen-tts.exe CPU F32 through tools/reference_adapter.py",
+      "command": "qwen-tts.exe --seed 42 --max-new 4 --greedy --dump ... -o output.wav",
+      "required": true
+    },
+    {
+      "id": "p00-qwentts-tensor-manifest",
+      "path": "../artifacts/alignment/P00/P00-T05/runs/qwentts-zh-short/tensors/manifest.json",
+      "source": "https://github.com/ServeurpersoCom/qwentts.cpp",
+      "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+      "sha256": "2c6e56b5f412ea7e1e815d716ef4c65df9820df73e5bee624873c1e929493d54",
+      "license": "Apache-2.0",
+      "generated_by": "tools/reference_adapter.py qwentts-cpp tensor normalizer",
+      "command": "python tools/reference_adapter.py qwentts-cpp --case-id zh-short --seed 42 --max-new 4 --greedy ...",
+      "required": true
+    },
+    {
+      "id": "parity-corpus-long-en",
+      "path": "../fixtures/text/long-en.txt",
+      "source": "qwen3tts-rs parity corpus",
+      "revision": "b08178964504d5a214565ffc4ff5ed592eb8f7ec",
+      "sha256": "1a7f17f5ddfdceb9166ffda4cd1233370856f790f919624589f5d8be8752656f",
+      "license": "Apache-2.0",
+      "generated_by": "project alignment task P00-T05",
+      "command": "checked-in deterministic text fixture",
+      "required": true
+    },
+    {
+      "id": "p01-prompt-id-matrix",
+      "path": "../fixtures/alignment/p01_prompt_id_matrix.json",
+      "source": "tools/generate_prompt_id_matrix.py official-python",
+      "revision": "b08178964504d5a214565ffc4ff5ed592eb8f7ec",
+      "sha256": "ff64ed06fd32ade35918a89182a99a4a49d8a9e9db6dd1368de9f084cc9f799d",
+      "license": "Apache-2.0",
+      "generated_by": "tools/generate_prompt_id_matrix.py official-python",
+      "command": "python tools/generate_prompt_id_matrix.py --check fixtures/alignment/p01_prompt_id_matrix.json",
+      "required": true
+    },
+    {
+      "id": "p02-philox-vectors",
+      "path": "../fixtures/alignment/p02_philox_vectors.json",
+      "source": "tools/generate_philox_vectors.py independent Philox implementation",
+      "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+      "sha256": "a250d86a921a3bb6c53a13ec52b60c0cfd03752166e28ef7830bd30380577469",
+      "license": "Apache-2.0",
+      "generated_by": "tools/generate_philox_vectors.py",
+      "command": "python tools/generate_philox_vectors.py --check fixtures/alignment/p02_philox_vectors.json",
+      "required": true
+    },
+    {
+      "id": "p02-repetition-penalty",
+      "path": "../fixtures/alignment/p02_repetition_penalty_vectors.json",
+      "source": "tools/generate_repetition_penalty_vectors.py",
+      "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+      "sha256": "cc7c31649849ea55acc514bf0a64dbdcfd05db47b8af6e23cb3dce7edde41789",
+      "license": "Apache-2.0",
+      "generated_by": "tools/generate_repetition_penalty_vectors.py",
+      "command": "python tools/generate_repetition_penalty_vectors.py --check fixtures/alignment/p02_repetition_penalty_vectors.json",
+      "required": true
+    },
+    {
+      "id": "p02-sampling-config-matrix",
+      "path": "../fixtures/alignment/p02_sampling_config_matrix.json",
+      "source": "tools/generate_sampling_config_matrix.py",
+      "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+      "sha256": "1cc059350bdc0792f5aee77f3b5d2fa9005f99f99451f0b1aa2205c60320e6c6",
+      "license": "Apache-2.0",
+      "generated_by": "tools/generate_sampling_config_matrix.py",
+      "command": "python tools/generate_sampling_config_matrix.py --check fixtures/alignment/p02_sampling_config_matrix.json",
+      "required": true
+    }
+  ],
+  "instructions": "Required alignment fixtures are checked in and hash-verified. Model binaries remain external; see P00-T05/model-provenance.json."
+}

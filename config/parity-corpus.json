@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "zh-short",
+      "language": "Chinese",
+      "text": "你好，這是一段語音合成測試。"
+    },
+    {
+      "id": "en-short",
+      "language": "English",
+      "text": "The sun set behind the mountains."
+    },
+    {
+      "id": "mixed",
+      "language": "auto",
+      "text": "今天是 July 25, 2026，溫度是 28°C。"
+    },
+    {
+      "id": "ja-short",
+      "language": "Japanese",
+      "text": "これは音声合成のテストです。"
+    },
+    {
+      "id": "ko-short",
+      "language": "Korean",
+      "text": "이것은 음성 합성 테스트입니다."
+    },
+    {
+      "id": "punctuation",
+      "language": "English",
+      "text": "Wait—what? Yes... 1, 2, 3!"
+    },
+    {
+      "id": "long",
+      "language": "English",
+      "text_file": "fixtures/text/long-en.txt"
+    }
+  ]
+}

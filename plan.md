@@ -71,3 +71,133 @@
 - [ ] 数值对齐测试套件与报告
 - [ ] 性能基准测试报告（含首包延迟、吞吐量、内存曲线）
 - [ ] API 文档与集成示例
+
+---
+
+# qwentts.cpp Full Alignment Roadmap
+
+本 Roadmap 合併自 full-alignment devpack，作為目前 P00→P13 的主要執行順序。
+上方既有計畫完整保留作為歷史技術脈絡；若順序或範圍衝突，以本 Roadmap、
+`tasks/task-index.yaml` 與 Gate 文件為準。
+
+## P00 — Baseline and parity harness
+
+1. Pin target/reference/upstream revisions and write baseline delta report (`P00-T01`)
+2. Create fixture manifest and fail-closed fixture resolver (`P00-T02`)
+3. Add stage dump format and dump hooks behind a feature flag (`P00-T03`)
+4. Build reference command adapters for Python and qwentts.cpp (`P00-T04`)
+5. Create CPU F32 smoke corpus and baseline report (`P00-T05`)
+
+## P01 — Metadata and prompt parity
+
+1. Replace model-name inference with metadata/config parsing (`P01-T01`)
+2. Load all special token, language, speaker and dialect tables from metadata (`P01-T02`)
+3. Correct M-RoPE semantics and add exact position/rotation tests (`P01-T03`)
+4. Match prompt assembly for Base, CustomVoice and VoiceDesign (`P01-T04`)
+5. Gate exact prompt IDs across the model matrix (`P01-T05`)
+
+## P02 — Sampling parity
+
+1. Implement Philox RNG with known-vector tests (`P02-T01`)
+2. Implement repetition penalty with exact operation ordering (`P02-T02`)
+3. Separate Talker and Code Predictor sampling configs (`P02-T03`)
+4. Match token suppression and EOS handling (`P02-T04`)
+5. Gate deterministic token sequence parity (`P02-T05`)
+
+## P03 — Talker and Code Predictor numerical parity
+
+1. Instrument embeddings, norms, RoPE and layer outputs (`P03-T01`)
+2. Verify Talker prefill and single-step KV cache (`P03-T02`)
+3. Verify Code Predictor frame-local prefill and 14 decode steps (`P03-T03`)
+4. Eliminate avoidable host transfers in acoustic prediction (`P03-T04`)
+5. Gate stage cosine and logit ranking thresholds (`P03-T05`)
+
+## P04 — Tokenizer decoder offline parity
+
+1. Verify RVQ split projections and codebook policy (`P04-T01`)
+2. Verify decoder transformer and sliding-window semantics (`P04-T02`)
+3. Verify ConvNeXt upsample and DAC blocks (`P04-T03`)
+4. Match offline waveform on short/medium/long corpora (`P04-T04`)
+5. Create buffered chunk decode with left-context trimming (`P04-T05`)
+
+## P05 — True stateful codec streaming
+
+1. Define CodecStreamState and state ownership (`P05-T01`)
+2. Implement persistent causal-convolution contexts (`P05-T02`)
+3. Implement transposed-convolution overlap state (`P05-T03`)
+4. Implement transformer KV ring and absolute RoPE position (`P05-T04`)
+5. Implement one-frame graph/buffer reuse (`P05-T05`)
+6. Implement reset, ICL prime and optional state snapshots (`P05-T06`)
+7. Gate offline-equivalent output and bounded complexity (`P05-T07`)
+
+## P06 — End-to-end generation streaming
+
+1. Expose frame events from Talker generation (`P06-T01`)
+2. Connect generated codes directly to codec stream session (`P06-T02`)
+3. Add audio callback, backpressure and cancellation (`P06-T03`)
+4. Update GUI to consume streaming events (`P06-T04`)
+5. Gate TTFA-before-completion and long-form output (`P06-T05`)
+
+## P07 — Tokenizer encoder and qwen-codec
+
+1. Complete 24 kHz audio preprocessing/resampling contract (`P07-T01`)
+2. Verify SEANet and encoder transformer (`P07-T02`)
+3. Implement RVQ encode argmin path (`P07-T03`)
+4. Define versioned RVQ code file format (`P07-T04`)
+5. Implement qwen-codec encode/decode/stream CLI (`P07-T05`)
+6. Gate round-trip and reference code parity (`P07-T06`)
+
+## P08 — Native quantized runtime
+
+1. Define quantized tensor types and protected tensor policy (`P08-T01`)
+2. Implement direct Q8 linear and embedding operations (`P08-T02`)
+3. Implement Q4_K_M-class block layout and kernels (`P08-T03`)
+4. Add backend-resident packed weight loader (`P08-T04`)
+5. Integrate quantized Talker and Code Predictor (`P08-T05`)
+6. Gate memory, token and quality metrics (`P08-T06`)
+
+## P09 — Model format and conversion
+
+1. Define metadata-complete Rust model container strategy (`P09-T01`)
+2. Implement GGUF reader compatibility or lossless converter (`P09-T02`)
+3. Implement official checkpoint conversion with provenance (`P09-T03`)
+4. Implement quantization command and protected tensor rules (`P09-T04`)
+5. Gate five talker variants plus shared tokenizer (`P09-T05`)
+
+## P10 — CLI and library product surface
+
+1. Implement stable high-level Rust synthesis/session API (`P10-T01`)
+2. Implement qwen-tts CLI with streaming and WAV output (`P10-T02`)
+3. Add model discovery/download and cache policy (`P10-T03`)
+4. Add structured logs, JSON metrics and exit codes (`P10-T04`)
+5. Gate compatibility corpus and cancellation (`P10-T05`)
+
+## P11 — OpenAI server and voice registry
+
+1. Implement `/v1/audio/speech` non-streaming endpoint (`P11-T01`)
+2. Implement chunked/streaming audio response (`P11-T02`)
+3. Implement safe cloned-voice registry (`P11-T03`)
+4. Implement request limits, cancellation and error mapping (`P11-T04`)
+5. Gate API and concurrency tests (`P11-T05`)
+
+## P12 — C ABI and continuous batching
+
+1. Define stable opaque-handle C ABI (`P12-T01`)
+2. Implement callback ownership and cancellation (`P12-T02`)
+3. Implement per-session scheduler state (`P12-T03`)
+4. Implement bounded multi-lane Talker/Predictor batching (`P12-T04`)
+5. Implement per-slot codec streams and isolation (`P12-T05`)
+6. Gate C lifecycle, 8-session isolation and throughput (`P12-T06`)
+
+## P13 — Backends, CI and release
+
+1. CPU/CUDA/Metal full matrix and performance report (`P13-T01`)
+2. Vulkan/ROCm strategy and implementation gate (`P13-T02`)
+3. Replace permissive CI with fail-closed parity workflow (`P13-T03`)
+4. Generate SBOM, notices, model manifest and reproducible build notes (`P13-T04`)
+5. Run final audit and produce alignment release report (`P13-T05`)
+
+## Sequencing Rule
+
+P00→P08 are core correctness/runtime prerequisites. P10–P12 must not mask incomplete core
+parity. P13 is the only final release gate.

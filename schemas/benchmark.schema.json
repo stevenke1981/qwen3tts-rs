@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Qwen3TTS Benchmark Result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "revision",
+    "backend",
+    "model",
+    "metrics"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "revision": {
+      "type": "string"
+    },
+    "backend": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "device": {
+      "type": "object"
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "ttft_ms": {
+          "type": "number"
+        },
+        "ttfa_ms": {
+          "type": "number"
+        },
+        "rtf": {
+          "type": "number"
+        },
+        "frame_latency_p50_ms": {
+          "type": "number"
+        },
+        "frame_latency_p95_ms": {
+          "type": "number"
+        },
+        "frame_latency_p99_ms": {
+          "type": "number"
+        },
+        "resident_memory_bytes": {
+          "type": "integer"
+        },
+        "peak_memory_bytes": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

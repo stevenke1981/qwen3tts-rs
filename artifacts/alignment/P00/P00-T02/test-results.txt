@@ -1,0 +1,33 @@
+P00-T02 verification
+
+Command:
+python -m unittest tools.test_fixture_manifest -v
+Exit code: 0
+Result: 11 tests passed, 0 failed
+
+Covered:
+- valid matching fixture
+- manifest-relative path
+- empty required manifest
+- missing required file
+- malformed/missing metadata
+- duplicate fixture ID
+- SHA-256 mismatch
+- optional missing fixture
+- absolute missing required fixture
+- directory path rejection
+- empty/non-string provenance rejection
+
+Command:
+python tools/fixture_manifest.py config/fixtures.json --require-all
+Exit code: 1 (EXPECTED FAIL-CLOSED RESULT)
+Output:
+FIXTURE_MISSING manifest has no required fixtures
+
+Command:
+python tools/check_alignment_static.py . --report artifacts/alignment/P00/P00-T02/static-gap-report.json
+Exit code: 0
+Result: report generated; existing accumulated-history, full-dequantization, silent-fixture-skip
+and permissive-CI hits remain visible.
+
+No real-weight success or phase-gate success is claimed.

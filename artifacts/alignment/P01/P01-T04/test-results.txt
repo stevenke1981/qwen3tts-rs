@@ -1,0 +1,14 @@
+P01-T04 root verification
+
+- formatting: PASS
+- CPU/F32 compile: PASS
+- text_frontend library tests: 32 passed
+- input_builder library tests: 7 passed
+- prompt_assembly_test: 8 passed
+- voice_clone_native_test: 7 passed
+- synthesize example: PASS
+- synthesize_batch example: PASS
+- scoped diff check: PASS
+- independent review: no blocking findings
+
+Observed warning: existing MSVC LNK4098 linker warning; no command failed.

@@ -1,0 +1,9 @@
+$env:PATH='C:\Users\steven\.cargo\bin;' + $env:PATH
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --lib talker::primitives
+cargo test --lib talker::talker
+cargo test --test mrope_reference_test -- --nocapture
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- src/text_frontend/model_catalog.rs src/text_frontend/candle_backend.rs src/talker/primitives.rs src/talker/talker.rs tests/mrope_reference_test.rs docs/alignment/mrope-parity.md

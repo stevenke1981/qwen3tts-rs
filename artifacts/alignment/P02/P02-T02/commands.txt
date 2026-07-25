@@ -1,0 +1,12 @@
+```text
+$env:Path = "C:\Users\steven\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;C:\Users\steven\.cargo\bin;" + $env:Path
+python tools/generate_repetition_penalty_vectors.py
+python tools/generate_repetition_penalty_vectors.py --check fixtures/alignment/p02_repetition_penalty_vectors.json
+cargo fmt --all
+cargo test --lib talker::sampling
+cargo test --test repetition_penalty_test
+cargo test --test philox_rng_test
+cargo test --lib c0_history_capacity_targets_max_new_tokens
+git diff --check -- src/talker/talker.rs src/talker/sampling.rs tests/repetition_penalty_test.rs tools/generate_repetition_penalty_vectors.py fixtures/alignment/p02_repetition_penalty_vectors.json config/fixtures.json artifacts/alignment/P02/P02-T02/*.md artifacts/alignment/P02/P02-T02/*.txt artifacts/alignment/P02/P02-T02/*.json
+git diff --check -- src/talker/talker.rs src/talker/sampling.rs tests/repetition_penalty_test.rs tools/generate_repetition_penalty_vectors.py fixtures/alignment/p02_repetition_penalty_vectors.json config/fixtures.json
+```

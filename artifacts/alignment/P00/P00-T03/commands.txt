@@ -1,0 +1,9 @@
+# Run with the installed Rust toolchain bin directory on PATH.
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --lib
+cargo test --features stage-dump --test stage_dump_test
+# The stage_dump_test binary invokes both comparison cases:
+# identical manifests -> exit 0
+# changed manifest SHA-256 -> non-zero
+git diff --check -- Cargo.toml src/lib.rs src/alignment_stage_dump.rs src/talker/talker.rs src/talker/code_predictor.rs src/decoder_12hz.rs tests/stage_dump_test.rs schemas/stage-dump.schema.json tools/compare_stage_dumps.py

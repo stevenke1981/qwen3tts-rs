@@ -1,0 +1,49 @@
+name: alignment
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full_fixtures:
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test --all-targets --all-features
+      - run: python3 tools/check_alignment_static.py . --report static-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alignment-static
+          path: static-report.json
+
+  full-parity:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_fixtures }}
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Validate fixture manifest
+        run: python3 tools/fixture_manifest.py --require-all config/fixtures.json
+      - name: Run CPU F32 parity
+        run: cargo test --release --features parity-fixtures --test parity_real_weights
+      - name: Run streaming complexity
+        run: cargo test --release --features parity-fixtures --test streaming_long
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alignment-full-parity
+          path: artifacts/alignment

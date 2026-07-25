@@ -1,0 +1,9 @@
+$env:PATH='C:\Users\steven\.cargo\bin;' + $env:PATH
+$env:QWEN3_TTS_REAL_MODEL_DIR='C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\5d83992436eae1d760afd27aff78a71d676296fc'
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --lib text_frontend::model_catalog
+cargo test --test model_metadata_real_test -- --ignored --nocapture
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- src/text_frontend/model_catalog.rs examples/synthesize.rs examples/synthesize_batch.rs tests/model_metadata_real_test.rs docs/alignment/model-metadata.md

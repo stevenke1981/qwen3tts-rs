@@ -144,3 +144,95 @@ qwen-vox-rs/
 5. **風險上報：** 發現 Candle 缺失算子或精度無法對齊時，立即停止並在 PR 描述中标記 ⚠️ BLOCKER
 
 > **最後提醒：** 這不是 LLM 推理專案。不要用 llama.cpp 的思維處理 TTS。每一毫秒延遲、每一個量化比特都直接影響語音質量與交互體驗。精確勝過優雅，可測勝過簡潔。
+
+---
+
+## 7. Alignment Controlled Workflow
+
+本節合併自 full-alignment devpack。若與前述專案技術約束衝突，保留前述
+Rust/Candle、核心解碼器禁用 GGUF、精度與效能限制；工作流程與 Gate 依本節執行。
+
+### 7.1 代理分工
+
+#### GPT-5.6 Sol — 總指揮、架構、審查與 Gate Owner
+
+Sol 必須：
+
+- 負責架構、任務拆分、驗收門檻與最終決策。
+- 分派前完整讀取 task card，每次只交付一個有邊界的 Spark 任務。
+- 親自檢查 diff、執行測試並核對證據。
+- 測試被略過、fixture 缺失或使用 `continue-on-error` 時拒絕假成功。
+- 每個接受的任務後更新 `TODOS.md`、`STATUS.md` 與任務證據目錄。
+- 契約或數值假設未驗證時停止 Phase Gate。
+
+Sol 不得：
+
+- 將整個 Phase 當作模糊任務交給 Spark。
+- 只因可編譯就接受程式碼。
+- 允許 Spark 在任務外改變公開架構或驗收門檻。
+- 只依隨機權重測試宣稱對齊。
+- 覆蓋使用者工作或 force-push。
+
+#### GPT-5.3 Codex Spark — 範圍受控實作者
+
+Spark 必須：
+
+- 只修改 assignment 指定的檔案與模組。
+- 修改前讀取引用的契約與測試，並隨行為變更新增或更新測試。
+- 執行 task card 指定的驗證命令。
+- 回報修改檔案、設計選擇、命令、結果與剩餘風險。
+- 缺少必要模型 fixture 或參考輸出時停止並據實回報。
+
+Spark 不得：
+
+- 重設無關架構、將任務標成完成、merge、push 或刪除使用者檔案。
+- 弱化門檻、跳過測試、以 `allow(dead_code)` 隱藏未完成工作或使用 stub 假裝完成。
+- 機械複製大量 C++，忽略授權及 Rust 的 ownership、layout、錯誤與併發語意。
+
+### 7.2 必要工作循環
+
+```text
+DISCOVER → SPECIFY → TEST-FIRST → IMPLEMENT → LOCAL VERIFY
+→ INDEPENDENT REVIEW → GATE → DOCUMENT → NEXT TASK
+```
+
+實作者與獨立審查者不得是同一次 Spark invocation。
+
+### 7.3 Gate 與 Evidence
+
+任務只有在以下條件全部成立時才能接受：
+
+1. 必要測試實際執行，沒有靜默 skip。
+2. 既有測試維持通過。
+3. Clippy 沒有新增警告。
+4. 數值證據寫入 `artifacts/alignment/<phase>/<task>/`。
+5. 效能敏感變更附 benchmark 或複雜度證明。
+6. 審查涵蓋錯誤路徑、state reset、cancellation 與 concurrent sessions。
+7. `STATUS.md` 記錄精確命令與結果。
+
+每個任務的證據目錄至少包含：
+
+- `assignment.md`
+- `worker-report.md`
+- `review.md`
+- `commands.txt`
+- `test-results.txt`
+- `gate.json`
+
+### 7.4 Failure Classification
+
+- F1 Compile：型別、建置或連結錯誤。
+- F2 Contract：公開 API 或 schema 不一致。
+- F3 Numerical：tensor、token 或 audio 對齊失敗。
+- F4 State：reset、cache、streaming 或 session isolation 失敗。
+- F5 Performance：記憶體無界、O(n²) 或超出效能預算。
+- F6 Backend：CPU、CUDA、Metal 或 Vulkan 行為差異。
+- F7 Product：CLI、server 或 FFI 不相容。
+- F8 Fixture：參考資料缺失、過期或來源不可信。
+
+每個失敗都必須記錄分類、重現命令、觀察結果與下一個 probe。
+
+### 7.5 驗收狀態
+
+只有 P13 可以將整體狀態設為 `ALIGNED`。較早階段只能使用：
+`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`GATE_FAILED`、`GATE_PASSED`。

@@ -25,17 +25,46 @@ fn native_voice_clone_plan_requires_reference_text_for_icl_mode() {
 }
 
 #[test]
-fn native_voice_clone_rejects_missing_reference_text() {
+fn native_voice_clone_plan_without_reference_text_uses_speaker_embedding_only_mode() {
     let options = SynthesisOptions {
         reference_audio: Some("reference.wav".to_string()),
         reference_text: None,
         ..SynthesisOptions::default()
     };
 
-    let err = NativeVoiceClonePlan::from_options(&options)
-        .expect_err("native Candle voice clone should reject x-vector-only mode");
+    let plan = NativeVoiceClonePlan::from_options(&options)
+        .unwrap()
+        .unwrap();
 
-    assert!(err.to_string().contains("--reference-text"));
+    assert_eq!(plan.mode, VoiceCloneMode::SpeakerEmbeddingOnly);
+    assert_eq!(plan.reference_audio.as_os_str(), "reference.wav");
+    assert_eq!(plan.reference_text, None);
+    assert!(!plan.requires_reference_codec_tokens());
+    assert!(plan.requires_speaker_embedding());
+}
+
+#[test]
+fn native_voice_clone_plan_without_reference_audio_is_none() {
+    let options = SynthesisOptions {
+        reference_audio: None,
+        reference_text: Some("這是一段參考文字".to_string()),
+        ..SynthesisOptions::default()
+    };
+
+    let plan = NativeVoiceClonePlan::from_options(&options);
+    assert!(plan.is_ok());
+    assert!(plan.unwrap().is_none());
+}
+
+#[test]
+fn native_voice_clone_plan_rejects_empty_reference_audio() {
+    let options = SynthesisOptions {
+        reference_audio: Some("   ".to_string()),
+        reference_text: Some("這是一段參考文字".to_string()),
+        ..SynthesisOptions::default()
+    };
+
+    assert!(NativeVoiceClonePlan::from_options(&options).is_err());
 }
 
 #[test]

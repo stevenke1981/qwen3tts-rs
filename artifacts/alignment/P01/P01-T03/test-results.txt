@@ -1,0 +1,13 @@
+P01-T03 root verification
+
+- cargo fmt --all -- --check: PASS
+- cargo check --no-default-features --features cpu: PASS
+- cargo test --lib talker::primitives: PASS (1 passed)
+- cargo test --lib talker::talker: PASS (library target succeeded; 0 name matches)
+- cargo test --test mrope_reference_test -- --nocapture: PASS (7 passed)
+- cargo check --example synthesize --features candle-llm: PASS
+- cargo check --example synthesize_batch --features candle-llm: PASS
+- scoped git diff --check: PASS
+- independent review: ACCEPT
+
+Observed warning: MSVC LNK4098, already tracked and non-fatal.

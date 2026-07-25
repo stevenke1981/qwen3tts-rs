@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "task_id": "P01-T01",
+  "status": "GATE_PASSED",
+  "phase_gate": false,
+  "assignment": "artifacts/alignment/P01/P01-T01/assignment.md",
+  "implementation_verification": "PASS",
+  "real_weight_verification": "PASS_1_TEST",
+  "independent_review": "ACCEPT",
+  "model_catalog_tests": "PASS_13",
+  "example_checks": "PASS_2",
+  "fail_closed_without_real_fixture_env": true
+}

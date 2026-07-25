@@ -1,0 +1,14 @@
+PASS: cpu_f32_smoke unit tests, 13/13.
+PASS: combined Python tooling tests, 42/42 with one Windows privilege-only symlink skip.
+PASS: fixture release check, required=8 verified=8 optional_missing=0.
+PASS: real official Python CPU/F32 run, 3 frames, prompt and token evidence.
+PASS: real qwentts.cpp CPU/F32 run, 4 frames, 16 normalized tensor stages and 7680-sample WAV.
+PASS: baseline coverage for prompt/token/tensor/audio and Draft 2020-12 schema validation.
+PASS: qwentts.cpp conversion, 478 talker tensors written and 0 unhandled.
+PASS: qwentts.cpp MSVC CPU Release build.
+PASS: cargo fmt --all -- --check.
+PASS: cargo check --no-default-features --features cpu.
+PASS: cargo test --lib, 82 passed, 0 failed.
+WARN: MSVC emitted the existing LNK4098 LIBCMT conflict warning.
+BASELINE: qwentts.cpp TTFA 448.4 ms and total 2933.8 ms for the four-frame smoke run.
+DELTA: official generated 3 frames while qwentts.cpp used the requested four-frame cap.

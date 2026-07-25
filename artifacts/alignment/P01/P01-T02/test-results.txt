@@ -1,0 +1,15 @@
+P01-T02 root verification
+
+cargo fmt --all -- --check: PASS
+cargo check --no-default-features --features cpu: PASS
+cargo test --lib text_frontend::model_catalog: PASS (16 passed)
+cargo test --lib talker::config: PASS (5 passed)
+cargo test --lib talker::input_builder: PASS (7 passed)
+cargo test --test model_runtime_metadata_real_test -- --ignored --nocapture:
+PASS (running 1 test; 1 passed)
+cargo check --example synthesize --features candle-llm: PASS
+cargo check --example synthesize_batch --features candle-llm: PASS
+git diff --check (six allowed files): PASS
+
+Known non-blocking warning:
+MSVC LNK4098 is pre-existing and does not fail these gates.

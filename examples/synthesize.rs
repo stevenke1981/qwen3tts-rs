@@ -34,11 +34,13 @@
 //! ```
 
 #[cfg(feature = "candle-llm")]
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
 use qwen3tts::text_frontend::model_catalog::{
-    model_capability, model_table, validate_generation_request, GenerationMode, SUPPORTED_LANGUAGES,
+    GenerationMode, ModelMetadata, SUPPORTED_LANGUAGES, model_capability, model_table,
+    resolve_generation_mode, validate_generation_request,
 };
 use qwen3tts::text_frontend::speaker_presets;
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend, TokenStream};
@@ -58,18 +60,18 @@ enum BackendKind {
     Candle,
 }
 
-#[cfg(feature = "candle-llm")]
 fn default_backend() -> BackendKind {
-    BackendKind::Candle
-}
-
-#[cfg(not(feature = "candle-llm"))]
-fn default_backend() -> BackendKind {
-    BackendKind::Python
+    #[cfg(feature = "candle-llm")]
+    {
+        BackendKind::Candle
+    }
+    #[cfg(not(feature = "candle-llm"))]
+    {
+        BackendKind::Python
+    }
 }
 
 /// 自動尋找 HuggingFace 快取中的 Qwen3-TTS 模型 snapshot 目錄
-#[cfg(feature = "candle-llm")]
 fn locate_model_snapshot(model_id: &str) -> Option<PathBuf> {
     if let Ok(env_dir) = std::env::var("QWEN3_TTS_MODEL_DIR") {
         let p = PathBuf::from(env_dir);
@@ -80,7 +82,19 @@ fn locate_model_snapshot(model_id: &str) -> Option<PathBuf> {
     locate_hf_model_snapshot(model_id)
 }
 
-#[cfg(feature = "candle-llm")]
+fn resolve_model_dir(model_id: &str, model_dir: Option<&str>) -> PathBuf {
+    if let Some(path) = model_dir {
+        return PathBuf::from(path);
+    }
+    locate_model_snapshot(model_id).unwrap_or_else(|| {
+        eprintln!(
+            "錯誤: 找不到 {model_id} 的本地 snapshot。請提供 --model-dir。\n\
+             範例: --model-dir ~/.cache/huggingface/hub/models--Qwen--Qwen3-TTS-12Hz-0.6B-Base/snapshots/<sha>"
+        );
+        std::process::exit(1);
+    })
+}
+
 fn locate_hf_model_snapshot(model_id: &str) -> Option<PathBuf> {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
@@ -178,7 +192,6 @@ fn main() {
     let mut save_tokens_path: Option<String> = None;
     let mut text_only = false; // 只跑到 LLM 階段，產生 Token 後直接結束
     let mut max_new_tokens: u32 = 4096; // 最大生成 Token 數
-    #[cfg(feature = "candle-llm")]
     let mut model_dir: Option<String> = None; // 給 CandleLLM 用
     let mut backend = default_backend();
     let mut speed = 1.0;
@@ -271,19 +284,8 @@ fn main() {
             }
             "--model-dir" => {
                 require_arg(&args, i, "--model-dir");
-                #[cfg(feature = "candle-llm")]
-                {
-                    model_dir = Some(args[i + 1].clone());
-                    i += 2;
-                }
-                #[cfg(not(feature = "candle-llm"))]
-                {
-                    eprintln!(
-                        "錯誤: --model-dir 需要 --features candle-llm。\n\
-                         重新編譯: cargo run --example synthesize --features candle-llm -- ..."
-                    );
-                    std::process::exit(1);
-                }
+                model_dir = Some(args[i + 1].clone());
+                i += 2;
             }
             "--backend" | "-b" => {
                 require_arg(&args, i, "--backend");
@@ -343,13 +345,19 @@ fn main() {
     }
 
     let instruct = resolve_instruct(instruct, instruct_file);
-    #[cfg(feature = "candle-llm")]
-    let validation_model = model_dir.as_deref().unwrap_or(&model_id);
-    #[cfg(not(feature = "candle-llm"))]
-    let validation_model = &model_id;
+    let metadata_dir = resolve_model_dir(&model_id, model_dir.as_deref());
+    let validation_metadata = match ModelMetadata::from_model_dir(&metadata_dir) {
+        Ok(metadata) => metadata,
+        Err(err) => {
+            eprintln!("錯誤: 無法從模型目錄解析 metadata: {err}");
+            eprintln!("模型目錄: {}", metadata_dir.display());
+            std::process::exit(1);
+        }
+    };
+    let effective_mode = resolve_generation_mode(&validation_metadata, mode);
     if let Err(err) = validate_generation_request(
-        validation_model,
-        mode,
+        &validation_metadata,
+        effective_mode,
         speaker.as_deref(),
         instruct.as_deref(),
         reference_audio.as_deref(),
@@ -382,9 +390,7 @@ fn main() {
     println!("╚══════════════════════════════════════╝");
     println!("文字    : {text}");
     println!("模型    : {banner_model}");
-    if let Some(capability) =
-        model_capability(&banner_model).or_else(|| model_capability(validation_model))
-    {
+    if let Some(capability) = model_capability(&banner_model) {
         println!(
             "能力    : {} / {} / {} languages / streaming={}",
             capability.parameters,
@@ -394,7 +400,7 @@ fn main() {
         );
     }
     println!("後端    : {:?}", backend);
-    println!("模式    : {}", mode.as_str());
+    println!("模式    : {}", effective_mode.as_str());
     println!("語言    : {language}");
     println!("輸出    : {output_path}");
     if let Some(spk) = &speaker {
@@ -418,7 +424,7 @@ fn main() {
     if let Some(text) = &reference_text {
         println!("參考逐字: {text}");
     }
-    if mode == GenerationMode::VoiceClone && reference_text.is_none() {
+    if effective_mode == GenerationMode::VoiceClone && reference_text.is_none() {
         eprintln!(
             "提示: Voice Clone 最佳效果建議提供 --reference-text；未提供時只能使用 speaker-embedding-only 模式，音色/內容穩定性可能較差。"
         );
@@ -431,7 +437,9 @@ fn main() {
     }
     println!();
 
-    if tokens_path.is_none() && mode == GenerationMode::VoiceClone && backend == BackendKind::Python
+    if tokens_path.is_none()
+        && effective_mode == GenerationMode::VoiceClone
+        && backend == BackendKind::Python
     {
         println!("[1/1] 使用 Python 官方 Voice Clone 路徑產生 WAV…");
         println!("      （首次載入需下載權重，約 1-5 分鐘）");
@@ -500,17 +508,7 @@ fn main() {
                 use qwen3tts::text_frontend::CandleLLM;
 
                 // 決定模型目錄：--model-dir > QWEN3_TTS_MODEL_DIR > HF 快取掃描
-                let dir = if let Some(d) = model_dir.as_ref() {
-                    PathBuf::from(d)
-                } else {
-                    locate_model_snapshot(&model_id).unwrap_or_else(|| {
-                        eprintln!(
-                            "錯誤: 找不到 {model_id} 的本地 snapshot。請提供 --model-dir。\n\
-                             範例: --model-dir ~/.cache/huggingface/hub/models--Qwen--Qwen3-TTS-12Hz-0.6B-Base/snapshots/<sha>"
-                        );
-                        std::process::exit(1);
-                    })
-                };
+                let dir = resolve_model_dir(&model_id, model_dir.as_deref());
 
                 let sf_path = dir.join("model.safetensors");
                 if !sf_path.exists() {
@@ -733,7 +731,7 @@ fn print_usage() {
   --save-tokens <檔案>
                     保存 Token 二進位檔
   --model <ID>       HuggingFace 模型 ID（預設: Qwen/Qwen3-TTS-12Hz-0.6B-Base）
-  --model-dir <路徑> 本地模型目錄（給 Candle 後端用，自動從 HF 快取找）
+  --model-dir <路徑> 本地模型目錄（適用於各後端，未提供時自動從 HF 快取找）
   --backend / -b     文字前端後端：python | candle（預設: {backend_default}）
   --language / -l    語言（預設: auto）
   --speaker / -s     說話者名稱（可選）

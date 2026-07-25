@@ -11,7 +11,8 @@ use std::time::Instant;
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
 use qwen3tts::text_frontend::model_catalog::{
-    GenerationMode, SUPPORTED_LANGUAGES, model_capability, model_table, validate_generation_request,
+    GenerationMode, ModelMetadata, SUPPORTED_LANGUAGES, model_capability, model_table,
+    resolve_generation_mode, validate_generation_request,
 };
 use qwen3tts::text_frontend::speaker_presets;
 use qwen3tts::text_frontend::{CandleLLM, SynthesisOptions, TextFrontend};
@@ -84,14 +85,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         return Err("no text lines provided".into());
     }
     validate_per_line_options(&args, texts.len())?;
-    let validation_model = args
-        .model_dir
-        .as_ref()
-        .map(|path| path.to_string_lossy())
-        .unwrap_or_else(|| args.model_id.as_str().into());
+
+    let model_dir = resolve_model_dir(&args)?;
+    let metadata = ModelMetadata::from_model_dir(&model_dir)?;
+    let effective_mode = resolve_generation_mode(&metadata, args.mode);
     validate_generation_request(
-        validation_model.as_ref(),
-        args.mode,
+        &metadata,
+        effective_mode,
         args.speaker.as_deref(),
         select_instruct(&args, 0).map(String::as_str),
         args.reference_audio
@@ -99,7 +99,8 @@ fn run() -> Result<(), Box<dyn Error>> {
             .map(|path| path.to_string_lossy())
             .as_deref(),
     )?;
-    if args.mode == GenerationMode::VoiceClone {
+
+    if effective_mode == GenerationMode::VoiceClone {
         return Err(
             "batch voice-clone is not implemented yet, and Candle/Rust native voice-clone is not implemented yet. For best reference cloning quality in the temporary Python path, use synthesize.exe --backend python --mode voice-clone with both --reference-audio and --reference-text"
                 .into(),
@@ -113,7 +114,6 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let model_dir = resolve_model_dir(&args)?;
     let model_safetensors = model_dir.join("model.safetensors");
     if !model_safetensors.exists() {
         return Err(format!("missing {}", model_safetensors.display()).into());
@@ -135,7 +135,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     println!("loading Candle model once...");
     println!("  model: {}", args.model_id);
-    if let Some(capability) = model_capability(validation_model.as_ref()) {
+    if let Some(capability) = model_capability(&args.model_id) {
         println!(
             "  capability: {} / {} / {} languages / streaming={}",
             capability.parameters,
@@ -144,7 +144,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             if capability.streaming { "yes" } else { "no" }
         );
     }
-    println!("  mode: {}", args.mode.as_str());
+    println!("  mode: {}", effective_mode.as_str());
     println!("  model dir: {}", model_dir.display());
     println!("  tokenizer: {}", tokenizer_json.display());
     let load_start = Instant::now();

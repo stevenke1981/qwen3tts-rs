@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "fixture_id": "p02-sampling-config-matrix",
+  "source_repo": "https://github.com/ServeurpersoCom/qwen3tts-rs",
+  "source_revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+  "generated_by": "tools/generate_sampling_config_matrix.py",
+  "command": "python tools/generate_sampling_config_matrix.py",
+  "cases": [
+    {
+      "name": "defaults_to_model_json_when_file_missing",
+      "generation_config": {},
+      "synthesis_options": {
+        "temperature": 0.9,
+        "top_k": 50,
+        "top_p": 1.0
+      },
+      "expected": {
+        "route": "generate_sampled",
+        "talker": {
+          "do_sample": true,
+          "options": {
+            "temperature": 0.9,
+            "top_k": 50,
+            "top_p": 1.0,
+            "repetition_penalty": 1.05
+          }
+        },
+        "subtalker": {
+          "do_sample": true,
+          "options": {
+            "temperature": 0.9,
+            "top_k": 50,
+            "top_p": 1.0,
+            "repetition_penalty": 1.0
+          }
+        }
+      }
+    },
+    {
+      "name": "explicit_talker_subtalker_overrides",
+      "generation_config": {
+        "do_sample": true,
+        "temperature": 1.2,
+        "top_k": 64,
+        "top_p": 0.92,
+        "repetition_penalty": 1.15,
+        "subtalker_dosample": false,
+        "subtalker_temperature": 0.8,
+        "subtalker_top_k": 40,
+        "subtalker_top_p": 0.7
+      },
+      "synthesis_options": {
+        "temperature": 0.35,
+        "top_k": 16,
+        "top_p": 0.75
+      },
+      "expected": {
+        "route": "generate_sampled",
+        "talker": {
+          "do_sample": true,
+          "options": {
+            "temperature": 0.35,
+            "top_k": 16,
+            "top_p": 0.75,
+            "repetition_penalty": 1.15
+          }
+        },
+        "subtalker": {
+          "do_sample": false,
+          "options": {
+            "temperature": 0.8,
+            "top_k": 40,
+            "top_p": 0.7,
+            "repetition_penalty": 1.0
+          }
+        }
+      }
+    },
+    {
+      "name": "cli_temperature_zero_stays_greedy_talker_with_sampling_mode",
+      "generation_config": {
+        "do_sample": true,
+        "temperature": 1.0,
+        "top_k": 20,
+        "top_p": 0.8,
+        "repetition_penalty": 1.0,
+        "subtalker_dosample": true,
+        "subtalker_temperature": 0.55,
+        "subtalker_top_k": 32,
+        "subtalker_top_p": 0.9
+      },
+      "synthesis_options": {
+        "temperature": 0.0,
+        "top_k": 9,
+        "top_p": 0.9
+      },
+      "expected": {
+        "route": "generate_sampled",
+        "talker": {
+          "do_sample": true,
+          "options": {
+            "temperature": 0.0,
+            "top_k": 9,
+            "top_p": 0.9,
+            "repetition_penalty": 1.0
+          }
+        },
+        "subtalker": {
+          "do_sample": true,
+          "options": {
+            "temperature": 0.55,
+            "top_k": 32,
+            "top_p": 0.9,
+            "repetition_penalty": 1.0
+          }
+        }
+      }
+    },
+    {
+      "name": "talker_greedy_forced_by_generation_config",
+      "generation_config": {
+        "do_sample": false,
+        "temperature": 1.0,
+        "top_k": 64,
+        "top_p": 0.95,
+        "repetition_penalty": 1.05,
+        "subtalker_dosample": true,
+        "subtalker_temperature": 0.55,
+        "subtalker_top_k": 32,
+        "subtalker_top_p": 0.85
+      },
+      "synthesis_options": {
+        "temperature": 0.9,
+        "top_k": 20,
+        "top_p": 0.8
+      },
+      "expected": {
+        "route": "generate",
+        "talker": {
+          "do_sample": false,
+          "options": {
+            "temperature": 0.9,
+            "top_k": 20,
+            "top_p": 0.8,
+            "repetition_penalty": 1.05
+          }
+        },
+        "subtalker": {
+          "do_sample": true,
+          "options": {
+            "temperature": 0.55,
+            "top_k": 32,
+            "top_p": 0.85,
+            "repetition_penalty": 1.0
+          }
+        }
+      }
+    },
+    {
+      "name": "invalid_generation_config_rejected",
+      "generation_config": {
+        "do_sample": true,
+        "temperature": 1.0,
+        "top_k": 0,
+        "top_p": 2.5,
+        "repetition_penalty": 1.05
+      },
+      "synthesis_options": {
+        "temperature": 0.9,
+        "top_k": 50,
+        "top_p": 1.0
+      },
+      "expect_error": true
+    }
+  ]
+}

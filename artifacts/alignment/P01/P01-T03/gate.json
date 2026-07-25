@@ -1,0 +1,55 @@
+{
+  "task_id": "P01-T03",
+  "gate_status": "GATE_PASSED",
+  "evidence_dir": "artifacts/alignment/P01/P01-T03",
+  "checks": [
+    {
+      "name": "cargo_fmt",
+      "command": "cargo fmt --all -- --check",
+      "status": "passed"
+    },
+    {
+      "name": "cargo_check_no_default_cpu",
+      "command": "cargo check --no-default-features --features cpu",
+      "status": "passed"
+    },
+    {
+      "name": "cargo_test_talker_primitives",
+      "command": "cargo test --lib talker::primitives",
+      "status": "passed",
+      "result": "1 passed"
+    },
+    {
+      "name": "cargo_test_talker_talker",
+      "command": "cargo test --lib talker::talker",
+      "status": "passed",
+      "result": "0 matched tests, library target succeeded"
+    },
+    {
+      "name": "cargo_test_mrope_reference",
+      "command": "cargo test --test mrope_reference_test -- --nocapture",
+      "status": "passed",
+      "result": "7 passed"
+    },
+    {
+      "name": "cargo_check_synthesize",
+      "command": "cargo check --example synthesize --features candle-llm",
+      "status": "passed"
+    },
+    {
+      "name": "cargo_check_synthesize_batch",
+      "command": "cargo check --example synthesize_batch --features candle-llm",
+      "status": "passed"
+    },
+    {
+      "name": "scoped_diff_check",
+      "command": "git diff --check -- src/text_frontend/model_catalog.rs src/text_frontend/candle_backend.rs src/talker/primitives.rs src/talker/talker.rs tests/mrope_reference_test.rs docs/alignment/mrope-parity.md",
+      "status": "passed"
+    }
+  ],
+  "notes": [
+    "Root reran every required Cargo gate with C:\\Users\\steven\\.cargo\\bin on PATH.",
+    "MSVC emitted the existing LNK4098 warning; no test or build failed.",
+    "Independent GPT-5.3 Codex Spark review returned ACCEPT."
+  ]
+}

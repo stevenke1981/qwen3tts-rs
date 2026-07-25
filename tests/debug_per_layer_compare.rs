@@ -10,8 +10,8 @@ use std::path::Path;
 
 use candle_core::Module;
 use qwen3tts::{
-    codec::{CausalConv1d, CodebookLookup, DecoderBlock, PreTransformer},
     Decoder12Hz, DecoderConfig, TtsDecoder,
+    codec::{CausalConv1d, CodebookLookup, DecoderBlock, PreTransformer},
 };
 
 // ---------------------------------------------------------------------------

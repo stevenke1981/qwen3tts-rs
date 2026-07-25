@@ -1,0 +1,67 @@
+ M .codebase-memory/graph.db.zst
+ M AGENTS.md
+ M examples/synthesize.rs
+ M plan.md
+ M spec.md
+ M src/codec/causal_conv.rs
+ M src/codec/decoder_blocks.rs
+ M src/codec/mod.rs
+ M src/decoder_12hz.rs
+ M src/quantization/mod.rs
+ M src/talker/code_predictor.rs
+ M src/talker/input_builder.rs
+ M src/talker/sampling.rs
+ M src/talker/talker.rs
+ M src/talker/talker_attention.rs
+ M src/text_frontend/candle_backend.rs
+ M src/text_frontend/model_catalog.rs
+ M src/text_frontend/python_bridge.rs
+ M src/text_frontend/token_parser.rs
+ M src/text_frontend/voice_clone_speaker.rs
+ M src/vocoder/mod.rs
+ M tests/debug_per_layer_compare.rs
+ M tests/integration_test.rs
+?? .alignment-backup/
+?? .alignment-devpack
+?? .codebase-memory/manifest.json
+?? .github/.github/
+?? .github/workflows/alignment.yml.template
+?? ACCEPTANCE_CRITERIA.md
+?? AGENTS.md.alignment-new
+?? CLEAN_ROOM_RULES.md
+?? CONTROLLED_WORKFLOW.md
+?? GAP_MATRIX.md
+?? IMPLEMENTATION_MAP.md
+?? NOTICE.md
+?? PERFORMANCE_BUDGET.md
+?? PLAN.md.alignment-new
+?? RISK_REGISTER.md
+?? SOURCE_BASELINE.md
+?? SPEC.md.alignment-new
+?? STATUS.md
+?? TARGET_ARCHITECTURE.md
+?? TEAM.md
+?? TEST_PLAN.md
+?? TODOS.md
+?? agents/
+?? artifacts/alignment/
+?? config/
+?? docs/alignment/
+?? docs/docs/
+?? examples/SOL_ASSIGNMENT_EXAMPLE.md
+?? prompts/
+?? schemas/
+?? scripts/bootstrap.ps1
+?? scripts/install.ps1
+?? scripts/run-gates.ps1
+?? scripts/run-gates.sh
+?? tasks/
+?? templates/
+?? tools/check_alignment_static.py
+?? tools/compare_audio.py
+?? tools/compare_stage_dumps.py
+?? tools/compare_tokens.py
+?? tools/fixture_manifest.py
+?? tools/tools/
+?? tools/verify_package.py
+?? tools/verify_streaming_complexity.py

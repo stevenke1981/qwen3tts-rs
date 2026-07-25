@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Qwen3TTS Stage Dump Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source",
+    "model",
+    "case_id",
+    "stages"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "official-python",
+        "qwentts.cpp",
+        "qwen3tts-rs"
+      ]
+    },
+    "revision": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "model": {
+      "type": "string"
+    },
+    "case_id": {
+      "type": "string"
+    },
+    "seed": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 0,
+      "items": { "$ref": "#/definitions/StageDumpEntry" },
+      "uniqueItems": true
+    }
+  },
+  "definitions": {
+    "StageDumpEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "dtype",
+        "shape",
+        "file",
+        "layout",
+        "sha256"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "dtype": {
+          "type": "string",
+          "const": "f32"
+        },
+        "shape": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "file": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+_\\d{4}\\.f32\\.bin$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "layout": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

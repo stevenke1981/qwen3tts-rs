@@ -1,0 +1,11 @@
+$env:PATH='C:\Users\steven\.cargo\bin;' + $env:PATH
+cargo fmt --all
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --lib text_frontend
+cargo test --lib talker::input_builder
+cargo test --test prompt_assembly_test -- --nocapture
+cargo test --test voice_clone_native_test -- --nocapture
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- src/text_frontend/candle_backend.rs src/text_frontend/model_catalog.rs src/text_frontend/mod.rs src/text_frontend/prompt_templates.rs src/text_frontend/voice_clone.rs src/talker/input_builder.rs tests/prompt_assembly_test.rs tests/voice_clone_native_test.rs docs/alignment/prompt-assembly.md

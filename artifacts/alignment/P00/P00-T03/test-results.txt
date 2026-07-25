@@ -1,0 +1,21 @@
+MAIN-AGENT VERIFICATION
+
+cargo fmt --all -- --check
+exit 0
+
+cargo check --no-default-features --features cpu
+exit 0
+
+cargo test --lib
+exit 0
+82 passed, 0 failed
+Known MSVC linker warning: LNK4098
+
+cargo test --features stage-dump --test stage_dump_test
+exit 0
+4 passed, 0 failed
+Identity comparison: exit 0
+Changed SHA-256 comparison: exit 1 (expected failure)
+
+git diff --check -- <P00-T03 files>
+exit 0 after removing trailing blank lines from Cargo.toml

@@ -7,10 +7,10 @@ use qwen3tts::text_frontend::CandleLLM;
 #[cfg(feature = "candle-llm")]
 use qwen3tts::text_frontend::{SynthesisOptions, TextFrontend};
 use qwen3tts::{
-    codec::{snake_beta, CausalConv1d, CausalConvConfig, DecoderBlock},
+    Decoder12Hz, DecoderConfig, TtsDecoder,
+    codec::{CausalConv1d, CausalConvConfig, DecoderBlock, snake_beta},
     talker::weight_loader::TalkerWeightLoader,
     weights::WeightLoader,
-    Decoder12Hz, DecoderConfig, TtsDecoder,
 };
 
 fn read_npy_f32(path: &str) -> Vec<f32> {
@@ -793,7 +793,11 @@ fn test_text_to_speech_end_to_end() {
     // Check tokenizer.json exists
     if !model_dir.join("tokenizer.json").exists() {
         eprintln!("Skipping: tokenizer.json not found in {model_dir:?}");
-        eprintln!("Run: python -c \"from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('{}').save_pretrained('{}')\"", model_dir.display(), model_dir.display());
+        eprintln!(
+            "Run: python -c \"from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('{}').save_pretrained('{}')\"",
+            model_dir.display(),
+            model_dir.display()
+        );
         return;
     }
 

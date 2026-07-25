@@ -1,0 +1,3 @@
+python -m unittest tools.test_fixture_manifest -v
+python tools/fixture_manifest.py config/fixtures.json --require-all
+python tools/check_alignment_static.py . --report artifacts/alignment/P00/P00-T02/static-gap-report.json

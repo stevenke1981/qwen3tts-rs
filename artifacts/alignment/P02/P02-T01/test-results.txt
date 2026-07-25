@@ -1,0 +1,22 @@
+P02-T01 root verification
+
+- python vector provenance check:
+  `python tools/generate_philox_vectors.py --check fixtures/alignment/p02_philox_vectors.json`
+  => PASS (`PHILOX_VECTORS_CHECK_OK fixtures\alignment\p02_philox_vectors.json`)
+- cargo fmt (`cargo fmt --all -- --check`)
+  => PASS
+- CPU gate (`cargo check --no-default-features --features cpu`)
+  => PASS
+- sampling module unit tests (`cargo test --lib talker::sampling`)
+  => PASS (`8 passed`)
+- Philox integration test suite (`cargo test --test philox_rng_test`)
+  => PASS (`3 passed`)
+- example checks:
+  - `cargo check --example synthesize --features candle-llm` => PASS
+  - `cargo check --example synthesize_batch --features candle-llm` => PASS
+- scoped diff check:
+  `git diff --check -- src/talker/sampling.rs tests/philox_rng_test.rs tools/generate_philox_vectors.py fixtures/alignment/p02_philox_vectors.json docs/alignment/philox-rng.md config/fixtures.json`
+  => PASS
+
+Non-blocking note:
+- Existing MSVC linker warning `LNK4098` observed; task remains non-blocking.

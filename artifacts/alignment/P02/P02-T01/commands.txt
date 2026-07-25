@@ -1,0 +1,9 @@
+$env:PATH='C:\Users\steven\.cargo\bin;' + $env:PATH
+python tools/generate_philox_vectors.py --check fixtures/alignment/p02_philox_vectors.json
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --lib talker::sampling
+cargo test --test philox_rng_test
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- src/talker/sampling.rs tests/philox_rng_test.rs tools/generate_philox_vectors.py fixtures/alignment/p02_philox_vectors.json docs/alignment/philox-rng.md config/fixtures.json

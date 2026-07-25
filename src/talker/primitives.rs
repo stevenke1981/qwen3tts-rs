@@ -3,7 +3,7 @@
 //! RMSNorm、標準 RoPE、3D Multimodal RoPE、SwiGLU MLP。
 
 use super::config::TalkerConfig;
-use candle_core::{DType, Device, Result, Tensor};
+use candle_core::{DType, Device, Error, Result, Tensor};
 
 // ---------------------------------------------------------------------------
 // Embedding Lookup Helper
@@ -155,6 +155,29 @@ pub struct MultimodalRotaryEmbedding {
 
 impl MultimodalRotaryEmbedding {
     pub fn new(config: &TalkerConfig, device: &Device) -> Result<Self> {
+        if !config.rope_theta.is_finite() || config.rope_theta <= 0.0 {
+            return Err(Error::Msg(
+                "talker_config.rope_theta must be finite and greater than 0".into(),
+            ));
+        }
+        if config.mrope_section.len() != 3 {
+            return Err(Error::Msg(
+                "talker_config.mrope_section must contain exactly 3 values".into(),
+            ));
+        }
+        if config.mrope_section.iter().any(|value| *value == 0) {
+            return Err(Error::Msg(
+                "talker_config.mrope_section must contain only positive values".into(),
+            ));
+        }
+        if config.head_dim % 2 != 0
+            || config.mrope_section.iter().sum::<usize>() * 2 != config.head_dim
+        {
+            return Err(Error::Msg(
+                "talker_config.mrope_section must satisfy sum*2 == talker_config.head_dim".into(),
+            ));
+        }
+
         let dim = config.head_dim / 2;
         let inv_freq_values: Vec<f32> = (0..dim)
             .map(|i| 1.0 / config.rope_theta.powf(i as f64 / dim as f64) as f32)
@@ -174,11 +197,13 @@ impl MultimodalRotaryEmbedding {
     /// position_ids: [3, batch, seq_len]
     /// 回傳 cos/sin: [batch, 1, seq_len, head_dim]
     pub fn forward(&self, _x: &Tensor, position_ids: &Tensor) -> Result<(Tensor, Tensor)> {
+        let (axes, batch, seq_len) = position_ids.dims3()?;
+        if axes != 3 {
+            return Err(Error::Msg(
+                "position_ids must have shape [3, batch, seq_len]".into(),
+            ));
+        }
         let ids = position_ids.to_vec3::<u32>()?;
-        let axes = ids.len();
-        let batch = ids[0].len();
-        let seq_len = ids[0][0].len();
-        debug_assert_eq!(axes, 3);
 
         let inv_freq = &self.inv_freq_values;
         let half_dim = inv_freq.len();
@@ -189,7 +214,7 @@ impl MultimodalRotaryEmbedding {
         for b in 0..batch {
             for t in 0..seq_len {
                 for d in 0..head_dim {
-                    let axis = self.mrope_axis_for_dim(d, half_dim);
+                    let axis = self.mrope_axis_for_dim(d)?;
                     let freq_idx = d % half_dim;
                     let angle = ids[axis][b][t] as f32 * inv_freq[freq_idx];
                     let out_idx = (b * seq_len + t) * head_dim + d;
@@ -206,57 +231,89 @@ impl MultimodalRotaryEmbedding {
 
     /// Fast path for autoregressive generation where all three M-RoPE axes use
     /// the same single position.
-    pub fn forward_single_position(
-        &self,
-        position: u32,
-        batch: usize,
-        device: &Device,
-    ) -> Result<(Tensor, Tensor)> {
+    pub fn forward_single_position(&self, positions: &Tensor) -> Result<(Tensor, Tensor)> {
+        let (batch, query_len) = positions.dims2()?;
+        let device = positions.device();
+        let positions = positions.to_vec2::<u32>()?;
         let inv_freq = &self.inv_freq_values;
         let half_dim = inv_freq.len();
         let head_dim = half_dim * 2;
-        let mut cos = vec![0.0f32; batch * head_dim];
-        let mut sin = vec![0.0f32; batch * head_dim];
+        let mut cos = vec![0.0f32; batch * query_len * head_dim];
+        let mut sin = vec![0.0f32; batch * query_len * head_dim];
 
         for b in 0..batch {
-            for d in 0..head_dim {
-                let freq_idx = d % half_dim;
-                let angle = position as f32 * inv_freq[freq_idx];
-                let out_idx = b * head_dim + d;
-                cos[out_idx] = angle.cos();
-                sin[out_idx] = angle.sin();
+            for t in 0..query_len {
+                for d in 0..head_dim {
+                    let freq_idx = d % half_dim;
+                    let _axis = self.mrope_axis_for_dim(d)?;
+                    let angle = positions[b][t] as f32 * inv_freq[freq_idx];
+                    let out_idx = (b * query_len + t) * head_dim + d;
+                    cos[out_idx] = angle.cos();
+                    sin[out_idx] = angle.sin();
+                }
             }
         }
 
-        let cos = Tensor::from_slice(&cos, (batch, 1, 1, head_dim), device)?;
-        let sin = Tensor::from_slice(&sin, (batch, 1, 1, head_dim), device)?;
+        let cos = Tensor::from_slice(&cos, (batch, 1, query_len, head_dim), device)?;
+        let sin = Tensor::from_slice(&sin, (batch, 1, query_len, head_dim), device)?;
         Ok((cos, sin))
     }
 
-    fn mrope_axis_for_dim(&self, dim: usize, half_dim: usize) -> usize {
-        let half_dim_idx = dim % half_dim;
+    fn mrope_axis_for_dim(&self, dim: usize) -> Result<usize> {
+        let head_dim = self.inv_freq_values.len() * 2;
+        if dim >= head_dim {
+            return Err(Error::Msg(format!(
+                "mrope dim {dim} out of range for head_dim {head_dim}"
+            )));
+        }
         if self.rope_interleaved {
             let modality_num = self.mrope_section.len();
+            let axis_dim = dim % (self.inv_freq_values.len());
             for axis in 1..modality_num {
+                let start = axis;
                 let end = self.mrope_section[axis] * modality_num;
-                if half_dim_idx >= axis
-                    && half_dim_idx < end
-                    && (half_dim_idx - axis) % modality_num == 0
-                {
-                    return axis;
+                if axis_dim >= start && axis_dim < end && (axis_dim - start) % modality_num == 0 {
+                    return Ok(axis);
                 }
             }
-            0
+            Ok(0)
         } else {
+            let modality_num = self.mrope_section.len();
             let mut offset = 0usize;
-            for (axis, section) in self.mrope_section.iter().map(|s| s * 2).enumerate() {
-                if dim >= offset && dim < offset + section {
-                    return axis;
+            for chunk in 0..(modality_num * 2) {
+                let axis = chunk % modality_num;
+                let section = self.mrope_section[axis];
+                if dim < offset + section {
+                    return Ok(axis);
                 }
                 offset += section;
             }
-            0
+            Err(Error::Msg(format!(
+                "failed to map mrope dim {dim} with head_dim {head_dim}"
+            )))
         }
+    }
+
+    pub fn cached_positions_from_delta(
+        cache_position_start: u32,
+        rope_delta: &Tensor,
+        query_len: usize,
+        device: &Device,
+    ) -> Result<Tensor> {
+        let (batch, one) = rope_delta.dims2()?;
+        if one != 1 {
+            return Err(Error::Msg("rope_delta must have shape [batch, 1]".into()));
+        }
+        let deltas = rope_delta.to_vec2::<u32>()?;
+        let mut positions = Vec::with_capacity(batch * query_len);
+        for b in 0..batch {
+            let base = cache_position_start + deltas[b][0];
+            let base = base as usize;
+            for q in 0..query_len {
+                positions.push((base + q) as u32);
+            }
+        }
+        Tensor::from_slice(&positions, (batch, query_len), device)
     }
 }
 
@@ -392,20 +449,19 @@ mod tests {
     fn single_position_rope_matches_general_forward() {
         let device = Device::Cpu;
         let rope = MultimodalRotaryEmbedding::new(&TalkerConfig::default(), &device).unwrap();
-        let batch = 2usize;
-        let position = 37u32;
+        let batch = 1usize;
+        let query_len = 3usize;
         let position_ids = Tensor::from_slice(
-            &[position, position, position, position, position, position],
-            (3, batch, 1),
+            &[10u32, 11, 12, 10, 11, 12, 10, 11, 12],
+            (3, batch, query_len),
             &device,
         )
         .unwrap();
         let x = Tensor::zeros((batch, 1, 1024), DType::F32, &device).unwrap();
+        let positions = Tensor::from_slice(&[10u32, 11, 12], (batch, query_len), &device).unwrap();
 
         let (general_cos, general_sin) = rope.forward(&x, &position_ids).unwrap();
-        let (fast_cos, fast_sin) = rope
-            .forward_single_position(position, batch, &device)
-            .unwrap();
+        let (fast_cos, fast_sin) = rope.forward_single_position(&positions).unwrap();
 
         assert_tensors_close(&general_cos, &fast_cos, 1e-6);
         assert_tensors_close(&general_sin, &fast_sin, 1e-6);

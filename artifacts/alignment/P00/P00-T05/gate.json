@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "task_id": "P00-T05",
+  "status": "GATE_PASSED",
+  "phase_gate": true,
+  "assignment": "artifacts/alignment/P00/P00-T05/assignment.md",
+  "implementation_verification": "PASS",
+  "real_weight_verification": "PASS",
+  "independent_review": "ACCEPT",
+  "fixture_manifest": "PASS_8_REQUIRED",
+  "real_report_schema": "PASS",
+  "cpu_unit_tests": "PASS_82",
+  "known_baseline_delta": "official_3_frames_vs_qwentts_4_frames"
+}

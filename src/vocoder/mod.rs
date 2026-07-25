@@ -15,9 +15,9 @@
 
 use candle_core::{Device, Tensor};
 
-use crate::codec::{snake_beta, CausalConv1d, CausalConvConfig, DecoderBlock};
-use crate::weights::WeightLoader;
 use crate::Result;
+use crate::codec::{CausalConv1d, CausalConvConfig, DecoderBlock, snake_beta};
+use crate::weights::WeightLoader;
 
 /// 聲碼器配置
 #[derive(Debug, Clone)]

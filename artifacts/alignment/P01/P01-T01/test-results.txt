@@ -1,0 +1,16 @@
+P01-T01 root verification
+
+cargo fmt --all -- --check: PASS
+cargo check --no-default-features --features cpu: PASS
+cargo test --lib text_frontend::model_catalog: PASS (13 passed)
+cargo test --test model_metadata_real_test -- --ignored --nocapture:
+PASS (running 1 test; 1 passed)
+cargo check --example synthesize --features candle-llm: PASS
+cargo check --example synthesize_batch --features candle-llm: PASS
+git diff --check (five allowed files): PASS
+
+Negative real-fixture check:
+without QWEN3_TTS_REAL_MODEL_DIR the explicit ignored test exits 101 as required.
+
+Known non-blocking warning:
+MSVC LNK4098 is pre-existing and does not fail these gates.

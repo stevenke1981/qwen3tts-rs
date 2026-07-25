@@ -33,6 +33,7 @@
 //! - **CandleLLM** (🔜 規劃中): 純 Rust/Candle + GGUF 權重
 
 pub mod model_catalog;
+pub mod prompt_templates;
 mod python_bridge;
 pub mod speaker_presets;
 mod token_parser;
@@ -72,7 +73,7 @@ pub struct SynthesisOptions {
 
     /// Voice Clone 參考音訊逐字稿。
     ///
-    /// 未提供時，Python fallback 會使用 speaker-embedding-only 模式。
+    /// 未提供時，仍可走 SpeakerEmbeddingOnly（x-vector）路徑；若需 ICL 則必須提供此欄位。
     pub reference_text: Option<String>,
 
     /// 取樣 seed。None 時使用文字與條件 hash 產生穩定 seed。

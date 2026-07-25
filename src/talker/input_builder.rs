@@ -9,6 +9,11 @@ use super::primitives::embedding_lookup;
 use super::talker::TalkerForConditionalGeneration;
 
 /// Native voice-clone conditioning already extracted from reference audio.
+///
+/// - ICL path: both `reference_text_token_ids` and `reference_codes` must be
+///   present.
+/// - Speaker-embedding-only path: both collections are empty and
+///   `speaker_embedding` is used.
 pub struct VoiceClonePrompt<'b> {
     /// Token IDs for the reference transcript content, excluding chat-template role/tail tokens.
     pub reference_text_token_ids: &'b [u32],
@@ -96,6 +101,11 @@ impl<'a> InputBuilder<'a> {
         let input_tensor =
             Tensor::from_slice(text_token_ids, (1, text_token_ids.len()), &self.device)?;
         let text_seq_len = text_token_ids.len();
+        if text_seq_len < 8 {
+            candle_core::bail!(
+                "text token sequence too short for qwen3tts template: {text_seq_len}"
+            );
+        }
 
         // 特殊 token 嵌入
         let bos = config.tts_bos_token_id;
@@ -108,18 +118,11 @@ impl<'a> InputBuilder<'a> {
         let tts_eos_embed = special_embeds.narrow(1, 1, 1)?;
         let tts_pad_embed = special_embeds.narrow(1, 2, 1)?;
 
-        // Codec conditioning token list
-        let lang_lower = language.to_lowercase();
-        let language_id = if lang_lower == "auto" {
-            None
-        } else {
-            config
-                .codec_language_id
-                .iter()
-                .find(|(name, _)| name == &lang_lower)
-                .map(|(_, id)| *id)
-        };
+        let speaker = speaker.map(str::trim).filter(|s| !s.is_empty());
+        let language_id = resolve_codec_language_id(config, language, speaker)?;
+        let speaker_id = resolve_speaker_id(config, speaker)?;
 
+        // Codec conditioning token list
         let codec_prefill = if let Some(lid) = language_id {
             vec![
                 config.codec_think_id,
@@ -153,19 +156,13 @@ impl<'a> InputBuilder<'a> {
             let c_pre = codec_emb.narrow(1, 0, codec_prefill.len())?;
             let c_post = codec_emb.narrow(1, codec_prefill.len(), 2)?;
             codec_emb = Tensor::cat(&[c_pre, spk_emb, c_post], 1)?;
-        } else if let Some(spk) = speaker {
-            if let Some((_, spk_id)) = config
-                .spk_id
-                .iter()
-                .find(|(name, _)| name == &spk.to_lowercase())
-            {
-                let spk_t = Tensor::new(&[[*spk_id as u32]], &self.device)?;
-                let spk_emb = self.talker.embed_codec(&spk_t)?; // [1, 1, hidden]
-                                                                // Insert between codec_prefill and codec_pad_bos
-                let c_pre = codec_emb.narrow(1, 0, codec_prefill.len())?;
-                let c_post = codec_emb.narrow(1, codec_prefill.len(), 2)?;
-                codec_emb = Tensor::cat(&[c_pre, spk_emb, c_post], 1)?;
-            }
+        } else if let Some(spk_id) = speaker_id {
+            let spk_t = Tensor::new(&[[spk_id as u32]], &self.device)?;
+            let spk_emb = self.talker.embed_codec(&spk_t)?; // [1, 1, hidden]
+            // Insert between codec_prefill and codec_pad_bos
+            let c_pre = codec_emb.narrow(1, 0, codec_prefill.len())?;
+            let c_post = codec_emb.narrow(1, codec_prefill.len(), 2)?;
+            codec_emb = Tensor::cat(&[c_pre, spk_emb, c_post], 1)?;
         }
 
         // ── Role embedding: <|im_start|>assistant\n ──
@@ -196,17 +193,46 @@ impl<'a> InputBuilder<'a> {
         };
 
         let trailing_text_hidden = if let Some(prompt) = voice_clone {
-            let text_content_len = text_seq_len - 3 - 5;
-            let text_content_ids = input_tensor.narrow(1, 3, text_content_len)?;
-            let (icl_input_embed, trailing_text_hidden) = self.build_icl_prompt(
-                prompt.reference_text_token_ids,
-                &text_content_ids,
-                prompt.reference_codes,
-                &tts_pad_embed,
-                &tts_eos_embed,
-            )?;
-            input_embeds = Tensor::cat(&[input_embeds, icl_input_embed], 1)?;
-            trailing_text_hidden
+            let uses_icl_prompt =
+                !prompt.reference_codes.is_empty() || !prompt.reference_text_token_ids.is_empty();
+            if uses_icl_prompt
+                && (prompt.reference_codes.is_empty() || prompt.reference_text_token_ids.is_empty())
+            {
+                candle_core::bail!(
+                    "voice-clone reference prompt requires both reference_text_token_ids and reference_codes"
+                );
+            }
+
+            let text_content_len = text_seq_len.checked_sub(3 + 5).ok_or_else(|| {
+                candle_core::Error::Msg(format!(
+                    "invalid voice-clone prompt body length: {text_seq_len}"
+                ))
+            })?;
+
+            if uses_icl_prompt {
+                let text_content_ids = input_tensor.narrow(1, 3, text_content_len)?;
+                let (icl_input_embed, trailing_text_hidden) = self.build_icl_prompt(
+                    prompt.reference_text_token_ids,
+                    &text_content_ids,
+                    prompt.reference_codes,
+                    &tts_pad_embed,
+                    &tts_eos_embed,
+                )?;
+                input_embeds = Tensor::cat(&[input_embeds, icl_input_embed], 1)?;
+                trailing_text_hidden
+            } else {
+                let text_emb = self.talker.embed_text(&input_tensor.narrow(1, 3, 1)?)?;
+                let codec_last = codec_emb.narrow(1, codec_len - 1, 1)?;
+                let first_text_with_codec = (text_emb + codec_last)?;
+                input_embeds = Tensor::cat(&[input_embeds, first_text_with_codec], 1)?;
+
+                let trailing_len = text_seq_len.checked_sub(4 + 5).ok_or_else(|| {
+                    candle_core::Error::Msg(format!("invalid prompt body length: {text_seq_len}"))
+                })?;
+                let trailing_ids = input_tensor.narrow(1, 4, trailing_len)?;
+                let trailing_emb = self.talker.embed_text(&trailing_ids)?;
+                Tensor::cat(&[trailing_emb, tts_eos_embed], 1)?
+            }
         } else {
             // 文字部分
             // text_emb + codec_last
@@ -216,7 +242,10 @@ impl<'a> InputBuilder<'a> {
             input_embeds = Tensor::cat(&[input_embeds, first_text_with_codec], 1)?;
 
             // 剩餘文字 (trailing_text_hidden)
-            let trailing_ids = input_tensor.narrow(1, 4, text_seq_len - 4 - 5)?;
+            let trailing_len = text_seq_len.checked_sub(4 + 5).ok_or_else(|| {
+                candle_core::Error::Msg(format!("invalid prompt body length: {text_seq_len}"))
+            })?;
+            let trailing_ids = input_tensor.narrow(1, 4, trailing_len)?;
             let trailing_emb = self.talker.embed_text(&trailing_ids)?;
             Tensor::cat(&[trailing_emb, tts_eos_embed], 1)?
         };
@@ -319,5 +348,143 @@ fn normalize_speaker_embedding(speaker_embedding: &Tensor, hidden_size: usize) -
         shape => candle_core::bail!(
             "speaker embedding shape must be [{hidden_size}], [1,{hidden_size}], or [1,1,{hidden_size}], got {shape:?}"
         ),
+    }
+}
+
+fn resolve_codec_language_id(
+    config: &super::config::TalkerConfig,
+    language: &str,
+    speaker: Option<&str>,
+) -> Result<Option<u32>> {
+    let request = language.trim();
+    if request.eq_ignore_ascii_case("auto") {
+        return if let Some(speaker) = speaker {
+            if let Some(dialect) = config.speaker_dialect_for(speaker) {
+                if let Some(dialect_id) = config.language_id_for(dialect) {
+                    return Ok(Some(dialect_id));
+                }
+            }
+            Ok(None)
+        } else {
+            Ok(None)
+        };
+    }
+    let language_id = config
+        .language_id_for(request)
+        .ok_or_else(|| candle_core::Error::Msg(format!("unsupported language: {request}")))?;
+
+    if is_chinese_language(config, request) {
+        if let Some(dialect_name) = speaker.and_then(|name| config.speaker_dialect_for(name)) {
+            if let Some(dialect_id) = config.language_id_for(dialect_name) {
+                return Ok(Some(dialect_id));
+            }
+        }
+    }
+    Ok(Some(language_id))
+}
+
+fn resolve_speaker_id(
+    config: &super::config::TalkerConfig,
+    speaker: Option<&str>,
+) -> Result<Option<u32>> {
+    let speaker = match speaker {
+        Some(name) => name.trim(),
+        None => return Ok(None),
+    };
+    if speaker.is_empty() {
+        return Ok(None);
+    }
+    let speaker_id = config
+        .speaker_id_for(speaker)
+        .ok_or_else(|| candle_core::Error::Msg(format!("unsupported speaker: {speaker}")))?;
+    Ok(Some(speaker_id))
+}
+
+fn is_chinese_language(config: &super::config::TalkerConfig, language: &str) -> bool {
+    let requested = match config.language_id_for(language) {
+        Some(id) => id,
+        None => return false,
+    };
+    matches!(
+        config.language_id_for("chinese").or_else(|| config.language_id_for("zh")),
+        Some(id) if id == requested
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_chinese_language, resolve_codec_language_id, resolve_speaker_id};
+    use crate::talker::config::TalkerConfig;
+
+    fn custom_voice_like_config() -> TalkerConfig {
+        let mut config = TalkerConfig::default();
+        config.codec_language_id = vec![
+            ("chinese".into(), 2055),
+            ("english".into(), 2050),
+            ("beijing_dialect".into(), 9001),
+            ("sichuan_dialect".into(), 9002),
+        ];
+        config.spk_id = vec![("Dylan".into(), 1518), ("Eric".into(), 1519)];
+        config.spk_is_dialect = vec![
+            ("Dylan".into(), Some("beijing_dialect".into())),
+            ("Eric".into(), Some("sichuan_dialect".into())),
+        ];
+        config
+    }
+
+    #[test]
+    fn resolve_codec_language_for_chinese_substitutes_dialect() {
+        let config = custom_voice_like_config();
+        let dylan = resolve_codec_language_id(&config, "chinese", Some("Dylan")).unwrap();
+        let eric = resolve_codec_language_id(&config, "zh", Some("Eric")).unwrap();
+        assert_eq!(dylan, Some(9001));
+        assert_eq!(eric, Some(9002));
+    }
+
+    #[test]
+    fn resolve_codec_language_for_auto_substitutes_dialect() {
+        let config = custom_voice_like_config();
+        let dylan = resolve_codec_language_id(&config, "auto", Some("Dylan")).unwrap();
+        assert_eq!(dylan, Some(9001));
+    }
+
+    #[test]
+    fn resolve_codec_language_for_english_does_not_substitute_dialect() {
+        let config = custom_voice_like_config();
+        let dylan = resolve_codec_language_id(&config, "english", Some("Dylan")).unwrap();
+        assert_eq!(dylan, Some(2050));
+    }
+
+    #[test]
+    fn resolve_codec_language_rejects_unknown_language() {
+        let config = custom_voice_like_config();
+        assert!(resolve_codec_language_id(&config, "french", None).is_err());
+    }
+
+    #[test]
+    fn resolve_speaker_is_case_insensitive() {
+        let config = custom_voice_like_config();
+        assert_eq!(
+            resolve_speaker_id(&config, Some("dylan")).unwrap(),
+            Some(1518)
+        );
+        assert_eq!(
+            resolve_speaker_id(&config, Some("dylAN")).unwrap(),
+            Some(1518)
+        );
+    }
+
+    #[test]
+    fn resolve_speaker_rejects_unknown_speaker() {
+        let config = custom_voice_like_config();
+        assert!(resolve_speaker_id(&config, Some("unknown")).is_err());
+    }
+
+    #[test]
+    fn chinese_language_detection_prefers_chinese_key() {
+        let config = custom_voice_like_config();
+        assert!(is_chinese_language(&config, "zh"));
+        assert!(is_chinese_language(&config, "chinese"));
+        assert!(!is_chinese_language(&config, "english"));
     }
 }

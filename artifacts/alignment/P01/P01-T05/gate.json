@@ -1,0 +1,16 @@
+{
+  "task_id": "P01-T05",
+  "gate_status": "GATE_PASSED",
+  "checks": [
+    {"name": "python_oracle_help", "status": "passed"},
+    {"name": "python_oracle_check", "status": "passed", "result": "PROMPT_MATRIX_CHECK_OK"},
+    {"name": "format", "status": "passed"},
+    {"name": "cpu_check", "status": "passed"},
+    {"name": "prompt_id_matrix_real_test", "status": "passed", "result": "1 passed"},
+    {"name": "text_frontend_tests", "status": "passed", "result": "32 passed"},
+    {"name": "examples", "status": "passed", "result": "2 checks passed"},
+    {"name": "scoped_diff", "status": "passed"},
+    {"name": "independent_review", "status": "passed", "result": "ACCEPT"}
+  ],
+  "notes": "Warnings observed: SoX missing in environment, existing MSVC LNK4098 linker warning; both are non-blocking and did not fail gates."
+}

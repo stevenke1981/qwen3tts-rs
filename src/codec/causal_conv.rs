@@ -458,7 +458,7 @@ impl CausalConv1d {
             shape => {
                 return Err(Error::Config(format!(
                     "Expected frame shape ({in_channels},) or (1, {in_channels}, 1), got {shape:?}"
-                )))
+                )));
             }
         };
 

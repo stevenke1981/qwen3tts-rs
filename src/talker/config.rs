@@ -35,6 +35,12 @@ pub struct TalkerConfig {
     pub mrope_section: Vec<usize>,
     /// RoPE interleaved 模式
     pub rope_interleaved: bool,
+    /// `assistant_token_id` from `config.json`
+    pub assistant_token_id: u32,
+    /// `im_start_token_id` from `config.json`
+    pub im_start_token_id: u32,
+    /// `im_end_token_id` from `config.json`
+    pub im_end_token_id: u32,
     /// 隱藏層激活函數
     pub hidden_act: String,
     /// 注意力 bias
@@ -61,10 +67,74 @@ pub struct TalkerConfig {
     /// 說話者 ID 對照表（可選）
     pub spk_id: Vec<(String, u32)>,
     /// 說話者是否為方言
-    pub spk_is_dialect: Vec<(String, bool)>,
+    pub spk_is_dialect: Vec<(String, Option<String>)>,
 
     /// 子碼本預測器配置
     pub code_predictor: CodePredictorConfig,
+}
+
+impl TalkerConfig {
+    /// 取得可用語言清單（保留 metadata 載入順序）。
+    pub fn supported_languages(&self) -> Vec<&str> {
+        self.codec_language_id
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect()
+    }
+
+    /// 取得可用 speaker 清單（保留 metadata 載入順序）。
+    pub fn supported_speakers(&self) -> Vec<&str> {
+        self.spk_id.iter().map(|(name, _)| name.as_str()).collect()
+    }
+
+    /// 依語言名稱（不分大小寫）回傳對應 codec 語言 token。
+    pub fn language_id_for(&self, language: &str) -> Option<u32> {
+        let normalized = normalize_lookup_key(language);
+        self.codec_language_id
+            .iter()
+            .find(|(name, _)| normalize_lookup_key(name) == normalized)
+            .map(|(_, id)| *id)
+    }
+
+    /// 依 speaker 名稱（不分大小寫）回傳對應 speaker token。
+    pub fn speaker_id_for(&self, speaker: &str) -> Option<u32> {
+        let normalized = normalize_lookup_key(speaker);
+        self.spk_id
+            .iter()
+            .find(|(name, _)| normalize_lookup_key(name) == normalized)
+            .map(|(_, id)| *id)
+    }
+
+    /// 依 speaker 名稱（不分大小寫）回傳方言對應語言鍵。
+    pub fn speaker_dialect_for(&self, speaker: &str) -> Option<&str> {
+        let normalized = normalize_lookup_key(speaker);
+        self.spk_is_dialect
+            .iter()
+            .find(|(name, _)| normalize_lookup_key(name) == normalized)
+            .and_then(|(_, dialect)| dialect.as_deref())
+    }
+}
+
+fn normalize_lookup_key(value: &str) -> String {
+    let normalized: String = value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+
+    match normalized.as_str() {
+        "zh" | "zhcn" | "zhtw" => "chinese".to_string(),
+        "en" => "english".to_string(),
+        "es" => "spanish".to_string(),
+        "fr" => "french".to_string(),
+        "de" => "german".to_string(),
+        "it" => "italian".to_string(),
+        "ja" => "japanese".to_string(),
+        "ko" => "korean".to_string(),
+        "ru" => "russian".to_string(),
+        "pt" => "portuguese".to_string(),
+        other => other.to_string(),
+    }
 }
 
 /// 子碼本預測器配置（5 層）
@@ -105,6 +175,9 @@ impl Default for TalkerConfig {
             rope_theta: 1_000_000.0,
             mrope_section: vec![24, 20, 20],
             rope_interleaved: true,
+            assistant_token_id: 77091,
+            im_start_token_id: 151644,
+            im_end_token_id: 151645,
             hidden_act: "silu".into(),
             attention_bias: false,
             attention_dropout: 0.0,
@@ -157,5 +230,78 @@ impl Default for TalkerConfig {
                 ],
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TalkerConfig, normalize_lookup_key};
+
+    fn custom_voice_like_config() -> TalkerConfig {
+        let mut config = TalkerConfig::default();
+        config.codec_language_id = vec![
+            ("chinese".into(), 2055),
+            ("english".into(), 2050),
+            ("beijing_dialect".into(), 9001),
+        ];
+        config.spk_id = vec![("Dylan".into(), 2878)];
+        config.spk_is_dialect = vec![("Dylan".into(), Some("beijing_dialect".into()))];
+        config
+    }
+
+    #[test]
+    fn supports_default_languages_and_speakers_deterministically() {
+        let config = TalkerConfig::default();
+        assert_eq!(
+            config.supported_languages(),
+            vec![
+                "chinese",
+                "english",
+                "german",
+                "italian",
+                "portuguese",
+                "spanish",
+                "japanese",
+                "korean",
+                "french",
+                "russian",
+            ]
+        );
+        assert_eq!(config.supported_speakers(), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn language_lookup_is_case_and_alias_aware() {
+        let config = TalkerConfig::default();
+        assert_eq!(config.language_id_for("zh-CN"), Some(2055));
+        assert_eq!(config.language_id_for("En"), Some(2050));
+        assert_eq!(config.language_id_for("  FR  "), Some(2061));
+        assert_eq!(config.language_id_for("kOrEaN"), Some(2064));
+        assert_eq!(config.language_id_for("unknown"), None);
+    }
+
+    #[test]
+    fn speaker_lookup_is_case_insensitive() {
+        let config = custom_voice_like_config();
+        assert_eq!(config.speaker_id_for("dylan"), Some(2878));
+        assert_eq!(config.speaker_id_for("DYLAn"), Some(2878));
+    }
+
+    #[test]
+    fn dialect_lookup_uses_case_insensitive_speaker() {
+        let config = custom_voice_like_config();
+        assert_eq!(config.speaker_dialect_for("dylan"), Some("beijing_dialect"));
+        assert_eq!(config.speaker_dialect_for("DYLAn"), Some("beijing_dialect"));
+        assert_eq!(config.speaker_dialect_for("eric"), None);
+    }
+
+    #[test]
+    fn normalize_lookup_key_maps_aliases() {
+        assert_eq!(normalize_lookup_key("zh"), "chinese");
+        assert_eq!(normalize_lookup_key("zh-CN"), "chinese");
+        assert_eq!(normalize_lookup_key("en"), "english");
+        assert_eq!(normalize_lookup_key("pt"), "portuguese");
+        assert_eq!(normalize_lookup_key("es"), "spanish");
+        assert_eq!(normalize_lookup_key("ja"), "japanese");
     }
 }

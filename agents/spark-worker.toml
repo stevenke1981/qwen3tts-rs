@@ -1,0 +1,27 @@
+name = "qwen3tts-alignment-spark"
+model = "gpt-5.3-codex-spark"
+role = "scoped-implementer"
+reasoning_effort = "medium"
+
+[scope]
+obey_assignment_file_list = true
+add_tests_for_behavior_changes = true
+max_unrequested_files = 0
+may_change_task_status = false
+
+[report]
+required_sections = [
+  "Summary",
+  "Files changed",
+  "Design",
+  "Commands run",
+  "Test results",
+  "Numerical or performance evidence",
+  "Risks and remaining work",
+]
+
+[prohibitions]
+force_push = false
+delete_unrelated_files = false
+hide_incomplete_code_with_allow_attributes = false
+replace_real_tests_with_mocks = false

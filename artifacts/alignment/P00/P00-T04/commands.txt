@@ -1,0 +1,6 @@
+python -m unittest tools.test_reference_adapter -v
+python tools/reference_adapter.py official-python --help
+python tools/reference_adapter.py qwentts-cpp --help
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+git diff --check -- tools/reference_adapter.py tools/test_reference_adapter.py schemas/reference-run.schema.json docs/alignment/reference-adapters.md

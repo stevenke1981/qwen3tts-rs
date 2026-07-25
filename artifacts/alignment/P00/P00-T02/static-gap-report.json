@@ -1,0 +1,251 @@
+{
+  "hits": [
+    {
+      "rule": "accumulated_history",
+      "file": "GAP_MATRIX.md",
+      "line": 13,
+      "snippet": "accumulated-history recompute O(n\u00b2) | persistent causal states, O(1) work/frame wrt history | P0 |"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "SOURCE_BASELINE.md",
+      "line": 15,
+      "snippet": "accumulated history and is O(n\u00b2)."
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "src\\decoder_12hz.rs",
+      "line": 30,
+      "snippet": "pre_conv_buffer: Vec<f32>,"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "src\\decoder_12hz.rs",
+      "line": 124,
+      "snippet": "pre_conv_buffer: Vec::with_capacity(cap),"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "src\\decoder_12hz.rs",
+      "line": 238,
+      "snippet": "pre_conv_buffer.extend(&x_vec);"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "src\\decoder_12hz.rs",
+      "line": 239,
+      "snippet": "pre_conv_buffer.len() / self.config.latent_dim;"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "src\\decoder_12hz.rs",
+      "line": 249,
+      "snippet": "pre_conv_buffer,"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "src\\decoder_12hz.rs",
+      "line": 256,
+      "snippet": "accumulated history"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "src\\decoder_12hz.rs",
+      "line": 311,
+      "snippet": "pre_conv_buffer.clear();"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\weights.rs",
+      "line": 24,
+      "snippet": "load_quantized_f32};"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\weights.rs",
+      "line": 255,
+      "snippet": "load_quantized_f32(sf, base)?;"
+    },
+    {
+      "rule": "silent_fixture_skip",
+      "file": "tests\\debug_per_layer_compare.rs",
+      "line": 129,
+      "snippet": "Skipping: real weights not found at {weight_dir:?}\");"
+    },
+    {
+      "rule": "silent_fixture_skip",
+      "file": "tests\\integration_test.rs",
+      "line": 62,
+      "snippet": "Skipping: real weights not found at {weight_dir:?}\");"
+    },
+    {
+      "rule": "silent_fixture_skip",
+      "file": "tests\\integration_test.rs",
+      "line": 142,
+      "snippet": "Skipping: real weights not found at {weight_dir:?}\");"
+    },
+    {
+      "rule": "silent_fixture_skip",
+      "file": "tests\\integration_test.rs",
+      "line": 205,
+      "snippet": "Skipping: real weights not found at {weight_dir:?}\");"
+    },
+    {
+      "rule": "silent_fixture_skip",
+      "file": "tests\\integration_test.rs",
+      "line": 265,
+      "snippet": "Skipping: real weights not found at {weight_dir:?}\");"
+    },
+    {
+      "rule": "silent_fixture_skip",
+      "file": "tests\\integration_test.rs",
+      "line": 323,
+      "snippet": "Skipping: real weights not found at {base_dir:?}\");"
+    },
+    {
+      "rule": "silent_fixture_skip",
+      "file": "tests\\integration_test.rs",
+      "line": 387,
+      "snippet": "Skipping: real weights or PyTorch reference not found\");"
+    },
+    {
+      "rule": "silent_fixture_skip",
+      "file": "tests\\integration_test.rs",
+      "line": 426,
+      "snippet": "Skipping: real weights not found\");"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "tools\\check_alignment_static.py",
+      "line": 11,
+      "snippet": "accumulated_history\", re.compile(r\"pre_conv_buffer|accumulat(?:e|ed).*history\", re.I)),"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "tools\\check_alignment_static.py",
+      "line": 12,
+      "snippet": "dequantize_to_vec|load_quantized_f32\", re.I)),"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "tools\\check_alignment_static.py",
+      "line": 12,
+      "snippet": "load_quantized_f32\", re.I)),"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "tools\\tools\\check_alignment_static.py",
+      "line": 11,
+      "snippet": "accumulated_history\", re.compile(r\"pre_conv_buffer|accumulat(?:e|ed).*history\", re.I)),"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "tools\\tools\\check_alignment_static.py",
+      "line": 12,
+      "snippet": "dequantize_to_vec|load_quantized_f32\", re.I)),"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "tools\\tools\\check_alignment_static.py",
+      "line": 12,
+      "snippet": "load_quantized_f32\", re.I)),"
+    },
+    {
+      "rule": "silent_fixture_skip",
+      "file": "src\\codec\\causal_conv.rs",
+      "line": 667,
+      "snippet": "Skipping: real weights not found\");"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\quantization\\mod.rs",
+      "line": 92,
+      "snippet": "dequantize_to_vec(&self) -> Vec<f32> {"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\quantization\\mod.rs",
+      "line": 374,
+      "snippet": "dequantize_to_vec();"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\quantization\\mod.rs",
+      "line": 456,
+      "snippet": "load_quantized_f32("
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\quantization\\mod.rs",
+      "line": 518,
+      "snippet": "dequantize_to_vec(),"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\quantization\\mod.rs",
+      "line": 716,
+      "snippet": "dequantize_to_vec();"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\quantization\\mod.rs",
+      "line": 731,
+      "snippet": "dequantize_to_vec().len(), values.len());"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\quantization\\mod.rs",
+      "line": 746,
+      "snippet": "load_quantized_f32(&loaded, \"linear.weight\").unwrap();"
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "src\\quantization\\mod.rs",
+      "line": 795,
+      "snippet": "load_quantized_f32(&loaded, \"linear.weight\").unwrap();"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "docs\\alignment\\current-implementation-audit.md",
+      "line": 88,
+      "snippet": "pre_conv_buffer`, rebuilds an accumulated tensor, reruns pre-transformer, all upsample blocks,"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "docs\\alignment\\current-implementation-audit.md",
+      "line": 144,
+      "snippet": "accumulated-history streaming, full"
+    },
+    {
+      "rule": "accumulated_history",
+      "file": "docs\\alignment\\current-implementation-audit.md",
+      "line": 153,
+      "snippet": "accumulated-history fake streaming."
+    },
+    {
+      "rule": "full_dequantize",
+      "file": "docs\\alignment\\current-implementation-audit.md",
+      "line": 106,
+      "snippet": "load_quantized_f32`, builds a full Candle F32"
+    },
+    {
+      "rule": "permissive_ci",
+      "file": "docs\\alignment\\current-implementation-audit.md",
+      "line": 141,
+      "snippet": "continue-on-error: true` for integration tests and benches."
+    },
+    {
+      "rule": "permissive_ci",
+      "file": ".github\\workflows\\ci.yml",
+      "line": 59,
+      "snippet": "continue-on-error: true  # integration tests need weight files"
+    },
+    {
+      "rule": "permissive_ci",
+      "file": ".github\\workflows\\ci.yml",
+      "line": 115,
+      "snippet": "continue-on-error: true  # benches may fluctuate on CI runners"
+    }
+  ],
+  "note": "Hits require review; P05/P08/P13 production hits should be removed or justified."
+}

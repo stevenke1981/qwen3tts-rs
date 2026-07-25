@@ -7,8 +7,9 @@ use candle_core::{Device, Result, Tensor};
 
 use super::config::CodePredictorConfig;
 use super::decoder_layer::StandardDecoderLayer;
-use super::primitives::{create_causal_mask, embedding_lookup, linear, linear_with_bias, RMSNorm};
+use super::primitives::{RMSNorm, create_causal_mask, embedding_lookup, linear, linear_with_bias};
 use super::sampling::{Sampler, SamplingOptions};
+use crate::alignment_stage_dump::{NoopStageDumpObserver, StageDumpObserver};
 
 /// 子碼本預測器
 #[derive(Debug, Clone)]
@@ -62,9 +63,33 @@ impl CodePredictor {
         kv_caches: &mut [Option<(Tensor, Tensor)>],
         device: &Device,
     ) -> Result<(Tensor, Vec<Option<(Tensor, Tensor)>>)> {
+        let mut observer = NoopStageDumpObserver::default();
+        self.generate_with_observer(
+            talker_hidden,
+            codebook_0_embed,
+            kv_caches,
+            device,
+            0,
+            &mut observer,
+        )
+    }
+
+    pub fn generate_with_observer<O: StageDumpObserver>(
+        &self,
+        talker_hidden: &Tensor,
+        codebook_0_embed: &Tensor,
+        kv_caches: &mut [Option<(Tensor, Tensor)>],
+        device: &Device,
+        frame_index: usize,
+        observer: &mut O,
+    ) -> Result<(Tensor, Vec<Option<(Tensor, Tensor)>>)> {
         let mut generated_ids: Vec<u32> = Vec::with_capacity(self.config.num_code_groups - 1);
+        let capture = observer.wants_capture();
 
         let logits = self.first_step_logits(talker_hidden, codebook_0_embed, kv_caches, device)?;
+        if capture {
+            observer.on_code_predictor_step_logits(frame_index, 0, &logits)?;
+        }
         let next_token = logits.argmax(1)?;
         let mut next_val = next_token.to_vec1::<u32>()?[0];
         generated_ids.push(next_val);
@@ -80,12 +105,18 @@ impl CodePredictor {
             let sin = step_sin.narrow(2, step - 1, 1)?;
             let h = self.forward_layers(&next_input, &cos, &sin, None, kv_caches)?;
             let logits = linear(&h, &self.lm_heads[step])?.squeeze(1)?;
+            if capture {
+                observer.on_code_predictor_step_logits(frame_index, step, &logits)?;
+            }
             let next_token = logits.argmax(1)?;
             next_val = next_token.to_vec1::<u32>()?[0];
             generated_ids.push(next_val);
         }
 
         let code_tensor = Tensor::from_slice(&generated_ids, (1, generated_ids.len()), device)?;
+        if capture {
+            observer.on_code_predictor_final_codes(frame_index, &code_tensor)?;
+        }
         Ok((code_tensor, kv_caches.to_vec()))
     }
 
@@ -97,11 +128,50 @@ impl CodePredictor {
         device: &Device,
         sampler: &mut Sampler,
         sampling: SamplingOptions,
+        do_sample: bool,
+    ) -> Result<(Tensor, Vec<Option<(Tensor, Tensor)>>)> {
+        let mut observer = NoopStageDumpObserver::default();
+        self.generate_sampled_with_observer(
+            talker_hidden,
+            codebook_0_embed,
+            kv_caches,
+            device,
+            sampler,
+            sampling,
+            do_sample,
+            0,
+            &mut observer,
+        )
+    }
+
+    pub fn generate_sampled_with_observer<O: StageDumpObserver>(
+        &self,
+        talker_hidden: &Tensor,
+        codebook_0_embed: &Tensor,
+        kv_caches: &mut [Option<(Tensor, Tensor)>],
+        device: &Device,
+        sampler: &mut Sampler,
+        sampling: SamplingOptions,
+        do_sample: bool,
+        frame_index: usize,
+        observer: &mut O,
     ) -> Result<(Tensor, Vec<Option<(Tensor, Tensor)>>)> {
         let mut generated_ids: Vec<u32> = Vec::with_capacity(self.config.num_code_groups - 1);
+        let capture = observer.wants_capture();
 
         let logits = self.first_step_logits(talker_hidden, codebook_0_embed, kv_caches, device)?;
-        let mut next_val = sampler.sample(&logits, sampling, None, None)?;
+        if capture {
+            observer.on_code_predictor_step_logits(frame_index, 0, &logits)?;
+        }
+        let sampling = if do_sample {
+            sampling
+        } else {
+            SamplingOptions {
+                temperature: -1.0,
+                ..sampling
+            }
+        };
+        let mut next_val = sampler.sample(&logits, sampling, None, None, &[])?;
         generated_ids.push(next_val);
 
         let step_positions: Vec<u32> = (2..self.config.num_code_groups as u32).collect();
@@ -115,11 +185,17 @@ impl CodePredictor {
             let sin = step_sin.narrow(2, step - 1, 1)?;
             let h = self.forward_layers(&next_input, &cos, &sin, None, kv_caches)?;
             let logits = linear(&h, &self.lm_heads[step])?.squeeze(1)?;
-            next_val = sampler.sample(&logits, sampling, None, None)?;
+            if capture {
+                observer.on_code_predictor_step_logits(frame_index, step, &logits)?;
+            }
+            next_val = sampler.sample(&logits, sampling, None, None, &[])?;
             generated_ids.push(next_val);
         }
 
         let code_tensor = Tensor::from_slice(&generated_ids, (1, generated_ids.len()), device)?;
+        if capture {
+            observer.on_code_predictor_final_codes(frame_index, &code_tensor)?;
+        }
         Ok((code_tensor, kv_caches.to_vec()))
     }
 

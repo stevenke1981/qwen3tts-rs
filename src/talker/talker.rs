@@ -10,15 +10,23 @@
 //!    c. 16 個 embedding sum → 作為下一步輸入
 //!    d. 加上 trailing_text_hidden 或 tts_pad_embed
 
-use candle_core::{DType, Device, Result, Tensor};
+use candle_core::{DType, Device, Error, Result, Tensor};
 
 use super::code_predictor::CodePredictor;
 use super::config::TalkerConfig;
 use super::model::TalkerModel;
 use super::primitives::{
-    create_causal_mask, embedding_lookup, linear, linear_with_bias, MultimodalRotaryEmbedding,
+    MultimodalRotaryEmbedding, create_causal_mask, embedding_lookup, linear, linear_with_bias,
 };
 use super::sampling::{Sampler, SamplingOptions};
+use crate::alignment_stage_dump::{NoopStageDumpObserver, StageDumpObserver};
+
+#[inline]
+fn record_c0_history_non_eos(c0_history: &mut Vec<u16>, eos_token_id: u16, c0_val: u16) {
+    if c0_val != eos_token_id {
+        c0_history.push(c0_val);
+    }
+}
 
 /// Talker 條件生成模型
 #[derive(Debug, Clone)]
@@ -67,22 +75,23 @@ impl TalkerForConditionalGeneration {
         let cumsum = attention_mask_f.cumsum(1)?;
         let one = Tensor::new(&[1.0f32], device)?;
         let cumsum = cumsum.broadcast_sub(&one)?;
-        let zero = Tensor::new(&[0.0f32], device)?;
-        let cumsum = cumsum.broadcast_maximum(&zero)?;
-        let cumsum = cumsum.broadcast_mul(&attention_mask_f)?;
+        let position_ids = cumsum.broadcast_mul(&attention_mask_f)?;
+        let one_minus_attention =
+            Tensor::new(&[1.0f32], device)?.broadcast_sub(&attention_mask_f)?;
+        let position_ids = position_ids.broadcast_add(&one_minus_attention)?;
 
         // [3, batch, seq_len]
-        let pos_3d = cumsum
-            .unsqueeze(0)?
-            .expand((3, cumsum.dim(0)?, cumsum.dim(1)?))?;
+        let pos_3d =
+            position_ids
+                .unsqueeze(0)?
+                .expand((3, position_ids.dim(0)?, position_ids.dim(1)?))?;
 
-        let max_pos = pos_3d.max(2)?.max(1)?;
+        let max_pos = position_ids.max(1)?.unsqueeze(1)?; // [batch, 1]
+        let valid_len = attention_mask_f.sum(1)?.unsqueeze(1)?;
+        let delta = max_pos.broadcast_add(&one)?;
+        let delta = delta.broadcast_sub(&valid_len)?;
 
-        let seq_lens = attention_mask.sum(1)?;
-        let max_pos_plus_one = max_pos.broadcast_add(&one)?;
-        let delta = max_pos_plus_one.broadcast_sub(&seq_lens.to_dtype(DType::F32)?)?;
-
-        Ok((pos_3d.to_dtype(DType::U32)?, delta))
+        Ok((pos_3d.to_dtype(DType::U32)?, delta.to_dtype(DType::U32)?))
     }
 
     // ─── 生成主程式 ──────────────────────────────────────────────
@@ -107,15 +116,38 @@ impl TalkerForConditionalGeneration {
         max_new_tokens: usize,
         device: &Device,
     ) -> Result<Tensor> {
+        let mut observer = NoopStageDumpObserver::default();
+        self.generate_with_observer(
+            inputs_embeds,
+            attention_mask,
+            trailing_text_hidden,
+            tts_pad_embed,
+            max_new_tokens,
+            device,
+            &mut observer,
+        )
+    }
+
+    pub fn generate_with_observer<O: StageDumpObserver>(
+        &self,
+        inputs_embeds: &Tensor,
+        attention_mask: Option<&Tensor>,
+        trailing_text_hidden: Option<&Tensor>,
+        tts_pad_embed: Option<&Tensor>,
+        max_new_tokens: usize,
+        device: &Device,
+        observer: &mut O,
+    ) -> Result<Tensor> {
         let (batch, seq_len, _hidden) = inputs_embeds.dims3()?;
         assert_eq!(batch, 1, "Only batch=1 supported");
+        let capture = observer.wants_capture();
 
         // ── Prefill: 處理所有輸入 ──
         let mask = attention_mask
             .cloned()
             .unwrap_or_else(|| Tensor::ones(&[batch, seq_len], DType::I64, device).unwrap());
 
-        let (position_ids, _rope_delta) = self.compute_position_ids(&mask)?;
+        let (position_ids, rope_delta) = self.compute_position_ids(&mask)?;
 
         // Create causal mask for prefill
         let causal_mask = create_causal_mask(seq_len, device)?;
@@ -156,6 +188,9 @@ impl TalkerForConditionalGeneration {
             // Step A: 從 last_hidden 預測 codebook 0
             let logits = self.codec_head_logits(&last_hidden)?; // [batch, 1, vocab]
             let logits = logits.squeeze(1)?; // [batch, vocab]
+            if capture {
+                observer.on_talker_codebook0_logits(num_frames, &logits)?;
+            }
 
             // Argmax (簡單版本)
             let c0_token = logits.argmax(1)?; // [batch]
@@ -166,9 +201,14 @@ impl TalkerForConditionalGeneration {
 
             // Step B: Code predictor 生成 codebooks 1-15
             let mut cp_kv_caches = vec![None; self.config.code_predictor.num_hidden_layers];
-            let (codes_1_15, _) =
-                self.code_predictor
-                    .generate(&last_hidden, &c0_emb, &mut cp_kv_caches, device)?;
+            let (codes_1_15, _) = self.code_predictor.generate_with_observer(
+                &last_hidden,
+                &c0_emb,
+                &mut cp_kv_caches,
+                device,
+                num_frames,
+                observer,
+            )?;
 
             flat_codes.push(c0_val as u32);
             flat_codes.extend(codes_1_15.squeeze(0)?.to_vec1::<u32>()?);
@@ -199,9 +239,18 @@ impl TalkerForConditionalGeneration {
             let next_input = (sum_emb + text_add)?;
 
             // Run the next generated frame through the talker transformer.
-            let (cos, sin) =
-                self.rope
-                    .forward_single_position((seq_len + gen_step) as u32, batch, device)?;
+            let cache_position_start = u32::try_from(seq_len + gen_step).map_err(|_| {
+                Error::Msg(format!(
+                    "cache_position_start overflow for seq_len {seq_len} gen_step {gen_step}"
+                ))
+            })?;
+            let positions = MultimodalRotaryEmbedding::cached_positions_from_delta(
+                cache_position_start,
+                &rope_delta,
+                1,
+                device,
+            )?;
+            let (cos, sin) = self.rope.forward_single_position(&positions)?;
             let hidden = self
                 .model
                 .forward(&next_input, &cos, &sin, None, &mut kv_caches)?;
@@ -211,6 +260,9 @@ impl TalkerForConditionalGeneration {
 
         // 轉換為 [num_frames, 16]
         let result = Tensor::from_slice(&flat_codes, (num_frames, 16), device)?;
+        if capture {
+            observer.on_talker_final_codes(&result)?;
+        }
         Ok(result)
     }
 
@@ -224,14 +276,50 @@ impl TalkerForConditionalGeneration {
         device: &Device,
         sampler: &mut Sampler,
         sampling: SamplingOptions,
+        do_sample: bool,
+        subtalker_sampling: SamplingOptions,
+        subtalker_do_sample: bool,
+    ) -> Result<Tensor> {
+        let mut observer = NoopStageDumpObserver::default();
+        self.generate_sampled_with_observer(
+            inputs_embeds,
+            attention_mask,
+            trailing_text_hidden,
+            tts_pad_embed,
+            max_new_tokens,
+            device,
+            sampler,
+            sampling,
+            subtalker_sampling,
+            do_sample,
+            subtalker_do_sample,
+            &mut observer,
+        )
+    }
+
+    pub fn generate_sampled_with_observer<O: StageDumpObserver>(
+        &self,
+        inputs_embeds: &Tensor,
+        attention_mask: Option<&Tensor>,
+        trailing_text_hidden: Option<&Tensor>,
+        tts_pad_embed: Option<&Tensor>,
+        max_new_tokens: usize,
+        device: &Device,
+        sampler: &mut Sampler,
+        sampling: SamplingOptions,
+        subtalker_sampling: SamplingOptions,
+        talker_do_sample: bool,
+        subtalker_do_sample: bool,
+        observer: &mut O,
     ) -> Result<Tensor> {
         let (batch, seq_len, _hidden) = inputs_embeds.dims3()?;
         assert_eq!(batch, 1, "Only batch=1 supported");
+        let capture = observer.wants_capture();
 
         let mask = attention_mask
             .cloned()
             .unwrap_or_else(|| Tensor::ones(&[batch, seq_len], DType::I64, device).unwrap());
-        let (position_ids, _rope_delta) = self.compute_position_ids(&mask)?;
+        let (position_ids, rope_delta) = self.compute_position_ids(&mask)?;
         let causal_mask = create_causal_mask(seq_len, device)?;
         let (cos, sin) = self.rope.forward(inputs_embeds, &position_ids)?;
 
@@ -248,6 +336,7 @@ impl TalkerForConditionalGeneration {
         let mut flat_codes: Vec<u32> =
             Vec::with_capacity(max_new_tokens * self.config.num_code_groups);
         let mut num_frames = 0usize;
+        let mut c0_history: Vec<u16> = Vec::with_capacity(max_new_tokens);
         let tts_pad = tts_pad_embed.cloned().unwrap_or_else(|| {
             Tensor::zeros(&[1, 1, self.config.hidden_size], DType::F32, device).unwrap()
         });
@@ -259,29 +348,43 @@ impl TalkerForConditionalGeneration {
 
         for _step in 0..max_new_tokens {
             let logits = self.codec_head_logits(&last_hidden)?.squeeze(1)?;
-            let c0_val = sampler.sample(
+            if capture {
+                observer.on_talker_codebook0_logits(num_frames, &logits)?;
+            }
+            let c0_val = sampler.sample_with_mode(
                 &logits,
                 sampling,
+                talker_do_sample,
                 Some(2048),
                 Some(self.config.codec_eos_token_id as usize),
+                &c0_history,
             )? as u16;
             let c0_t = Tensor::new(&[c0_val as u32], device)?;
             let c0_2d = c0_t.reshape((1, 1))?;
             let c0_emb = self.embed_codec(&c0_2d)?;
 
             let mut cp_kv_caches = vec![None; self.config.code_predictor.num_hidden_layers];
-            let (codes_1_15, _) = self.code_predictor.generate_sampled(
+            let (codes_1_15, _) = self.code_predictor.generate_sampled_with_observer(
                 &last_hidden,
                 &c0_emb,
                 &mut cp_kv_caches,
                 device,
                 sampler,
-                sampling,
+                subtalker_sampling,
+                subtalker_do_sample,
+                num_frames,
+                observer,
             )?;
 
             flat_codes.push(c0_val as u32);
             flat_codes.extend(codes_1_15.squeeze(0)?.to_vec1::<u32>()?);
             num_frames += 1;
+
+            record_c0_history_non_eos(
+                &mut c0_history,
+                self.config.codec_eos_token_id as u16,
+                c0_val,
+            );
 
             if c0_val as u32 == self.config.codec_eos_token_id {
                 break;
@@ -301,9 +404,18 @@ impl TalkerForConditionalGeneration {
             };
             let next_input = (sum_emb + text_add)?;
 
-            let (cos, sin) =
-                self.rope
-                    .forward_single_position((seq_len + gen_step) as u32, batch, device)?;
+            let cache_position_start = u32::try_from(seq_len + gen_step).map_err(|_| {
+                Error::Msg(format!(
+                    "cache_position_start overflow for seq_len {seq_len} gen_step {gen_step}"
+                ))
+            })?;
+            let positions = MultimodalRotaryEmbedding::cached_positions_from_delta(
+                cache_position_start,
+                &rope_delta,
+                1,
+                device,
+            )?;
+            let (cos, sin) = self.rope.forward_single_position(&positions)?;
             let hidden = self
                 .model
                 .forward(&next_input, &cos, &sin, None, &mut kv_caches)?;
@@ -311,6 +423,51 @@ impl TalkerForConditionalGeneration {
             gen_step += 1;
         }
 
-        Tensor::from_slice(&flat_codes, (num_frames, 16), device)
+        let result = Tensor::from_slice(&flat_codes, (num_frames, 16), device)?;
+        if capture {
+            observer.on_talker_final_codes(&result)?;
+        }
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::record_c0_history_non_eos;
+    use crate::talker::config::TalkerConfig;
+
+    fn test_config() -> TalkerConfig {
+        TalkerConfig {
+            codec_eos_token_id: 777,
+            num_code_groups: 16,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn record_c0_history_skips_eos_and_only_pushes_non_eos_tokens() {
+        let mut c0_history = Vec::new();
+        let config = test_config();
+        let eos = config.codec_eos_token_id as u16;
+
+        record_c0_history_non_eos(&mut c0_history, eos, 12);
+        record_c0_history_non_eos(&mut c0_history, eos, 77);
+        record_c0_history_non_eos(&mut c0_history, eos, eos);
+        record_c0_history_non_eos(&mut c0_history, eos, 12);
+
+        assert_eq!(c0_history, vec![12u16, 77u16, 12u16]);
+    }
+
+    #[test]
+    fn c0_history_capacity_targets_max_new_tokens() {
+        let max_new_tokens = 7usize;
+        let mut c0_history: Vec<u16> = Vec::with_capacity(max_new_tokens);
+        assert_eq!(c0_history.capacity(), max_new_tokens);
+
+        record_c0_history_non_eos(&mut c0_history, 777u16, 1u16);
+        record_c0_history_non_eos(&mut c0_history, 777u16, 2u16);
+        record_c0_history_non_eos(&mut c0_history, 777u16, 777u16);
+        assert_eq!(c0_history, vec![1u16, 2u16]);
+        assert!(c0_history.capacity() >= max_new_tokens);
     }
 }

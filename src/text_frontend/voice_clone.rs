@@ -1,8 +1,10 @@
 //! Native Rust/Candle voice-clone planning helpers.
 //!
-//! The best-quality Qwen3-TTS clone path is in-context learning (ICL): a short
-//! reference audio clip, its transcript, a speaker embedding, and reference
-//! codec tokens are all provided to the talker before generation.
+//! Qwen3-TTS native clone supports two paths:
+//! 1) In-context learning (ICL): reference audio + transcript + speaker embedding +
+//!    reference codec tokens.
+//! 2) Speaker-embedding-only: reference audio + speaker embedding, without a
+//!    transcript (x-vector-only).
 
 use std::path::PathBuf;
 
@@ -22,6 +24,8 @@ pub mod speech_tokenizer;
 pub enum VoiceCloneMode {
     /// Full ICL mode: reference audio + reference transcript + speaker embedding.
     InContextLearning,
+    /// Speaker-embedding only mode: reference audio + speaker embedding.
+    SpeakerEmbeddingOnly,
 }
 
 /// Validated native Candle voice-clone plan.
@@ -112,8 +116,8 @@ impl NativeVoiceClonePlan {
     /// Build a native plan from synthesis options.
     ///
     /// `None` means voice clone was not requested. When it is requested, native
-    /// Candle currently requires `--reference-text` so the talker can use the
-    /// same ICL prompt structure as the official implementation.
+    /// Candle chooses ICL when `--reference-text` is provided, and falls back to
+    /// speaker-embedding-only otherwise.
     pub fn from_options(options: &SynthesisOptions) -> Result<Option<Self>> {
         let Some(reference_audio) = options.reference_audio.as_deref() else {
             return Ok(None);
@@ -131,16 +135,16 @@ impl NativeVoiceClonePlan {
             .as_deref()
             .map(str::trim)
             .filter(|text| !text.is_empty())
-            .ok_or_else(|| {
-                Error::Config(
-                    "Candle/Rust native voice clone requires --reference-text for ICL mode".into(),
-                )
-            })?;
+            .map(str::to_string);
+        let mode = match reference_text {
+            Some(_) => VoiceCloneMode::InContextLearning,
+            None => VoiceCloneMode::SpeakerEmbeddingOnly,
+        };
 
         Ok(Some(Self {
             reference_audio: PathBuf::from(reference_audio),
-            reference_text: Some(reference_text.to_string()),
-            mode: VoiceCloneMode::InContextLearning,
+            reference_text,
+            mode,
         }))
     }
 

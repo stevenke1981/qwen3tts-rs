@@ -1,0 +1,15 @@
+{
+  "task_id": "P01-T04",
+  "gate_status": "GATE_PASSED",
+  "checks": [
+    {"name": "format", "status": "passed"},
+    {"name": "cpu_check", "status": "passed"},
+    {"name": "text_frontend_tests", "status": "passed", "result": "32 passed"},
+    {"name": "input_builder_tests", "status": "passed", "result": "7 passed"},
+    {"name": "prompt_assembly_tests", "status": "passed", "result": "8 passed"},
+    {"name": "voice_clone_tests", "status": "passed", "result": "7 passed"},
+    {"name": "examples", "status": "passed", "result": "2 passed"},
+    {"name": "scoped_diff", "status": "passed"},
+    {"name": "independent_review", "status": "passed", "result": "no blocking findings"}
+  ]
+}

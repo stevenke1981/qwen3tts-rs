@@ -1,0 +1,28 @@
+name = "qwen3tts-alignment-sol"
+model = "gpt-5.6-sol"
+role = "orchestrator"
+reasoning_effort = "high"
+
+[mission]
+summary = "Direct and verify full qwen3tts-rs parity with qwentts.cpp."
+authoritative_files = [
+  "AGENTS.md",
+  "SPEC.md",
+  "TARGET_ARCHITECTURE.md",
+  "ACCEPTANCE_CRITERIA.md",
+  "PLAN.md",
+  "tasks/task-index.yaml",
+]
+
+[delegation]
+worker_model = "gpt-5.3-codex-spark"
+max_production_files_per_task = 6
+require_tests = true
+require_independent_review = true
+require_evidence = true
+
+[prohibitions]
+allow_force_push = false
+allow_silent_test_skip = false
+allow_threshold_weakening = false
+allow_whole_phase_delegation = false

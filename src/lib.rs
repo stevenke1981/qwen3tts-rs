@@ -11,6 +11,7 @@
 //! - 所有緩衝區在 `new()` 時預分配
 //! - 純同步 `decode_chunk()` 調用，異步僅用於 I/O 邊界
 
+pub mod alignment_stage_dump;
 pub mod codec;
 pub mod gui;
 pub mod paths;
@@ -26,6 +27,9 @@ pub mod weights;
 mod decoder_12hz;
 mod decoder_25hz;
 
+pub use alignment_stage_dump::{NoopStageDumpObserver, StageDumpMetadata, StageDumpObserver};
+#[cfg(feature = "stage-dump")]
+pub use alignment_stage_dump::{StageDumpEntry, StageDumpManifest, StageDumpWriter};
 pub use decoder_12hz::Decoder12Hz;
 pub use decoder_25hz::Decoder25Hz;
 pub use vocoder::{HifiGanVocoder, Vocoder, VocoderConfig};

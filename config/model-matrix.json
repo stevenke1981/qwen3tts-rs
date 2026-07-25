@@ -1,0 +1,50 @@
+{
+  "models": [
+    {
+      "id": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+      "size": "0.6B",
+      "mode": "base",
+      "voice_clone": true,
+      "custom_voice": false,
+      "voice_design": false
+    },
+    {
+      "id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+      "size": "0.6B",
+      "mode": "custom_voice",
+      "voice_clone": false,
+      "custom_voice": true,
+      "voice_design": false
+    },
+    {
+      "id": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "size": "1.7B",
+      "mode": "base",
+      "voice_clone": true,
+      "custom_voice": false,
+      "voice_design": false
+    },
+    {
+      "id": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+      "size": "1.7B",
+      "mode": "custom_voice",
+      "voice_clone": false,
+      "custom_voice": true,
+      "voice_design": false
+    },
+    {
+      "id": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+      "size": "1.7B",
+      "mode": "voice_design",
+      "voice_clone": false,
+      "custom_voice": false,
+      "voice_design": true
+    }
+  ],
+  "tokenizer": "Qwen/Qwen3-TTS-Tokenizer-12Hz",
+  "sample_rate": 24000,
+  "frame_rate": 12.5,
+  "hop_samples": 1920,
+  "num_codebooks": 16,
+  "codebook_size": 2048
+}

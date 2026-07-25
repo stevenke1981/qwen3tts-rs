@@ -1,0 +1,25 @@
+MAIN-AGENT VERIFICATION
+
+python -m unittest tools.test_reference_adapter -v
+exit 0
+18 passed, 0 failed, 1 platform symlink-creation test skipped
+The privilege-independent mocked symlink guard test passed.
+
+python tools/reference_adapter.py official-python --help
+exit 0
+
+python tools/reference_adapter.py qwentts-cpp --help
+exit 0
+
+cargo fmt --all -- --check
+exit 0
+
+cargo check --no-default-features --features cpu
+exit 0
+
+git diff --check -- <P00-T04 files>
+exit 0
+
+Official installed runner dry-run
+exit 0
+No output directory was created.

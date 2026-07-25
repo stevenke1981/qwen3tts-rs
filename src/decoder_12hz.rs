@@ -1,8 +1,9 @@
 use candle_core::{Device, Tensor};
 
+use crate::alignment_stage_dump::{NoopStageDumpObserver, StageDumpObserver};
 use crate::codec::{
-    snake_beta, CausalConv1d, CausalConvConfig, CodebookLookup, DecoderBlock, ParallelCodebook,
-    PreTransformer, PreTransformerConfig, UpsampleBlock,
+    CausalConv1d, CausalConvConfig, CodebookLookup, DecoderBlock, ParallelCodebook, PreTransformer,
+    PreTransformerConfig, UpsampleBlock, snake_beta,
 };
 use crate::weights::WeightLoader;
 use crate::{DecoderConfig, Error, Result, TtsDecoder};
@@ -133,8 +134,28 @@ impl Decoder12Hz {
     /// Decode a complete 12Hz token sequence with the same causal batch path
     /// used by the reference tokenizer decoder.
     pub fn decode_frames(&mut self, frames: &[[u16; 16]]) -> Result<Vec<f32>> {
+        let mut observer = NoopStageDumpObserver::default();
+        self.decode_frames_with_observer(frames, &mut observer)
+    }
+
+    pub fn decode_frames_with_observer<O: StageDumpObserver>(
+        &mut self,
+        frames: &[[u16; 16]],
+        observer: &mut O,
+    ) -> Result<Vec<f32>> {
+        let capture = observer.wants_capture();
         if frames.is_empty() {
             return Ok(Vec::new());
+        }
+
+        if capture {
+            let input_codes: Vec<f32> = frames
+                .iter()
+                .flat_map(|frame| frame.iter().map(|&token| token as f32))
+                .collect();
+            let input_shape = (frames.len(), self.config.num_codebook_layers);
+            let input_codes = Tensor::from_slice(&input_codes, input_shape, &self.device)?;
+            observer.on_codec_input_codes(&input_codes)?;
         }
 
         let num_frames = frames.len();
@@ -216,8 +237,46 @@ impl Decoder12Hz {
 
         let h = snake_beta(&h, &self.final_snake_a, &self.final_snake_b)?;
         let h = self.final_conv.forward(&h)?;
+        let pcm: Vec<f32> = h.squeeze(0)?.squeeze(0)?.to_vec1()?;
+        if capture {
+            observer.on_codec_output_pcm(&Tensor::from_slice(&pcm, pcm.len(), &self.device)?)?;
+        }
 
-        h.squeeze(0)?.squeeze(0)?.to_vec1().map_err(Into::into)
+        Ok(pcm)
+    }
+
+    pub fn decode_chunk_with_observer<O: StageDumpObserver>(
+        &mut self,
+        tokens: &[u16],
+        observer: &mut O,
+    ) -> Result<Vec<f32>> {
+        let capture = observer.wants_capture();
+        if tokens.len() != self.config.num_codebook_layers {
+            return Err(Error::Config(format!(
+                "Expected {} tokens (one per codebook layer), got {}",
+                self.config.num_codebook_layers,
+                tokens.len()
+            )));
+        }
+        if capture {
+            let input_codes: Vec<u32> = tokens.iter().map(|&token| token as u32).collect();
+            let input_codes = Tensor::from_slice(
+                &input_codes,
+                (1, self.config.num_codebook_layers),
+                &self.device,
+            )?;
+            observer.on_codec_input_codes(&input_codes)?;
+        }
+
+        let output = self.decode_chunk_inner(tokens)?;
+        if capture {
+            observer.on_codec_output_pcm(&Tensor::from_slice(
+                &output,
+                output.len(),
+                &self.device,
+            )?)?;
+        }
+        Ok(output)
     }
 
     fn decode_chunk_inner(&mut self, tokens: &[u16]) -> Result<Vec<f32>> {
@@ -302,8 +361,8 @@ impl TtsDecoder for Decoder12Hz {
                 tokens.len()
             )));
         }
-
-        self.decode_chunk_inner(tokens)
+        let mut observer = NoopStageDumpObserver::default();
+        self.decode_chunk_with_observer(tokens, &mut observer)
     }
 
     fn reset_state(&mut self) {

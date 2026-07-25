@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "official_source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "qwentts_cpp_revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+  "license": "Apache-2.0",
+  "assets": [
+    {
+      "id": "official-qwen3-tts-12hz-0.6b-base",
+      "source": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+      "snapshot_revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+      "file": "model.safetensors",
+      "byte_length": 1829344272,
+      "sha256": "180b3b10eb1c9f1b4db7806d5475bae3071c0243c299d49926bab1da3b6946f6"
+    },
+    {
+      "id": "official-qwen3-tts-tokenizer-12hz",
+      "source": "https://huggingface.co/Qwen/Qwen3-TTS-Tokenizer-12Hz",
+      "snapshot_revision": "7dd38ad4e9bad454aae9cd937d0cd577604fe229",
+      "file": "model.safetensors",
+      "byte_length": 682293092,
+      "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258"
+    },
+    {
+      "id": "qwentts-cpp-0.6b-base-f32",
+      "source": "qwentts.cpp convert.py from the pinned official checkpoint",
+      "file": "qwen-talker-0.6b-base-F32.gguf",
+      "byte_length": 3664526336,
+      "sha256": "f6a34bfa8b2a62294300ed33de52443b8d9e8efc5dafeca1b1c22cb4684d786e"
+    },
+    {
+      "id": "qwentts-cpp-tokenizer-12hz-f32",
+      "source": "qwentts.cpp convert.py from the pinned official tokenizer",
+      "file": "qwen-tokenizer-12hz-F32.gguf",
+      "byte_length": 647263104,
+      "sha256": "b16b95557c7c7340a121757bd6855b9609e1cf4ad3fad0778b89393293ae5f3d"
+    },
+    {
+      "id": "qwentts-cpp-cpu-executable",
+      "source": "MSVC Release build with GGML CPU backend",
+      "file": "qwen-tts.exe",
+      "byte_length": 333312,
+      "sha256": "50f58b6ecac0f21a0a37394aa87fb2f5fd6bc0f35c935c10f7a574ec01455b3d"
+    }
+  ],
+  "conversion": {
+    "command": "PYTHONUTF8=1 C:\\Python314\\python.exe convert.py",
+    "talker_tensors_written": 478,
+    "talker_tensors_unhandled": 0
+  },
+  "build": {
+    "configure": "cmake -S . -B build-p00t05b -DGGML_BLAS=OFF -DGGML_CUDA=OFF -DGGML_VULKAN=OFF -DGGML_METAL=OFF",
+    "compile": "cmake --build build-p00t05b --config Release --target qwen-tts --parallel 4",
+    "toolchain": "MSVC 19.51.36243.0",
+    "ggml_revision": "c044c6f03892f9d5e98213b05f8afea1f8b0d3c9"
+  }
+}

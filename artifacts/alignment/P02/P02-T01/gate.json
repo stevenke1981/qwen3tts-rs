@@ -1,0 +1,16 @@
+{
+  "task_id": "P02-T01",
+  "gate_status": "GATE_PASSED",
+  "checks": [
+    {"name": "philox_vector_generation", "status": "passed", "result": "PHILOX_VECTORS_CHECK_OK fixtures\\alignment\\p02_philox_vectors.json"},
+    {"name": "format", "status": "passed"},
+    {"name": "cpu_check", "status": "passed"},
+    {"name": "sampling_unit_tests", "status": "passed", "result": "8 passed"},
+    {"name": "philox_integration_tests", "status": "passed", "result": "3 passed"},
+    {"name": "examples", "status": "passed", "result": "synthesize + synthesize_batch checks passed"},
+    {"name": "scoped_diff", "status": "passed"},
+    {"name": "independent_review_round1", "status": "rejected"},
+    {"name": "independent_review_round2", "status": "passed", "result": "ACCEPT"}
+  ],
+  "notes": "Fixture SHA-256: a250d86a921a3bb6c53a13ec52b60c0cfd03752166e28ef7830bd30380577469; existing MSVC LNK4098 warning remains non-blocking."
+}

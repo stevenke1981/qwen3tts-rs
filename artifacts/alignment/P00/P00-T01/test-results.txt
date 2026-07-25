@@ -1,0 +1,24 @@
+P00-T01 CPU baseline verification
+
+Bootstrap first attempt:
+- FAIL: rustc not found on process PATH (F1 Toolchain)
+
+Bootstrap with child-process PATH corrected:
+- Exit code: 0
+- WARNING: bootstrap.ps1 did not propagate cargo fmt --check failure (F7 Product/Tooling)
+- cargo check --all-targets completed
+- cargo test --lib completed: 82 passed, 0 failed
+- static gap report generated
+
+Independent fail-closed rerun after cargo fmt --all:
+- cargo fmt --all -- --check: PASS (exit 0)
+- cargo check --all-targets: PASS (exit 0)
+- cargo test --lib: PASS (exit 0), 82 passed, 0 failed
+
+Warnings:
+- tests/debug_per_layer_compare.rs: unused_mut
+- MSVC linker LNK4098 default runtime library conflict
+
+Real-weight parity:
+- NOT CLAIMED
+- Existing skip-on-missing-fixture paths are classified F8 and remain P00 work.

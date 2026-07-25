@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Qwen3TTS CPU F32 Smoke Baseline Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "backend",
+    "target_revision",
+    "reference_revision",
+    "official_revision",
+    "corpus",
+    "runs",
+    "coverage",
+    "required",
+    "status"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "backend": {
+      "const": "CPU/F32"
+    },
+    "target_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reference_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "official_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "cases"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "language",
+              "text_sha256"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "language": {
+                "type": "string",
+                "minLength": 1
+              },
+              "text_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "adapter",
+          "case",
+          "model",
+          "seed",
+          "source_revision",
+          "source_manifest_path",
+          "source_manifest_sha256",
+          "artifacts"
+        ],
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "enum": [
+              "official-python",
+              "qwentts.cpp"
+            ]
+          },
+          "case": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "seed": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source_revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_manifest_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_manifest_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "relative_path",
+                "byte_length",
+                "sha256"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "prompt",
+                    "token",
+                    "tensor",
+                    "audio",
+                    "stderr"
+                  ]
+                },
+                "relative_path": {
+                  "type": "string",
+                  "pattern": "^[^<>:\"|?*\\\\]+(?:[\\\\/][^<>:\"|?*\\\\]+)*$"
+                },
+                "byte_length": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "shape": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "dtype": {
+                  "type": "string"
+                },
+                "layout": {
+                  "type": "string"
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "kind": {
+                        "const": "tensor"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  },
+                  "then": {
+                    "required": [
+                      "shape",
+                      "dtype",
+                      "layout"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "required",
+          "present",
+          "missing",
+          "status"
+        ],
+        "properties": {
+          "required": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "present": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL"
+            ]
+          }
+        }
+      },
+      "propertyNames": {
+        "enum": [
+          "prompt",
+          "token",
+          "tensor",
+          "audio"
+        ]
+      }
+    },
+    "required": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapters",
+        "cases",
+        "kinds"
+      ],
+      "properties": {
+        "adapters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "official-python",
+              "qwentts.cpp"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "prompt",
+              "token",
+              "tensor",
+              "audio"
+            ]
+          },
+          "uniqueItems": true
+          }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL"
+      ]
+    }
+  }
+}

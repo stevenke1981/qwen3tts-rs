@@ -1,0 +1,121 @@
+{
+  "cases": [
+    {
+      "ctr_lo": 0,
+      "name": "zero_seed_zero_counter",
+      "samples": [
+        {
+          "subsequence": "0",
+          "uniform": 0.39904648065567017,
+          "uniform_bits": "0x3ecc4fd2",
+          "words": [
+            1713891541,
+            3781805453,
+            3159862348,
+            2600524760
+          ]
+        }
+      ],
+      "seed": "0",
+      "seed_hex": "0x0000000000000000",
+      "subsequence_start": "0"
+    },
+    {
+      "ctr_lo": 0,
+      "name": "seed1_subseq0_ctr0",
+      "samples": [
+        {
+          "subsequence": "0",
+          "uniform": 0.8902591466903687,
+          "uniform_bits": "0x3f63e806",
+          "words": [
+            3823634032,
+            3842641596,
+            2515673792,
+            3054873127
+          ]
+        }
+      ],
+      "seed": "1",
+      "seed_hex": "0x0000000000000001",
+      "subsequence_start": "0"
+    },
+    {
+      "ctr_lo": 7,
+      "name": "seed123456789abcdef0_subseq1_ctr7",
+      "samples": [
+        {
+          "subsequence": "1",
+          "uniform": 0.11124680191278458,
+          "uniform_bits": "0x3de3d55d",
+          "words": [
+            477801367,
+            731680216,
+            3144223409,
+            1653668364
+          ]
+        }
+      ],
+      "seed": "1311768467463790320",
+      "seed_hex": "0x123456789abcdef0",
+      "subsequence_start": "1"
+    },
+    {
+      "ctr_lo": 0,
+      "name": "seed_deadbeef_subseq42_ctr0",
+      "samples": [
+        {
+          "subsequence": "42",
+          "uniform": 0.7960494160652161,
+          "uniform_bits": "0x3f4bc9e5",
+          "words": [
+            3419006238,
+            2188664071,
+            2672270330,
+            2497621687
+          ]
+        }
+      ],
+      "seed": "16045690984833335023",
+      "seed_hex": "0xdeadbeefdeadbeef",
+      "subsequence_start": "42"
+    },
+    {
+      "ctr_lo": 0,
+      "name": "seed_beef_subseq_rollover",
+      "samples": [
+        {
+          "subsequence": "18446744073709551615",
+          "uniform": 0.617827296257019,
+          "uniform_bits": "0x3f1e29ee",
+          "words": [
+            2653548104,
+            257432330,
+            2821881396,
+            454922476
+          ]
+        },
+        {
+          "subsequence": "0",
+          "uniform": 0.4069763720035553,
+          "uniform_bits": "0x3ed05f35",
+          "words": [
+            1747950189,
+            3146361835,
+            3386263335,
+            3885573097
+          ]
+        }
+      ],
+      "seed": "1311768467294899695",
+      "seed_hex": "0x1234567890abcdef",
+      "subsequence_start": "18446744073709551615"
+    }
+  ],
+  "command": "python tools/generate_philox_vectors.py",
+  "fixture_id": "p02-philox-vectors",
+  "generated_by": "tools/generate_philox_vectors.py independent Philox implementation",
+  "source_repo": "https://github.com/ServeurpersoCom/qwentts.cpp",
+  "source_revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+  "version": 1
+}

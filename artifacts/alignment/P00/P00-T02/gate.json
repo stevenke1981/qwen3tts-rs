@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "task_id": "P00-T02",
+  "status": "GATE_PASSED",
+  "phase_gate": false,
+  "assignment": "artifacts/alignment/P00/P00-T02/assignment.md",
+  "checks": {
+    "unit_tests": {
+      "status": "PASS",
+      "passed": 11,
+      "failed": 0
+    },
+    "empty_manifest_require_all": {
+      "status": "EXPECTED_FAIL_CLOSED",
+      "exit_code": 1,
+      "prefix": "FIXTURE_MISSING"
+    },
+    "static_gap_scan": "PASS_REPORT_GENERATED",
+    "scope_boundary": "PASS",
+    "real_weight_fixture_gate": "FIXTURE_MISSING"
+  },
+  "independent_review": "ACCEPT",
+  "next_task": "P00-T03"
+}

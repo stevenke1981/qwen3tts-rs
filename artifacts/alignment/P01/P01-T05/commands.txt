@@ -1,0 +1,13 @@
+```
+$env:PATH='C:\Users\steven\.cargo\bin;' + $env:PATH
+$env:QWEN3_TTS_REAL_MODEL_DIR='C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\5d83992436eae1d760afd27aff78a71d676296fc'
+C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe tools/generate_prompt_id_matrix.py --help
+C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe tools/generate_prompt_id_matrix.py --check fixtures/alignment/p01_prompt_id_matrix.json
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --test prompt_id_matrix_real_test -- --ignored --nocapture
+cargo test --lib text_frontend
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- src/text_frontend/prompt_templates.rs src/text_frontend/model_catalog.rs tests/prompt_id_matrix_real_test.rs tools/generate_prompt_id_matrix.py fixtures/alignment/p01_prompt_id_matrix.json docs/alignment/prompt-id-matrix.md config/fixtures.json
+```

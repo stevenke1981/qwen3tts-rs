@@ -143,3 +143,82 @@ pub struct TokenStream {
 - 25Hz 模式下，生成音频 PESQ 评分与 Python 原版差异 ≤ 0.05。
 - 通过 1000 条不同长度文本的端到端回归测试，无崩溃、无静音段。
 - `cargo test --release` 全部通过，含数值对齐单元测试。
+
+---
+
+## 6. qwentts.cpp Alignment Product Requirements
+
+本節合併自 full-alignment devpack。既有 Codec Decode 技術規格完整保留；目前產品
+對齊工作聚焦 Qwen3-TTS 12 Hz，25 Hz Flow Matching 不屬於 qwentts.cpp 12 Hz parity
+的必要範圍。
+
+### 6.1 Supported Model Matrix
+
+- Qwen3-TTS-12Hz-0.6B-Base
+- Qwen3-TTS-12Hz-0.6B-CustomVoice
+- Qwen3-TTS-12Hz-1.7B-Base
+- Qwen3-TTS-12Hz-1.7B-CustomVoice
+- Qwen3-TTS-12Hz-1.7B-VoiceDesign
+- shared Qwen3-TTS-Tokenizer-12Hz encoder and decoder
+
+### 6.2 TTS Generation
+
+- Text input、language selection 與 automatic language mode。
+- Base default synthesis。
+- x-vector-only voice clone。
+- ICL voice clone with reference audio and transcript。
+- CustomVoice named speakers and dialect metadata。
+- VoiceDesign free-text instructions。
+- Talker 與 Code Predictor 使用分離的 sampling options。
+- deterministic seed behavior。
+
+### 6.3 Streaming
+
+- 完整 token generation 結束前必須已觸發 audio callback/chunk。
+- 每個生成 codec frame 必須可立即送入 codec decode。
+- 每 frame 在 24 kHz 產生 1920 samples。
+- 持久狀態至少包含 convolution context、transposed-convolution overlap、
+  transformer KV window、absolute position 與 output bookkeeping。
+- Reset 必須重現乾淨 offline zero-padding 行為。
+- 多 Session 狀態必須隔離。
+
+### 6.4 Tokenizer
+
+- 將 24 kHz mono WAV 編碼成 12.5 Hz、16 RVQ codes。
+- 將 codes 解碼成 24 kHz mono PCM。
+- 同時支援 buffered chunk decode 與 true stateful stream decode。
+- Round-trip 檔案格式包含版本及模型 metadata。
+
+### 6.5 Model Storage and Quantization
+
+- 模型行為由 model/config metadata 讀取，不得只從模型名稱推論。
+- 支援 F32/BF16 baseline。
+- eligible Talker tensors 支援 native Q8_0 與 Q4_K_M-class inference。
+- RVQ codebooks、projections、speaker encoder 與小型/非正規 tensors 依明文政策
+  保留 F32/F16。
+- Runtime 不得 materialize 完整 quantized backbone 的 F32 副本。
+
+### 6.6 Product Surfaces
+
+- `qwen-tts`：text to WAV 或 streamed PCM。
+- `qwen-codec`：WAV to codes 與 codes to WAV。
+- `tts-server`：OpenAI-compatible `/v1/audio/speech` 與 streaming response。
+- Rust library API。
+- C ABI shared library。
+- 保持既有 optional egui GUI 支援。
+
+### 6.7 Non-Functional Requirements
+
+- Streaming 不得以完整歷史重新解碼形成 O(n²)。
+- 每 Session 記憶體有界。
+- 每個 generation/decode frame 間檢查 cancellation。
+- 禁止 global mutable session state。
+- 錯誤包含 phase 與 model context。
+- CPU correctness 作為數值參考。
+- CUDA 與 Metal 使用 backend-specific performance gates。
+- 大型模型與 fixtures 為外部資產，必須附 checksum。
+
+### 6.8 Exclusions
+
+- 25 Hz Flow Matching decoder 不屬於 qwentts.cpp 12 Hz parity 的必要範圍。
+- Training、fine-tuning 與 voice dataset management 不在本開發包範圍。

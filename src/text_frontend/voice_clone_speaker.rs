@@ -245,11 +245,7 @@ fn reflect_index(index: usize, len: usize) -> usize {
     }
     let period = 2 * len - 2;
     let idx = index % period;
-    if idx < len {
-        idx
-    } else {
-        period - idx
-    }
+    if idx < len { idx } else { period - idx }
 }
 
 fn reflect_pad_waveform(input: &[f32], pad: usize, out: &mut [f32]) {
