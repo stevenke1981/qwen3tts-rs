@@ -35,7 +35,8 @@ use crate::talker::{
     VoiceClonePrompt,
 };
 use crate::text_frontend::model_catalog::{
-    GenerationSamplingConfig, ModelMetadata, validate_generation_request,
+    GenerationSamplingConfig, ModelMetadata, resolve_effective_sampling_plan,
+    validate_generation_request,
 };
 use crate::text_frontend::prompt_templates::{
     build_assistant_prompt, build_instruction_prompt, build_reference_prompt,
@@ -379,11 +380,14 @@ impl TextFrontend for CandleLLM {
         let max_new_tokens = options.max_new_tokens as usize;
         let generation_sampling = self.generation_sampling;
 
-        let mut talker_sampling = generation_sampling.talker.options;
-        talker_sampling.temperature = options.temperature;
-        talker_sampling.top_k = options.top_k as usize;
-        talker_sampling.top_p = options.top_p;
-        let subtalker_sampling = generation_sampling.subtalker.options;
+        let sampling_plan = resolve_effective_sampling_plan(
+            generation_sampling,
+            options.temperature,
+            options.top_k,
+            options.top_p,
+        )?;
+        let talker_sampling = sampling_plan.talker.options;
+        let subtalker_sampling = sampling_plan.subtalker.options;
         let seed = options.seed.unwrap_or_else(|| {
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             text.hash(&mut hasher);
@@ -393,7 +397,11 @@ impl TextFrontend for CandleLLM {
             hasher.finish()
         });
 
-        let codes_tensor = if generation_sampling.talker.do_sample {
+        // A CLI temperature <= 0 is a Talker-only greedy override.  Keep the
+        // parsed subtalker mode untouched, and use the explicit-flag path
+        // whenever either branch may sample so one Sampler/Philox stream is
+        // shared in c0 -> codebooks 1..15 order.
+        let codes_tensor = if sampling_plan.uses_explicit_sampler() {
             let mut sampler = Sampler::new(seed);
             self.talker
                 .generate_sampled(
@@ -405,9 +413,9 @@ impl TextFrontend for CandleLLM {
                     &self.device,
                     &mut sampler,
                     talker_sampling,
-                    generation_sampling.talker.do_sample,
+                    sampling_plan.talker.do_sample,
                     subtalker_sampling,
-                    generation_sampling.subtalker.do_sample,
+                    sampling_plan.subtalker.do_sample,
                 )
                 .map_err(map_candle_err)?
         } else {

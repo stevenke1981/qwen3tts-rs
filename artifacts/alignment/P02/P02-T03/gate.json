@@ -1,0 +1,27 @@
+{
+  "task_id": "P02-T03",
+  "gate_status": "GATE_PASSED",
+  "fixture_sha256": "057185e61d8e85ee0a2454d37497fac1d612338b11b9172e9c6106fb7c29b2d4",
+  "generation_config_sha256": "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa",
+  "checks": [
+    {"name": "offline_empty_cache_check", "status": "passed"},
+    {"name": "format", "status": "passed"},
+    {"name": "cpu_check", "status": "passed"},
+    {"name": "sampling_unit_tests", "status": "passed", "result": "11 passed"},
+    {"name": "talker_production_tests", "status": "passed", "result": "3 passed"},
+    {"name": "code_predictor_production_test", "status": "passed", "result": "1 passed"},
+    {"name": "sampling_config_tests", "status": "passed", "result": "8 passed"},
+    {"name": "repetition_penalty_tests", "status": "passed", "result": "5 passed"},
+    {"name": "philox_tests", "status": "passed", "result": "3 passed"},
+    {"name": "text_frontend_tests", "status": "passed", "result": "32 passed"},
+    {"name": "candle_examples", "status": "passed", "result": "2 passed"},
+    {"name": "scoped_diff_check", "status": "passed"},
+    {"name": "independent_review", "status": "passed", "result": "ACCEPT"}
+  ],
+  "notes": [
+    "All five public models use immutable revisions inherited from the P01 matrix.",
+    "All five pinned generation_config.json files have identical verified bytes and SHA-256.",
+    "Existing MSVC LNK4098 remains non-blocking.",
+    "SamplerDiagnostics hot-path overhead remains to be benchmarked."
+  ]
+}

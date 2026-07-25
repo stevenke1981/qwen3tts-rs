@@ -1,0 +1,18 @@
+P02-T04 ROOT GATE: PASS
+
+suppression/EOS fixture check: PASS
+rustfmt check: PASS
+CPU check: PASS
+Talker sampling unit tests: 11 passed
+Talker production tests: 3 passed
+Code Predictor production test: 1 passed
+suppression/EOS integration tests: 5 passed
+sampling config tests: 8 passed
+repetition penalty tests: 5 passed
+Philox tests: 3 passed
+text frontend tests: 32 passed
+Candle synthesis example checks: 2 passed
+scoped diff check: PASS
+independent GPT-5.6 Luna review: ACCEPT
+
+Observed warning: existing MSVC LNK4098 only.

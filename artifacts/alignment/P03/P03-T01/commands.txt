@@ -1,0 +1,15 @@
+$env:PATH='C:\Users\steven\.cargo\bin;' + $env:PATH
+$env:QWEN3_TTS_REAL_MODEL_DIR='C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\5d83992436eae1d760afd27aff78a71d676296fc'
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo check --no-default-features --features cpu,stage-dump
+cargo test --test stage_dump_test
+cargo test --test stage_dump_test --features stage-dump
+cargo test --test stage_instrumentation_test --features stage-dump
+cargo test --test stage_instrumentation_real_test --features stage-dump -- --ignored --nocapture
+cargo test --lib talker
+cargo test --test deterministic_token_sequence_test
+cargo test --test deterministic_token_sequence_real_test -- --ignored --nocapture
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- src/alignment_stage_dump.rs src/lib.rs src/talker/talker.rs src/talker/model.rs src/talker/decoder_layer.rs src/talker/talker_attention.rs src/talker/code_predictor.rs src/talker/input_builder.rs src/talker/primitives.rs tests/stage_dump_test.rs tests/stage_instrumentation_test.rs tests/stage_instrumentation_real_test.rs tools/compare_stage_dumps.py docs/alignment/p03-stage-instrumentation.md

@@ -1,0 +1,16 @@
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --test prompt_assembly_test --no-default-features
+cargo test --test talker_kv_cache_test --no-default-features
+cargo test --test talker_kv_cache_real_test -- --ignored --nocapture
+python tools/generate_talker_kv_cache_fixture.py --check fixtures/alignment/p03_talker_kv_cache_real.json --metrics artifacts/alignment/P03/P03-T02/metrics.json
+python tools/fixture_manifest.py config/fixtures.json
+cargo check --no-default-features --features cpu,stage-dump
+cargo test --test stage_dump_test --features stage-dump
+cargo test --test stage_instrumentation_test --features stage-dump
+cargo test --test stage_instrumentation_real_test --features stage-dump -- --ignored --nocapture
+cargo test --lib talker
+cargo test --test deterministic_token_sequence_test
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- src/talker/model.rs src/talker/input_builder.rs tests/talker_kv_cache_test.rs tests/talker_kv_cache_real_test.rs config/fixtures.json

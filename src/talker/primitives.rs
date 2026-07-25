@@ -67,7 +67,7 @@ impl RMSNorm {
         let x_f32 = x.to_dtype(DType::F32)?;
         let ndim = x.rank();
         let variance = x_f32.sqr()?.mean_keepdim(ndim - 1)?;
-        let normalized = x_f32.broadcast_div(&(variance + self.eps)?.sqrt()?)?;
+        let normalized = x_f32.broadcast_div(&variance.affine(1.0, self.eps)?.sqrt()?)?;
         normalized
             .to_dtype(input_dtype)?
             .broadcast_mul(&self.weight)

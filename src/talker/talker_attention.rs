@@ -113,9 +113,8 @@ impl TalkerAttention {
         let v = self.repeat_kv(&cache_kv_v)?;
 
         // ── Scaled Dot-Product Attention ──
-        let scale = self.scaling;
         let attn_weights = q.matmul(&k.transpose(2, 3)?)?;
-        let attn_weights = (attn_weights * scale)?;
+        let attn_weights = attn_weights.affine(self.scaling, 0.0)?;
 
         let attn_weights = if let Some(mask) = attention_mask {
             // mask: [seq_len, seq_len] or broadcastable

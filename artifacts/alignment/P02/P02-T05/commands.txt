@@ -1,0 +1,18 @@
+C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe tools/generate_deterministic_token_sequences.py --check
+C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe tools/generate_deterministic_token_sequences.py --self-test
+C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe tools/generate_repetition_penalty_vectors.py --check fixtures/alignment/p02_repetition_penalty_vectors.json
+C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe tools/generate_suppression_eos_vectors.py --check fixtures/alignment/p02_suppression_eos_vectors.json
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --lib talker::sampling
+cargo test --lib talker::talker
+cargo test --lib talker::code_predictor
+cargo test --test deterministic_token_sequence_test
+cargo test --test suppression_eos_test
+cargo test --test sampling_config_test
+cargo test --test repetition_penalty_test
+cargo test --test philox_rng_test
+cargo test --test deterministic_token_sequence_real_test -- --ignored --nocapture
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- <P02-T05 scoped files>

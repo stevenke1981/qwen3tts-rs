@@ -10,8 +10,8 @@ Previous phase gate must pass.
 
 ## Tasks
 
-- [ ] **P03-T01** — Instrument embeddings, norms, RoPE and layer outputs
-- [ ] **P03-T02** — Verify Talker prefill and single-step KV cache
+- [x] **P03-T01** — Instrument embeddings, norms, RoPE and layer outputs (`GATE_PASSED`)
+- [x] **P03-T02** — Verify Talker prefill and single-step KV cache (`GATE_PASSED`)
 - [ ] **P03-T03** — Verify Code Predictor frame-local prefill and 14 decode steps
 - [ ] **P03-T04** — Eliminate avoidable host transfers in acoustic prediction
 - [ ] **P03-T05** — Gate stage cosine and logit ranking thresholds

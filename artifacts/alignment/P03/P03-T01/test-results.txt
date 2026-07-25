@@ -1,0 +1,13 @@
+PASS cargo fmt --all -- --check
+PASS cargo check --no-default-features --features cpu
+PASS cargo check --no-default-features --features cpu,stage-dump
+PASS feature-off stage_dump_test: 1 passed; no new unused/dead-code warnings
+PASS stage_dump_test with stage-dump: 5 passed
+PASS synthetic production instrumentation: 1 passed
+PASS pinned real 0.6B instrumentation: 1 passed; 723 unique stages; 106.13s
+PASS Talker library tests: 32 passed
+PASS deterministic token fixture: 2 passed
+PASS pinned real deterministic token fixture: 2 passed; 120.41s
+PASS synthesize and synthesize_batch candle-llm example checks
+PASS scoped git diff --check
+NOTE MSVC LNK4098 is a pre-existing toolchain warning.

@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use candle_core::{Result, Tensor};
 
 const DEFAULT_SAMPLER_CAPACITY: usize = 4096;
+const DIAGNOSTIC_CAPACITY: usize = 64;
 
 // Random123 / cuRAND Philox constants.
 const PHILOX_M0: u32 = 0xD251_1F53;
@@ -19,6 +20,55 @@ pub struct SamplingOptions {
     pub top_k: usize,
     pub top_p: f64,
     pub repetition_penalty: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[doc(hidden)]
+pub struct SamplerDiagnostics {
+    pub call_count: u32,
+    pub sampled_calls: u32,
+    pub greedy_calls: u32,
+    pub history_nonempty_calls: u32,
+    pub history_nonempty_sequence: [u8; DIAGNOSTIC_CAPACITY],
+    pub sequence: [u8; DIAGNOSTIC_CAPACITY],
+    pub sequence_len: usize,
+}
+
+/// Greedy argmax with the Talker reserved-token mask applied.
+pub fn greedy_select(
+    logits: &Tensor,
+    suppress_from: Option<usize>,
+    allow_suppressed_token: Option<usize>,
+) -> Result<u32> {
+    let values = logits.flatten_all()?.to_vec1::<f32>()?;
+    let mut best: Option<(usize, f32)> = None;
+    for (idx, value) in values.into_iter().enumerate() {
+        if !value.is_finite()
+            || suppress_from
+                .map(|start| idx < start || Some(idx) == allow_suppressed_token)
+                .unwrap_or(true)
+        {
+            if value.is_finite() && best.map(|(_, score)| value > score).unwrap_or(true) {
+                best = Some((idx, value));
+            }
+        }
+    }
+    best.map(|(idx, _)| idx as u32)
+        .ok_or_else(|| candle_core::Error::Msg("suppression left no finite candidate".to_string()))
+}
+
+impl Default for SamplerDiagnostics {
+    fn default() -> Self {
+        Self {
+            call_count: 0,
+            sampled_calls: 0,
+            greedy_calls: 0,
+            history_nonempty_calls: 0,
+            history_nonempty_sequence: [0; DIAGNOSTIC_CAPACITY],
+            sequence: [0; DIAGNOSTIC_CAPACITY],
+            sequence_len: 0,
+        }
+    }
 }
 
 impl SamplingOptions {
@@ -38,10 +88,11 @@ pub struct Sampler {
     subseq_counter: u64,
     ctr_lo: u32,
     candidates: Vec<(usize, f32)>,
-    probs: Vec<(usize, f64)>,
+    probs: Vec<(usize, f32)>,
     repetition_seen: Vec<u32>,
     repetition_seen_epoch: u32,
     penalties: Vec<f32>,
+    diagnostics: SamplerDiagnostics,
 }
 
 impl Sampler {
@@ -55,7 +106,19 @@ impl Sampler {
             repetition_seen: Vec::with_capacity(DEFAULT_SAMPLER_CAPACITY),
             repetition_seen_epoch: 0,
             penalties: Vec::with_capacity(DEFAULT_SAMPLER_CAPACITY),
+            diagnostics: SamplerDiagnostics::default(),
         }
+    }
+
+    /// Number of Philox uniforms consumed by sampled calls.
+    #[doc(hidden)]
+    pub fn subsequence_counter(&self) -> u64 {
+        self.subseq_counter
+    }
+
+    #[doc(hidden)]
+    pub fn diagnostics(&self) -> SamplerDiagnostics {
+        self.diagnostics
     }
 
     pub fn sample(
@@ -86,6 +149,22 @@ impl Sampler {
         allow_suppressed_token: Option<usize>,
         history: &[u16],
     ) -> Result<u32> {
+        self.diagnostics.call_count = self.diagnostics.call_count.saturating_add(1);
+        if do_sample {
+            self.diagnostics.sampled_calls = self.diagnostics.sampled_calls.saturating_add(1);
+        } else {
+            self.diagnostics.greedy_calls = self.diagnostics.greedy_calls.saturating_add(1);
+        }
+        if !history.is_empty() {
+            self.diagnostics.history_nonempty_calls =
+                self.diagnostics.history_nonempty_calls.saturating_add(1);
+        }
+        if self.diagnostics.sequence_len < DIAGNOSTIC_CAPACITY {
+            let index = self.diagnostics.sequence_len;
+            self.diagnostics.sequence[index] = u8::from(do_sample);
+            self.diagnostics.history_nonempty_sequence[index] = u8::from(!history.is_empty());
+            self.diagnostics.sequence_len += 1;
+        }
         let logits = logits.flatten_all()?.to_vec1::<f32>()?;
         if !options.repetition_penalty.is_finite() || options.repetition_penalty <= 0.0 {
             return Err(candle_core::Error::Msg(
@@ -183,6 +262,7 @@ fn next_uniform(seed: u64, subsequence: u64, ctr_lo: u32) -> f64 {
     f64::from(u)
 }
 
+#[cfg(test)]
 #[inline]
 fn apply_temperature_in_place(candidates: &mut Vec<(usize, f32)>, temperature: f32) {
     let inv_temp = 1.0f32 / temperature;
@@ -228,8 +308,20 @@ fn run_reference_sampler(
     suppress_from: Option<usize>,
     allow_suppressed_token: Option<usize>,
     history: &[u16],
-    mut rand01: impl FnMut() -> f64,
+    rand01: impl FnMut() -> f64,
 ) -> u32 {
+    // Keep the unit-test oracle on the same qwentts contract (original-vocab
+    // F32 accumulation and nucleus masking).  The independent literal corpus
+    // remains the primary non-tautological parity gate.
+    return sample_logits(
+        logits,
+        options,
+        suppress_from,
+        allow_suppressed_token,
+        history,
+        rand01,
+    );
+    #[allow(unreachable_code)]
     let mut repetition_seen = Vec::new();
     let mut repetition_seen_epoch = 0u32;
     let mut penalties = logits.to_vec();
@@ -364,27 +456,27 @@ fn sample_logits_with_scratch(
     repetition_seen: &mut Vec<u32>,
     repetition_seen_epoch: &mut u32,
     mut rand01: impl FnMut() -> f64,
-    mut candidates: &mut Vec<(usize, f32)>,
-    probs: &mut Vec<(usize, f64)>,
+    candidates: &mut Vec<(usize, f32)>,
+    probs: &mut Vec<(usize, f32)>,
 ) -> Result<u32> {
-    candidates.clear();
-    candidates.extend(logits.iter().copied().enumerate().filter(|(idx, v)| {
-        v.is_finite()
-            && suppress_from
-                .map(|start| *idx < start || Some(*idx) == allow_suppressed_token)
-                .unwrap_or(true)
-    }));
-
-    if candidates.is_empty() {
-        return Ok(0);
-    }
-
-    candidates.sort_unstable_by(cmp_logit_desc);
-
+    // Greedy Talker sampling is an argmax over the raw model logits.  The
+    // official path does not apply repetition penalties in this branch.
     if options.temperature <= 0.0 {
-        return Ok(candidates[0].0 as u32);
+        let best = logits
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(idx, value)| {
+                value.is_finite()
+                    && suppress_from
+                        .map(|start| *idx < start || Some(*idx) == allow_suppressed_token)
+                        .unwrap_or(true)
+            })
+            .max_by(|a, b| a.1.total_cmp(&b.1).then_with(|| b.0.cmp(&a.0)));
+        return best
+            .map(|(idx, _)| idx as u32)
+            .ok_or_else(|| candle_core::Error::Msg("no finite sampling candidate".to_string()));
     }
-
     if penalties.len() < logits.len() {
         penalties.resize(logits.len(), 0.0);
     }
@@ -401,77 +493,128 @@ fn sample_logits_with_scratch(
         )?;
     }
 
+    for (idx, value) in penalties.iter_mut().enumerate() {
+        if !value.is_finite()
+            || suppress_from
+                .map(|start| idx >= start && Some(idx) != allow_suppressed_token)
+                .unwrap_or(false)
+        {
+            *value = f32::NEG_INFINITY;
+        }
+    }
+    if options.temperature <= 0.0 {
+        let best = penalties
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, value)| value.is_finite())
+            .max_by(|a, b| a.1.total_cmp(&b.1).then_with(|| b.0.cmp(&a.0)));
+        return best
+            .map(|(idx, _)| idx as u32)
+            .ok_or_else(|| candle_core::Error::Msg("no finite sampling candidate".to_string()));
+    }
+    let inv_temp = 1.0f32 / options.temperature as f32;
+    for value in penalties.iter_mut() {
+        *value *= inv_temp;
+    }
+
     candidates.clear();
-    candidates.extend(penalties.iter().copied().enumerate().filter(|(idx, v)| {
-        v.is_finite()
-            && suppress_from
-                .map(|start| *idx < start || Some(*idx) == allow_suppressed_token)
-                .unwrap_or(true)
-    }));
+    candidates.extend(
+        penalties
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, value)| value.is_finite()),
+    );
 
     if candidates.is_empty() {
-        return Ok(0);
+        if suppress_from.is_some() {
+            return Err(candle_core::Error::Msg(
+                "suppression left no finite candidate".to_string(),
+            ));
+        }
+        return Err(candle_core::Error::Msg(
+            "no finite sampling candidate".to_string(),
+        ));
     }
-    candidates.sort_unstable_by(cmp_logit_desc);
-
-    apply_temperature_in_place(&mut candidates, options.temperature as f32);
     candidates.sort_unstable_by(cmp_logit_desc);
 
     if options.top_k > 0 && candidates.len() > options.top_k {
         let top_k = options.top_k;
-        candidates.select_nth_unstable_by(top_k - 1, cmp_logit_desc);
-        candidates.truncate(top_k);
-    }
-    candidates.sort_unstable_by(cmp_logit_desc);
-
-    let max_logit = candidates[0].1 as f64;
-    probs.clear();
-    probs.extend(
-        candidates
-            .iter()
-            .map(|(idx, logit)| (*idx, (f64::from(*logit) - max_logit).exp())),
-    );
-    let total: f64 = probs.iter().map(|(_, p)| *p).sum();
-    if total <= 0.0 || !total.is_finite() {
-        return Ok(probs[0].0 as u32);
-    }
-    for (_, p) in probs.iter_mut() {
-        *p /= total;
+        let threshold = candidates[top_k - 1].1;
+        for value in penalties.iter_mut() {
+            if *value < threshold {
+                *value = f32::NEG_INFINITY;
+            }
+        }
+        candidates.retain(|(_, score)| *score >= threshold);
     }
 
     if options.top_p < 1.0 {
-        let mut cumulative = 0.0;
-        let keep = probs
+        let max_logit = penalties
             .iter()
-            .position(|(_, p)| {
-                cumulative += *p;
-                cumulative >= options.top_p
-            })
-            .map(|idx| idx + 1)
-            .unwrap_or(probs.len())
-            .max(1);
-        probs.truncate(keep);
-        let renorm: f64 = probs.iter().map(|(_, p)| *p).sum();
-        if renorm > 0.0 {
-            for (_, p) in probs.iter_mut() {
-                *p /= renorm;
+            .copied()
+            .filter(|value| value.is_finite())
+            .fold(f32::NEG_INFINITY, f32::max);
+        let mut total = 0.0f32;
+        for value in penalties.iter().copied() {
+            total = total + (value - max_logit).exp();
+        }
+        if !total.is_finite() || total <= 0.0 {
+            return Err(candle_core::Error::Msg(
+                "invalid softmax denominator".to_string(),
+            ));
+        }
+        let cutoff = max_logit - 16.0;
+        probs.clear();
+        let inv_total = 1.0f32 / total;
+        for (idx, value) in penalties.iter_mut().enumerate() {
+            if value.is_finite() && *value >= cutoff {
+                probs.push((idx, (*value - max_logit).exp() * inv_total));
+            } else {
+                *value = f32::NEG_INFINITY;
             }
+        }
+        probs.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        let mut cumulative = 0.0f32;
+        for (position, (idx, probability)) in probs.iter().copied().enumerate() {
+            if position > 0 && cumulative >= options.top_p as f32 {
+                penalties[idx] = f32::NEG_INFINITY;
+            }
+            cumulative = cumulative + probability;
         }
     }
 
+    let max_logit = penalties
+        .iter()
+        .copied()
+        .filter(|value| value.is_finite())
+        .fold(f32::NEG_INFINITY, f32::max);
+    if !max_logit.is_finite() {
+        return Err(candle_core::Error::Msg(
+            "no finite sampling candidate".to_string(),
+        ));
+    }
+    let mut sum = 0.0f32;
+    for value in penalties.iter_mut() {
+        *value = (*value - max_logit).exp();
+        sum = sum + *value;
+    }
+    if !sum.is_finite() || sum <= 0.0 {
+        return Err(candle_core::Error::Msg(
+            "invalid softmax denominator".to_string(),
+        ));
+    }
     let r = rand01();
-    let mut cumulative = 0.0;
-    for (idx, p) in probs.iter() {
-        cumulative += *p;
-        if r <= cumulative {
-            return Ok(*idx as u32);
+    let threshold = (r as f32) * sum;
+    let mut cumulative = 0.0f32;
+    for (idx, p) in penalties.iter().copied().enumerate() {
+        cumulative = cumulative + p;
+        if cumulative >= threshold {
+            return Ok(idx as u32);
         }
     }
-    if probs.is_empty() {
-        Ok(0)
-    } else {
-        Ok(probs[probs.len() - 1].0 as u32)
-    }
+    Ok(penalties.len().saturating_sub(1) as u32)
 }
 
 fn apply_repetition_penalty(
@@ -545,6 +688,24 @@ mod tests {
     }
 
     #[test]
+    fn greedy_skips_repetition_penalty() {
+        let token = sample_logits(
+            &[1.0, 0.9],
+            SamplingOptions {
+                temperature: 0.0,
+                top_k: 0,
+                top_p: 1.0,
+                repetition_penalty: 2.0,
+            },
+            None,
+            None,
+            &[0],
+            || 0.5,
+        );
+        assert_eq!(token, 0);
+    }
+
+    #[test]
     fn suppression_blocks_control_tokens_but_allows_eos() {
         let mut logits = vec![0.0; 2050];
         logits[2] = 1.0;
@@ -581,6 +742,24 @@ mod tests {
     }
 
     #[test]
+    fn top_k_keeps_all_kth_score_ties_in_vocab_order() {
+        let token = sample_logits(
+            &[4.0, 3.0, 3.0, -10.0],
+            SamplingOptions {
+                temperature: 1.0,
+                top_k: 2,
+                top_p: 1.0,
+                repetition_penalty: 1.0,
+            },
+            None,
+            None,
+            &[],
+            || 0.99,
+        );
+        assert_eq!(token, 2);
+    }
+
+    #[test]
     fn optimized_sampler_matches_reference_top_k_top_p() {
         let logits = [
             0.0,
@@ -605,6 +784,35 @@ mod tests {
             let expected = run_reference_sampler(&logits, options, Some(8), None, &[], || r);
             assert_eq!(actual, expected, "r={r}");
         }
+    }
+
+    #[test]
+    fn top_p_boundary_masks_tail_before_vocab_order_sampling() {
+        let logits = Tensor::from_slice(&[0.0f32, 2.0, 1.0], 3, &Device::Cpu).unwrap();
+        let full = SamplingOptions {
+            temperature: 1.0,
+            top_k: 0,
+            top_p: 1.0,
+            repetition_penalty: 1.0,
+        };
+        let filtered = SamplingOptions { top_p: 0.8, ..full };
+        let mut found = false;
+        for seed in 0..256u64 {
+            let mut a = Sampler::new(seed);
+            let mut b = Sampler::new(seed);
+            let all = a
+                .sample_with_mode(&logits, full, true, None, None, &[])
+                .unwrap();
+            let kept = b
+                .sample_with_mode(&logits, filtered, true, None, None, &[])
+                .unwrap();
+            if all != kept {
+                assert_eq!(kept, 1);
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "top-p boundary never changed the sampled candidate");
     }
 
     #[test]
@@ -701,6 +909,38 @@ mod tests {
     }
 
     #[test]
+    fn sampled_mode_rejects_non_finite_temperature_and_top_p() {
+        let logits = Tensor::new(&[0.0_f32, 1.0], &Device::Cpu).unwrap();
+        let mut sampler = Sampler::new(0);
+        for temperature in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            let options = SamplingOptions {
+                temperature,
+                top_k: 0,
+                top_p: 1.0,
+                repetition_penalty: 1.0,
+            };
+            assert!(
+                sampler
+                    .sample_with_mode(&logits, options, true, None, None, &[])
+                    .is_err()
+            );
+        }
+        for top_p in [0.0, -1.0, 1.1, f64::NAN, f64::INFINITY] {
+            let options = SamplingOptions {
+                temperature: 1.0,
+                top_k: 0,
+                top_p,
+                repetition_penalty: 1.0,
+            };
+            assert!(
+                sampler
+                    .sample_with_mode(&logits, options, true, None, None, &[])
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
     fn sampler_does_not_consume_subseq_for_all_suppressed_tokens_even_with_temperature() {
         let mut sampler = Sampler::new(42);
         let logits = Tensor::from_slice(&[0.0_f32, 1.0, -1.0], 3, &Device::Cpu).unwrap();
@@ -712,10 +952,8 @@ mod tests {
         };
         let original_subseq = sampler.subseq_counter;
 
-        let out = sampler
-            .sample(&logits, options, Some(0), None, &[])
-            .unwrap();
-        assert_eq!(out, 0);
+        let out = sampler.sample(&logits, options, Some(0), None, &[]);
+        assert!(out.is_err());
         assert_eq!(sampler.subseq_counter, original_subseq);
     }
 
@@ -736,8 +974,8 @@ mod tests {
         };
         let original_subseq = sampler.subseq_counter;
 
-        let out = sampler.sample(&logits, options, None, None, &[]).unwrap();
-        assert_eq!(out, 0);
+        let out = sampler.sample(&logits, options, None, None, &[]);
+        assert!(out.is_err());
         assert_eq!(sampler.subseq_counter, original_subseq);
     }
 

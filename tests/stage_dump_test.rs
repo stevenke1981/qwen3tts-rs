@@ -1,12 +1,19 @@
 use candle_core::{Device, Tensor};
 #[cfg(feature = "stage-dump")]
+use qwen3tts::StageDumpMetadata;
+use qwen3tts::StageDumpObserver;
+#[cfg(feature = "stage-dump")]
 use qwen3tts::alignment_stage_dump::{StageDumpManifest, StageDumpWriter};
-use qwen3tts::{StageDumpMetadata, StageDumpObserver};
+#[cfg(feature = "stage-dump")]
 use sha2::{Digest, Sha256};
+#[cfg(feature = "stage-dump")]
 use std::fs;
+#[cfg(feature = "stage-dump")]
 use std::process::Command;
+#[cfg(feature = "stage-dump")]
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(feature = "stage-dump")]
 fn temp_stage_dir(test: &str) -> std::path::PathBuf {
     let mut base = std::env::temp_dir();
     let ts = SystemTime::now()
@@ -61,6 +68,12 @@ fn writer_manifest_contains_schema_fields_and_hashes() {
     assert_eq!(parsed.case_id, "case-a");
     assert_eq!(parsed.revision.as_deref(), Some("unit-test"));
     assert_eq!(parsed.seed, Some(777));
+    assert!(
+        parsed
+            .stages
+            .iter()
+            .all(|s| s.byte_order == "little-endian")
+    );
     assert_eq!(parsed.stages.len(), 9);
 
     assert_eq!(
@@ -178,6 +191,64 @@ fn writer_rejects_duplicates_and_double_commit() {
 
     assert!(writer.commit().is_ok());
     assert!(writer.commit().is_err());
+}
+
+#[cfg(feature = "stage-dump")]
+#[test]
+fn writer_rejects_invalid_structured_identifiers() {
+    let dir = temp_stage_dir("invalid-identifiers");
+    let mut writer = StageDumpWriter::new(
+        &dir,
+        StageDumpMetadata {
+            source: "test".into(),
+            revision: None,
+            model: "test".into(),
+            case_id: "bad".into(),
+            seed: None,
+        },
+    )
+    .unwrap();
+    let tensor = sample_tensor(&[1.0]);
+    assert!(
+        writer
+            .on_stage("talker-prefill-lx-input-norm", &tensor, "BTH")
+            .is_err()
+    );
+    assert!(
+        writer
+            .on_stage("code-predictor-step-frame0-l0-input-norm", &tensor, "BTH")
+            .is_err()
+    );
+    assert!(writer.on_stage("talker-foo", &tensor, "BTH").is_err());
+    assert!(
+        writer
+            .on_stage("talker-prefill-l0-bogus", &tensor, "BTH")
+            .is_err()
+    );
+    assert!(
+        writer
+            .on_stage("code-predictor-step1-frame0", &tensor, "BTH")
+            .is_err()
+    );
+    assert!(writer.on_stage("next-emb-stepX", &tensor, "BTH").is_err());
+    assert!(writer.on_stage("next-emb-bogus", &tensor, "BTH").is_err());
+    assert!(writer.on_stage("talker-input-embed", &tensor, "").is_err());
+    assert!(
+        writer
+            .on_stage("talker-input-embed", &tensor, "bogus")
+            .is_err()
+    );
+    for invalid in [
+        "talker-input-garbage",
+        "talker-step1-l0-input-norm-extra",
+        "talker-logits-step1-extra",
+        "code-predictor-step1-frame0-l0-input-norm-extra",
+    ] {
+        assert!(
+            writer.on_stage(invalid, &tensor, "BTH").is_err(),
+            "{invalid} must be rejected"
+        );
+    }
 }
 
 #[cfg(not(feature = "stage-dump"))]

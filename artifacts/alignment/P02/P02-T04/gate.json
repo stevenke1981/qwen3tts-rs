@@ -1,0 +1,26 @@
+{
+  "task_id": "P02-T04",
+  "gate_status": "GATE_PASSED",
+  "fixture_sha256": "2262db04921e477719d1e806be51aa4e7218e190a1d0498f9a13034a6c11956c",
+  "checks": [
+    {"name": "suppression_eos_fixture_check", "status": "passed"},
+    {"name": "format", "status": "passed"},
+    {"name": "cpu_check", "status": "passed"},
+    {"name": "sampling_unit_tests", "status": "passed", "result": "11 passed"},
+    {"name": "talker_production_tests", "status": "passed", "result": "3 passed"},
+    {"name": "code_predictor_production_test", "status": "passed", "result": "1 passed"},
+    {"name": "suppression_eos_tests", "status": "passed", "result": "5 passed"},
+    {"name": "sampling_config_tests", "status": "passed", "result": "8 passed"},
+    {"name": "repetition_penalty_tests", "status": "passed", "result": "5 passed"},
+    {"name": "philox_tests", "status": "passed", "result": "3 passed"},
+    {"name": "text_frontend_tests", "status": "passed", "result": "32 passed"},
+    {"name": "candle_examples", "status": "passed", "result": "2 passed"},
+    {"name": "scoped_diff_check", "status": "passed"},
+    {"name": "independent_review", "status": "passed", "result": "ACCEPT"}
+  ],
+  "notes": [
+    "Official Qwen revision: 022e286b98fbec7e1e916cb940cdf532cd9f488e.",
+    "qwentts.cpp revision: 82cd05b9f3a175612dc89fd6943e610fab096ef5.",
+    "Existing MSVC LNK4098 remains non-blocking."
+  ]
+}

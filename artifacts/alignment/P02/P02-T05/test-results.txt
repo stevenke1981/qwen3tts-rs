@@ -1,0 +1,22 @@
+P02-T05 ROOT GATE: PASS
+
+deterministic fixture check: PASS
+offline mutation self-test: PASS
+repetition fixture check: PASS
+suppression/EOS fixture check: PASS
+rustfmt check: PASS
+CPU check: PASS
+sampling unit tests: 14 passed
+Talker production tests: 4 passed
+Code Predictor production test: 1 passed
+deterministic sequence tests: 2 passed
+suppression/EOS tests: 5 passed
+sampling config tests: 8 passed
+repetition penalty tests: 5 passed
+Philox tests: 3 passed
+real pinned 0.6B tests: 2 passed in 124.50s
+Candle synthesis example checks: 2 passed
+scoped diff check: PASS
+independent GPT-5.6 Luna review: ACCEPT
+
+Observed warning: existing MSVC LNK4098 only.

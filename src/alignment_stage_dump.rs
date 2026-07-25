@@ -51,6 +51,12 @@ pub struct StageDumpEntry {
     pub file: String,
     pub sha256: String,
     pub layout: String,
+    #[serde(default = "default_byte_order")]
+    pub byte_order: String,
+}
+
+fn default_byte_order() -> String {
+    "little-endian".to_string()
 }
 
 /// Stage hook contract.
@@ -60,6 +66,12 @@ pub struct StageDumpEntry {
 pub trait StageDumpObserver {
     fn wants_capture(&self) -> bool {
         false
+    }
+
+    /// Record a structured numerical stage. The default is deliberately a
+    /// no-op so disabled capture does not materialize names or copy tensors.
+    fn on_stage(&mut self, _name: &str, _tensor: &Tensor, _layout: &str) -> CandleResult<()> {
+        Ok(())
     }
 
     fn on_talker_codebook0_logits(
@@ -123,6 +135,81 @@ pub struct StageDumpWriter {
 
 #[cfg(feature = "stage-dump")]
 impl StageDumpWriter {
+    fn validate_structured_identifier(name: &str) -> Result<()> {
+        if !(name.starts_with("talker-")
+            || name.starts_with("code-predictor-")
+            || name.starts_with("next-emb-"))
+        {
+            // Legacy dedicated hooks use stable underscore-delimited names and
+            // do not pass through the structured stage-name grammar.
+            return Ok(());
+        }
+
+        let mut normalized = String::with_capacity(name.len());
+        let mut in_digits = false;
+        for ch in name.chars() {
+            if ch.is_ascii_digit() {
+                if !in_digits {
+                    normalized.push('N');
+                    in_digits = true;
+                }
+            } else {
+                normalized.push(ch);
+                in_digits = false;
+            }
+        }
+
+        const ALLOWED: &[&str] = &[
+            "next-emb-stepN",
+            "talker-codec-embed-frameN",
+            "talker-hidden-prefill-final",
+            "talker-hidden-prefill-lN",
+            "talker-hidden-stepN",
+            "talker-hidden-stepN-final",
+            "talker-hidden-stepN-lN",
+            "talker-input-embed",
+            "talker-input-prefill",
+            "talker-input-stepN",
+            "talker-logits-prefill",
+            "talker-logits-stepN",
+            "talker-prefill-lN-attention-output",
+            "talker-prefill-lN-input-norm",
+            "talker-prefill-lN-mlp-output",
+            "talker-prefill-lN-post-attention-norm",
+            "talker-prefill-position-ids",
+            "talker-prefill-rope-cos",
+            "talker-prefill-rope-sin",
+            "talker-stepN-codec-embed",
+            "talker-stepN-lN-attention-output",
+            "talker-stepN-lN-input-norm",
+            "talker-stepN-lN-mlp-output",
+            "talker-stepN-lN-post-attention-norm",
+            "talker-stepN-rope-cos",
+            "talker-stepN-rope-sin",
+            "code-predictor-hidden-prefill-frameN-final",
+            "code-predictor-hidden-prefill-frameN-lN",
+            "code-predictor-hidden-stepN-frameN-final",
+            "code-predictor-hidden-stepN-frameN-lN",
+            "code-predictor-prefill-frameN-input-embed",
+            "code-predictor-prefill-frameN-lN-attention-output",
+            "code-predictor-prefill-frameN-lN-input-norm",
+            "code-predictor-prefill-frameN-lN-mlp-output",
+            "code-predictor-prefill-frameN-lN-post-attention-norm",
+            "code-predictor-prefill-frameN-position-ids",
+            "code-predictor-prefill-frameN-rope-cos",
+            "code-predictor-prefill-frameN-rope-sin",
+            "code-predictor-stepN-frameN-codec-embed",
+            "code-predictor-stepN-frameN-lN-attention-output",
+            "code-predictor-stepN-frameN-lN-input-norm",
+            "code-predictor-stepN-frameN-lN-mlp-output",
+            "code-predictor-stepN-frameN-lN-post-attention-norm",
+        ];
+        if ALLOWED.contains(&normalized.as_str()) {
+            Ok(())
+        } else {
+            Err(Error::Config(format!("invalid stage identifier: {name}")))
+        }
+    }
     fn io_error(stage: &str, path: &Path, err: io::Error) -> Error {
         Error::Config(format!(
             "stage-dump {stage} write failed at {}: {err}",
@@ -205,6 +292,10 @@ impl StageDumpWriter {
     /// Record a stage tensor using the canonical F32 layout.
     pub fn record_stage(&mut self, name: &str, tensor: &Tensor, layout: &str) -> Result<()> {
         let name = Self::sanitize_stage_name(name)?;
+        Self::validate_structured_identifier(&name)?;
+        if !matches!(layout, "ABT" | "BBTH" | "BT" | "BTH" | "BV" | "C") {
+            return Err(Error::Config(format!("invalid stage layout: {layout}")));
+        }
         if self.stage_names.contains(&name) {
             return Err(Error::Config(format!("duplicate stage name: {name}")));
         }
@@ -251,6 +342,7 @@ impl StageDumpWriter {
             file: file_name,
             sha256: format!("{:x}", hasher.finalize()),
             layout: layout.to_string(),
+            byte_order: "little-endian".into(),
         });
 
         Ok(())
@@ -282,6 +374,11 @@ impl StageDumpWriter {
 impl StageDumpObserver for StageDumpWriter {
     fn wants_capture(&self) -> bool {
         true
+    }
+
+    fn on_stage(&mut self, name: &str, tensor: &Tensor, layout: &str) -> CandleResult<()> {
+        self.record_stage(name, tensor, layout)
+            .map_err(|err| CandleError::Msg(err.to_string()))
     }
 
     fn on_talker_codebook0_logits(

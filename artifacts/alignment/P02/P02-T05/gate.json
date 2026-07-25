@@ -1,0 +1,31 @@
+{
+  "task_id": "P02-T05",
+  "gate_status": "GATE_PASSED",
+  "fixture_sha256": "868dfc3be5014c0d9879c37a10296614e5b5bc840baf0724aa25e08b47fb6d63",
+  "real_fixture_sha256": "6748ef16aa54f7d9237ed5d5296a91bc5b16c2c024321c0a02980c7acbbbcce6",
+  "repetition_fixture_sha256": "a3223c8d7bcc9121a5fb98b451de7ac4e1211c72af8a58fb1c161dba80cd4a27",
+  "checks": [
+    {"name": "deterministic_fixture_check", "status": "passed"},
+    {"name": "offline_mutation_self_test", "status": "passed"},
+    {"name": "format", "status": "passed"},
+    {"name": "cpu_check", "status": "passed"},
+    {"name": "sampling_unit_tests", "status": "passed", "result": "14 passed"},
+    {"name": "talker_production_tests", "status": "passed", "result": "4 passed"},
+    {"name": "code_predictor_production_test", "status": "passed", "result": "1 passed"},
+    {"name": "deterministic_sequence_tests", "status": "passed", "result": "2 passed"},
+    {"name": "suppression_eos_tests", "status": "passed", "result": "5 passed"},
+    {"name": "sampling_config_tests", "status": "passed", "result": "8 passed"},
+    {"name": "repetition_penalty_tests", "status": "passed", "result": "5 passed"},
+    {"name": "philox_tests", "status": "passed", "result": "3 passed"},
+    {"name": "real_0_6b_production_gate", "status": "passed", "result": "exact 3x16 tokens and 49 draws"},
+    {"name": "candle_examples", "status": "passed", "result": "2 passed"},
+    {"name": "scoped_diff_check", "status": "passed"},
+    {"name": "independent_review", "status": "passed", "result": "ACCEPT"}
+  ],
+  "notes": [
+    "Official Qwen revision: 022e286b98fbec7e1e916cb940cdf532cd9f488e.",
+    "qwentts.cpp revision: 82cd05b9f3a175612dc89fd6943e610fab096ef5.",
+    "Real snapshot revision: 5d83992436eae1d760afd27aff78a71d676296fc.",
+    "Existing MSVC LNK4098 remains non-blocking."
+  ]
+}

@@ -1,0 +1,25 @@
+P02-T03 root verification
+
+- Empty-cache offline generator check: PASS (`SAMPLING_CONFIG_MATRIX_CHECK_OK`).
+- `cargo fmt --all -- --check`: PASS.
+- CPU feature check: PASS.
+- Talker sampling unit tests: 11 passed.
+- Talker production-path tests: 3 passed.
+- Code Predictor production-path test: 1 passed.
+- Sampling-config integration tests: 8 passed.
+- Repetition-penalty regressions: 5 passed.
+- Philox regressions: 3 passed.
+- Text frontend tests: 32 passed.
+- Candle `synthesize` example check: PASS.
+- Candle `synthesize_batch` example check: PASS.
+- Scoped diff check: PASS (line-ending warnings only).
+- Five pinned `generation_config.json` byte hashes independently recomputed:
+  `f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa`.
+- Fixture SHA-256:
+  `057185e61d8e85ee0a2454d37497fac1d612338b11b9172e9c6106fb7c29b2d4`.
+
+Non-blocking warning:
+
+- Existing Windows linker warning `LNK4098` remains.
+- Fixed-size `SamplerDiagnostics` adds unbenchmarked hot-path bookkeeping without
+  dynamic allocation; latency must be measured by a later performance gate.

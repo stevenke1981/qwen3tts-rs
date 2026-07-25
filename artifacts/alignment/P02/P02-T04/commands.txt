@@ -1,0 +1,14 @@
+C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe tools/generate_suppression_eos_vectors.py --check fixtures/alignment/p02_suppression_eos_vectors.json
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --lib talker::sampling
+cargo test --lib talker::talker
+cargo test --lib talker::code_predictor
+cargo test --test suppression_eos_test
+cargo test --test sampling_config_test
+cargo test --test repetition_penalty_test
+cargo test --test philox_rng_test
+cargo test --lib text_frontend
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- src/talker/sampling.rs src/talker/talker.rs src/talker/code_predictor.rs src/talker/config.rs src/text_frontend/candle_backend.rs src/text_frontend/model_catalog.rs tests/suppression_eos_test.rs tools/generate_suppression_eos_vectors.py fixtures/alignment/p02_suppression_eos_vectors.json docs/alignment/suppression-eos.md config/fixtures.json

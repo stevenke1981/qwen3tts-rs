@@ -546,19 +546,18 @@ fn expected_standard_inputs(
     assert!(text_seq_len >= 8);
 
     let role_emb = embed_text_ids(talker, &text_token_ids[0..3], device).unwrap();
-    let (codec_input, codec_last) = codec_prefix(talker, language, speaker, None, config);
-    let first_text = {
-        let text_emb = embed_text_ids(talker, &text_token_ids[3..4], device).unwrap();
-        text_emb
-            .into_iter()
-            .map(|value| value + codec_last)
-            .collect::<Vec<_>>()
-    };
+    let (codec_input, _codec_last) = codec_prefix(talker, language, speaker, None, config);
     let text_content_ids = &text_token_ids[3..text_seq_len - 5];
-    let trailing_len = text_content_ids.len().checked_sub(1).unwrap_or(0);
-    let trailing_ids = &text_content_ids[1..1 + trailing_len];
-    let mut trailing_emb = embed_text_ids(talker, trailing_ids, device).unwrap_or_default();
+    let codec_pad = embed_codec_ids(talker, &[config.codec_pad_id], device).unwrap()[0];
+    let mut text_rows = embed_text_ids(talker, text_content_ids, device).unwrap();
+    for row in &mut text_rows {
+        *row += codec_pad;
+    }
     let tts_eos_emb = embed_text_ids(talker, &[config.tts_eos_token_id], device).unwrap();
+    let eos_row = tts_eos_emb[0] + codec_pad;
+    let codec_bos = embed_codec_ids(talker, &[config.codec_bos_id], device).unwrap()[0];
+    let tts_pad = embed_text_ids(talker, &[config.tts_pad_token_id], device).unwrap()[0];
+    let final_row = tts_pad + codec_bos;
 
     let mut input_embeds = if let Some(ids) = instruct_ids {
         let mut out = embed_text_ids(talker, ids, device).unwrap();
@@ -570,10 +569,10 @@ fn expected_standard_inputs(
         out.extend_from_slice(&codec_input);
         out
     };
-    input_embeds.extend_from_slice(&first_text);
-
-    trailing_emb.extend_from_slice(&tts_eos_emb);
-    (input_embeds, trailing_emb)
+    input_embeds.extend_from_slice(&text_rows);
+    input_embeds.push(eos_row);
+    input_embeds.push(final_row);
+    (input_embeds, vec![tts_pad])
 }
 
 fn expected_standard_voice_clone_inputs(
@@ -590,7 +589,7 @@ fn expected_standard_voice_clone_inputs(
 
     let role_emb = embed_text_ids(talker, &text_token_ids[0..3], device).unwrap();
     let prompt = prompt.expect("prompt required");
-    let (codec_input, codec_last) = codec_prefix(
+    let (codec_input, _codec_last) = codec_prefix(
         talker,
         language,
         speaker,
@@ -616,16 +615,18 @@ fn expected_standard_voice_clone_inputs(
 
     let text_content_len = text_seq_len - 8;
     let text_content = &text_token_ids[3..3 + text_content_len];
-    let first_text = embed_text_ids(talker, &[text_content[0]], device).unwrap();
-    let first_text = vec![first_text[0] + codec_last];
-    base_input.push(first_text[0]);
-
-    let trailing_len = text_content_len - 1;
-    let trailing_ids = &text_content[1..1 + trailing_len];
-    let mut trailing = embed_text_ids(talker, trailing_ids, device).unwrap_or_default();
-    trailing.extend_from_slice(
-        &embed_text_ids(talker, &[talker.config.tts_eos_token_id], device).unwrap(),
+    let codec_pad = embed_codec_ids(talker, &[talker.config.codec_pad_id], device).unwrap()[0];
+    let mut text_rows = embed_text_ids(talker, text_content, device).unwrap();
+    for row in &mut text_rows {
+        *row += codec_pad;
+    }
+    base_input.extend_from_slice(&text_rows);
+    base_input.push(
+        embed_text_ids(talker, &[talker.config.tts_eos_token_id], device).unwrap()[0] + codec_pad,
     );
+    let codec_bos = embed_codec_ids(talker, &[talker.config.codec_bos_id], device).unwrap()[0];
+    base_input.push(tts_pad + codec_bos);
+    let trailing = vec![tts_pad];
 
     let tts_pad_emb = vec![tts_pad];
     (base_input, trailing, tts_pad_emb)

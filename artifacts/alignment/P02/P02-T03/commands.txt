@@ -1,0 +1,16 @@
+$env:PATH='C:\Users\steven\.cargo\bin;' + $env:PATH
+$env:HF_HOME='E:\qwen3tts-rs\target\p02-empty-hf-root-final'
+$env:HF_HUB_OFFLINE='1'
+C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe tools/generate_sampling_config_matrix.py --check fixtures/alignment/p02_sampling_config_matrix.json
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo test --lib talker::sampling
+cargo test --lib talker::talker
+cargo test --lib talker::code_predictor
+cargo test --test sampling_config_test
+cargo test --test repetition_penalty_test
+cargo test --test philox_rng_test
+cargo test --lib text_frontend
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+git diff --check -- src/talker/sampling.rs src/talker/talker.rs src/talker/code_predictor.rs src/text_frontend/candle_backend.rs src/text_frontend/model_catalog.rs tests/sampling_config_test.rs tools/generate_sampling_config_matrix.py fixtures/alignment/p02_sampling_config_matrix.json docs/alignment/sampling-config.md config/fixtures.json

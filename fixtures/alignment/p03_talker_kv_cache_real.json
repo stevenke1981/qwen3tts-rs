@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "fixture_id": "p03-talker-kv-cache-real",
+  "snapshot_revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+  "official_qwen_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "qwentts_cpp_revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+  "external_frame_index": 0,
+  "oracle_case_id": "p03-t02-nihao",
+  "oracle_raw_dir": "artifacts/alignment/P03/P03-T02/qwentts-direct-oracle/raw_tensor_dump",
+  "oracle_sha256": {
+    "codes-step0.bin": "C0C5B11883C53C6DF63E97BCB2E422F115EE5CD4D1FB6EC403397632A5668D27",
+    "next-emb-step0.bin": "E12A11499F4007FC80FDEAB1E891BC8532EE69906F2B35C9701D7C0DD7F5422C",
+    "talker-hidden-step1.bin": "E092721E0B377EC02D1A08306E8A474140B3BF199E87DA1060FF229297315EAD"
+  },
+  "min_cosine": 0.999,
+  "max_abs_limit": 0.001
+}

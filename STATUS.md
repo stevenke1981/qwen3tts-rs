@@ -1,14 +1,14 @@
 # Alignment Status
 
 - Overall: `IN_PROGRESS`
-- Current phase: `P02`
-- Current task: `P02-T03` (`READY`, assignment prepared)
+- Current phase: `P03`
+- Current task: `P03-T03` (`READY`, assignment pending)
 - Target baseline commit: `b08178964504d5a214565ffc4ff5ed592eb8f7ec`
 - qwentts.cpp reference commit: `82cd05b9f3a175612dc89fd6943e610fab096ef5`
 - Official Qwen3-TTS commit: `022e286b98fbec7e1e916cb940cdf532cd9f488e`
 - Working branch: `alignment/full-qwentts-parity`
-- Last task gate: `P02-T02 GATE_PASSED`
-- Last full phase gate: `P01 GATE_PASSED`
+- Last task gate: `P03-T02 GATE_PASSED`
+- Last full phase gate: `P02 GATE_PASSED`
 
 ## Last Commands
 
@@ -74,6 +74,32 @@ git diff --check -- src/text_frontend/prompt_templates.rs src/text_frontend/mode
   (main/reference/instruction/body-slice) directly against Rust production helpers under
   real-tokenizer gate; Python oracle help/check, format, CPU compile, real-tokenizer test,
   text_frontend tests, both examples, and scoped diff check passed. Independent review
+  returned `ACCEPT`.
+- P02-T04 suppression/EOS parity: Talker now applies dynamic reserved-suffix
+  suppression in both sampled and greedy modes, enforces two generated c0 tokens
+  before EOS, and terminates before Code Predictor/frame/history work. Root gates
+  passed 11 sampling, 3 Talker, 1 Code Predictor, 5 suppression/EOS, 8 config,
+  5 repetition, 3 Philox and 32 text-frontend tests plus both Candle examples.
+  Independent GPT-5.6 Luna review returned `ACCEPT`.
+- P02-T05 deterministic token parity: production sampling now matches qwentts
+  F32/Philox operation order, original-vocabulary accumulation, top-k ties,
+  top-p cutoff/crossing, fail-closed candidates and Hugging Face terminal-cap
+  semantics. The independent corpus, mutation checks and all focused gates
+  passed. The pinned real 0.6B Base Candle path matched the official oracle
+  exactly at 3 x 16 tokens and 49 draws. Independent GPT-5.6 Luna review
+  returned `ACCEPT`; phase `P02` passed.
+- P03-T01 stage instrumentation: production Talker and Code Predictor paths now
+  emit deterministic embeddings, positions, RoPE, per-layer substages, final
+  norms, logits and code stages behind a no-op observer contract. The pinned
+  0.6B Base gate passed with 723 unique hashed stages and exact qwentts
+  `talker-hidden-step1` naming. Independent GPT-5.6 Luna review returned
+  `ACCEPT`.
+- P03-T02 Talker KV parity: qwentts non-ICL prompt geometry now uses the full
+  sequence-11 prefill, cache updates stage transactionally in a fixed 28-layer
+  array, and production-derived nonzero M-RoPE parity is covered. The pinned
+  real gate passed all 28 layers with hidden cosine `0.999999999999012`; direct
+  qwentts next-embedding and step-1 hidden oracles, fixture hashes, and the
+  723-stage instrumentation gate passed. Independent GPT-5.6 Luna review
   returned `ACCEPT`.
 - Source revisions: target and qwentts.cpp match the packaged baseline; no baseline delta file
   was required. Official semantics revision is now pinned.

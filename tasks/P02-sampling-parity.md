@@ -12,9 +12,9 @@ Previous phase gate must pass.
 
 - [x] **P02-T01** — Implement Philox RNG with known-vector tests
 - [x] **P02-T02** — Implement repetition penalty with exact operation ordering (GATE_PASSED)
-- [ ] **P02-T03** — Separate Talker and Code Predictor sampling configs (READY, assignment pending)
-- [ ] **P02-T04** — Match token suppression and EOS handling
-- [ ] **P02-T05** — Gate deterministic token sequence parity
+- [x] **P02-T03** — Separate Talker and Code Predictor sampling configs (GATE_PASSED)
+- [x] **P02-T04** — Match token suppression and EOS handling (GATE_PASSED)
+- [x] **P02-T05** — Gate deterministic token sequence parity (GATE_PASSED)
 
 ## Sol Delegation Rules
 
@@ -25,6 +25,8 @@ Previous phase gate must pass.
 - Store evidence under `artifacts/alignment/P02/<task-id>/`.
 
 ## Phase Gate
+
+Status: `GATE_PASSED`
 
 - Philox known vectors pass.
 - Repetition penalty chain order is exact.

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, TypedDict
 
@@ -61,7 +62,7 @@ def model_snapshot_path(repo_id: str, revision: str) -> Path:
 
 def resolve_snapshot(repo_id: str, revision: str, allow_patterns: List[str]) -> Path:
     path = model_snapshot_path(repo_id, revision)
-    if path.exists():
+    if path.exists() and all((path / pattern).exists() for pattern in allow_patterns):
         return path
 
     downloaded = snapshot_download(
@@ -228,7 +229,7 @@ def build_cases() -> List[Dict[str, Any]]:
                 "top_k": 50,
                 "top_p": 1.0,
             },
-            expected=expected_case(
+        expected=expected_case(
                 "generate_sampled",
                 {
                     "do_sample": True,
@@ -440,7 +441,9 @@ def build_model_cases() -> List[Dict[str, Any]]:
         model_id = entry["model_id"]
         revision = entry["model_revision"]
         cfg_path = ensure_generation_config_snapshot(model_id, revision)
-        cfg = _load_json(cfg_path)
+        raw_bytes = cfg_path.read_bytes()
+        raw_text = raw_bytes.decode("utf-8")
+        cfg = json.loads(raw_text)
         resolved = {}
         talker_do_sample, talker, subtalker_do_sample, subtalker = resolve_sampling_config(cfg)
         resolved = {
@@ -460,6 +463,7 @@ def build_model_cases() -> List[Dict[str, Any]]:
                 "generation_config": {
                     "path": "generation_config.json",
                     "sha256": sha256_file(cfg_path),
+                    "raw_bytes": raw_text,
                     "raw": cfg,
                     "resolved": resolved,
                 },
@@ -468,16 +472,17 @@ def build_model_cases() -> List[Dict[str, Any]]:
     return payload
 
 
-def build_fixture() -> Dict[str, Any]:
+def build_fixture(*, include_models: bool = True) -> Dict[str, Any]:
     return {
         "version": 1,
         "fixture_id": "p02-sampling-config-matrix",
+        "path": "fixtures/alignment/p02_sampling_config_matrix.json",
         "source_repo": SOURCE_REPO,
         "source_revision": SOURCE_REVISION,
         "generated_by": "tools/generate_sampling_config_matrix.py",
         "command": PYTHON,
         "cases": build_cases(),
-        "models": build_model_cases(),
+        "models": build_model_cases() if include_models else [],
     }
 
 
@@ -486,12 +491,61 @@ def _canonical_json(payload: Dict[str, Any]) -> str:
 
 
 def validate(path: Path) -> None:
-    expected = build_fixture()
     if not path.exists():
         raise RuntimeError(f"FIXTURE_MISSING: {path}")
     current = json.loads(path.read_text(encoding="utf-8"))
-    if _canonical_json(current) != _canonical_json(expected):
-        raise RuntimeError("FIXTURE_MISMATCH: p02 sampling config matrix changed")
+    metadata = {
+        "version": 1,
+        "fixture_id": "p02-sampling-config-matrix",
+        "path": "fixtures/alignment/p02_sampling_config_matrix.json",
+        "source_repo": SOURCE_REPO,
+        "source_revision": SOURCE_REVISION,
+        "generated_by": "tools/generate_sampling_config_matrix.py",
+        "command": PYTHON,
+    }
+    for key, value in metadata.items():
+        if current.get(key) != value:
+            raise RuntimeError(f"FIXTURE_MISMATCH: top-level {key} differs")
+    expected_cases = build_fixture(include_models=False)["cases"]
+    if _canonical_json(current.get("cases")) != _canonical_json(expected_cases):
+        raise RuntimeError("FIXTURE_MISMATCH: synthetic sampling cases changed")
+    expected_models = {entry["model_id"]: entry for entry in json.loads(
+        P01_FIXTURE_PATH.read_text(encoding="utf-8")
+    )["models"]}
+    models = current.get("models")
+    if not isinstance(models, list) or len(models) != len(expected_models):
+        raise RuntimeError("FIXTURE_MISMATCH: five-model provenance is missing")
+    seen = set()
+    for entry in models:
+        model_id = entry.get("model_id")
+        if model_id in seen:
+            raise RuntimeError(f"FIXTURE_MISMATCH: duplicate model {model_id}")
+        seen.add(model_id)
+        if model_id not in expected_models:
+            raise RuntimeError(f"FIXTURE_MISMATCH: unexpected model {model_id!r}")
+        if entry.get("model_revision") != expected_models[model_id]["model_revision"]:
+            raise RuntimeError(f"FIXTURE_MISMATCH: revision mismatch for {model_id}")
+        generation = entry.get("generation_config", {})
+        if generation.get("path") != "generation_config.json":
+            raise RuntimeError(f"FIXTURE_MISMATCH: generation-config path for {model_id}")
+        raw_text = generation.get("raw_bytes")
+        if not isinstance(raw_text, str):
+            raise RuntimeError(f"FIXTURE_MISMATCH: raw bytes missing for {model_id}")
+        raw = json.loads(raw_text)
+        if raw != generation.get("raw"):
+            raise RuntimeError(f"FIXTURE_MISMATCH: raw generation config mismatch for {model_id}")
+        digest = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
+        if digest != generation.get("sha256"):
+            raise RuntimeError(f"FIXTURE_MISMATCH: generation-config hash mismatch for {model_id}")
+        talker_do_sample, talker, subtalker_do_sample, subtalker = resolve_sampling_config(raw)
+        resolved = {
+            "talker": {"do_sample": talker_do_sample, "options": talker},
+            "subtalker": {"do_sample": subtalker_do_sample, "options": subtalker},
+        }
+        if resolved != generation.get("resolved"):
+            raise RuntimeError(f"FIXTURE_MISMATCH: resolved sampling mismatch for {model_id}")
+    if seen != set(expected_models):
+        raise RuntimeError("FIXTURE_MISMATCH: model set differs from pinned P01 models")
 
 
 def write_fixture(path: Path) -> None:

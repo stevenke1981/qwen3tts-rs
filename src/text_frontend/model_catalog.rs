@@ -73,6 +73,50 @@ pub struct GenerationSamplingConfig {
     pub subtalker: BranchSamplingConfig,
 }
 
+/// Resolved sampling plan used by the production Candle generation path.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EffectiveSamplingPlan {
+    pub talker: BranchSamplingConfig,
+    pub subtalker: BranchSamplingConfig,
+}
+
+impl EffectiveSamplingPlan {
+    pub fn uses_explicit_sampler(self) -> bool {
+        self.talker.do_sample || self.subtalker.do_sample
+    }
+}
+
+/// Apply public synthesis overrides to Talker only and resolve both branch
+/// flags used by `CandleLLM::synthesize`.
+pub fn resolve_effective_sampling_plan(
+    config: GenerationSamplingConfig,
+    temperature: f64,
+    top_k: u32,
+    top_p: f64,
+) -> crate::Result<EffectiveSamplingPlan> {
+    if !temperature.is_finite() {
+        return Err(crate::Error::Config(
+            "SynthesisOptions.temperature must be finite".into(),
+        ));
+    }
+    if !top_p.is_finite() || top_p <= 0.0 || top_p > 1.0 {
+        return Err(crate::Error::Config(
+            "SynthesisOptions.top_p must be finite and in (0.0, 1.0]".into(),
+        ));
+    }
+    let mut talker = config.talker.options;
+    talker.temperature = temperature;
+    talker.top_k = top_k as usize;
+    talker.top_p = top_p;
+    Ok(EffectiveSamplingPlan {
+        talker: BranchSamplingConfig {
+            do_sample: config.talker.do_sample && temperature > 0.0,
+            options: talker,
+        },
+        subtalker: config.subtalker,
+    })
+}
+
 impl GenerationSamplingConfig {
     /// Default configuration matching repository convention when `generation_config.json`
     /// is missing or intentionally not loaded.

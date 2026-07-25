@@ -90,19 +90,19 @@ phases:
           - P02-T01
       - id: P02-T03
         title: "Separate Talker and Code Predictor sampling configs"
-        status: READY
+        status: GATE_PASSED
         evidence_dir: artifacts/alignment/P02/P02-T03
         depends_on:
           - P02-T02
       - id: P02-T04
         title: "Match token suppression and EOS handling"
-        status: NOT_STARTED
+        status: GATE_PASSED
         evidence_dir: artifacts/alignment/P02/P02-T04
         depends_on:
           - P02-T03
       - id: P02-T05
         title: "Gate deterministic token sequence parity"
-        status: NOT_STARTED
+        status: GATE_PASSED
         evidence_dir: artifacts/alignment/P02/P02-T05
         depends_on:
           - P02-T04
@@ -111,19 +111,19 @@ phases:
     tasks:
       - id: P03-T01
         title: "Instrument embeddings, norms, RoPE and layer outputs"
-        status: NOT_STARTED
+        status: GATE_PASSED
         evidence_dir: artifacts/alignment/P03/P03-T01
         depends_on:
           - P02-T05
       - id: P03-T02
         title: "Verify Talker prefill and single-step KV cache"
-        status: NOT_STARTED
+        status: GATE_PASSED
         evidence_dir: artifacts/alignment/P03/P03-T02
         depends_on:
           - P03-T01
       - id: P03-T03
         title: "Verify Code Predictor frame-local prefill and 14 decode steps"
-        status: NOT_STARTED
+        status: READY
         evidence_dir: artifacts/alignment/P03/P03-T03
         depends_on:
           - P03-T02

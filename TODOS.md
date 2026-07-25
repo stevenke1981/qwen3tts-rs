@@ -24,15 +24,15 @@ Overall status: `IN_PROGRESS`
 
 - [x] `P02-T01` Implement Philox RNG with known-vector tests
 - [x] `P02-T02` Implement repetition penalty with exact operation ordering (`GATE_PASSED`)
-- [ ] `P02-T03` Separate Talker and Code Predictor sampling configs (READY, assignment pending)
-- [ ] `P02-T04` Match token suppression and EOS handling
-- [ ] `P02-T05` Gate deterministic token sequence parity
-- [ ] `P02-GATE` Phase gate passed
+- [x] `P02-T03` Separate Talker and Code Predictor sampling configs (`GATE_PASSED`)
+- [x] `P02-T04` Match token suppression and EOS handling (`GATE_PASSED`)
+- [x] `P02-T05` Gate deterministic token sequence parity (`GATE_PASSED`)
+- [x] `P02-GATE` Phase gate passed
 
 ## P03 — Talker and Code Predictor numerical parity
 
-- [ ] `P03-T01` Instrument embeddings, norms, RoPE and layer outputs
-- [ ] `P03-T02` Verify Talker prefill and single-step KV cache
+- [x] `P03-T01` Instrument embeddings, norms, RoPE and layer outputs (`GATE_PASSED`)
+- [x] `P03-T02` Verify Talker prefill and single-step KV cache (`GATE_PASSED`)
 - [ ] `P03-T03` Verify Code Predictor frame-local prefill and 14 decode steps
 - [ ] `P03-T04` Eliminate avoidable host transfers in acoustic prediction
 - [ ] `P03-T05` Gate stage cosine and logit ranking thresholds

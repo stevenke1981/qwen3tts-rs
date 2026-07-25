@@ -173,6 +173,7 @@ fn reference_probabilities(
     }
 
     if top_p >= 1.0 {
+        probs.sort_by_key(|(idx, _)| *idx);
         return probs;
     }
     let mut cumulative = 0.0;
@@ -191,6 +192,7 @@ fn reference_probabilities(
             *p /= renorm;
         }
     }
+    kept.sort_by_key(|(idx, _)| *idx);
     kept
 }
 
@@ -237,7 +239,7 @@ fn sample_with_case(case: &Case, draw: f64) -> usize {
     let mut cumulative = 0.0;
     for (idx, p) in probs {
         cumulative += p;
-        if draw <= cumulative {
+        if cumulative >= draw {
             return idx;
         }
     }

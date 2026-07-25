@@ -86,16 +86,16 @@ def apply_repetition_penalty(
 
 
 def to_probabilities(candidates: List[Tuple[int, float]]) -> List[Tuple[int, float]]:
-    max_logit = f64(candidates[0][1])
+    max_logit = f32(candidates[0][1])
     probs: List[Tuple[int, float]] = []
     total = 0.0
     for idx, logit in candidates:
-        p = math.exp(float(f64(logit) - max_logit))
+        p = f32(math.exp(float(f32(logit - max_logit))))
         probs.append((idx, p))
         total += p
     if total <= 0.0 or not math.isfinite(total):
         return [(candidates[0][0], 1.0)]
-    return [(idx, p / total) for idx, p in probs]
+    return [(idx, f32(p / total)) for idx, p in probs]
 
 
 def apply_temperature_in_place(candidates: List[Tuple[int, float]], temperature: float) -> None:
@@ -130,7 +130,7 @@ def sample_with_draw(
     cumulative = 0.0
     for idx, p in candidates:
         cumulative += p
-        if draw <= cumulative:
+        if cumulative >= f32(draw):
             return idx
     return candidates[-1][0]
 
@@ -215,6 +215,9 @@ def run_reference_sampler(
 
     probs = to_probabilities(penalized)
     probs = apply_top_p(probs, top_p)
+    # qwentts.cpp uses sorted candidates only for filtering, then performs the
+    # final multinomial accumulation in original vocabulary-id order.
+    probs.sort(key=lambda item: item[0])
     return [
         {
             "uniform_bits": f"0x{f32_bits(draw):08x}",

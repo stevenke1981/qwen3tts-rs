@@ -1,0 +1,11 @@
+{
+  "task": "P03-T01",
+  "status": "GATE_PASSED",
+  "review": "ACCEPT",
+  "real_model_revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+  "official_qwen_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "qwentts_cpp_revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+  "real_manifest_stage_count": 723,
+  "real_gate_seconds": 106.13,
+  "next_task": "P03-T02"
+}

@@ -1,0 +1,15 @@
+PASS cargo fmt --all -- --check
+PASS cargo check --no-default-features --features cpu
+PASS cargo check --no-default-features --features cpu,stage-dump
+PASS prompt_assembly_test 8/8
+PASS talker_kv_cache_test 2/2
+PASS stage_dump_test 5/5
+PASS stage_instrumentation_test 1/1
+PASS stage_instrumentation_real_test ignored (pinned env), manifest_count=723
+PASS lib talker 32/32
+PASS deterministic_token_sequence_test 2/2
+PASS synthesize and synthesize_batch example checks
+PASS pinned talker KV real gate, sequence=11, hidden cosine=0.999999999999012
+PASS generator fixture check with metrics
+PASS fixture_manifest required=16 verified=16
+PASS scoped git diff --check

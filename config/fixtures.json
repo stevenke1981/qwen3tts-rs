@@ -2,6 +2,17 @@
   "version": 1,
   "fixtures": [
     {
+      "id": "p03-talker-kv-cache-metrics",
+      "path": "../artifacts/alignment/P03/P03-T02/metrics.json",
+      "source": "qwentts.cpp independent oracle + Rust Talker KV gate",
+      "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+      "sha256": "598486218384408FC5F8BEC6706F4876DB1D9D00F0135640F088C79261E5A34C",
+      "license": "Apache-2.0",
+      "generated_by": "tests/talker_kv_cache_real_test.rs",
+      "command": "P03_METRICS_OUT=artifacts/alignment/P03/P03-T02/metrics.json cargo test --test talker_kv_cache_real_test -- --ignored --nocapture",
+      "required": true
+    },
+    {
       "id": "p00-cpu-f32-baseline-report",
       "path": "../artifacts/alignment/P00/P00-T05/cpu-f32-baseline.json",
       "source": "qwen3tts-rs P00-T05 alignment harness",
@@ -116,7 +127,7 @@
       "path": "../fixtures/alignment/p02_repetition_penalty_vectors.json",
       "source": "tools/generate_repetition_penalty_vectors.py",
       "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
-      "sha256": "cc7c31649849ea55acc514bf0a64dbdcfd05db47b8af6e23cb3dce7edde41789",
+      "sha256": "a3223c8d7bcc9121a5fb98b451de7ac4e1211c72af8a58fb1c161dba80cd4a27",
       "license": "Apache-2.0",
       "generated_by": "tools/generate_repetition_penalty_vectors.py",
       "command": "python tools/generate_repetition_penalty_vectors.py --check fixtures/alignment/p02_repetition_penalty_vectors.json",
@@ -127,10 +138,43 @@
       "path": "../fixtures/alignment/p02_sampling_config_matrix.json",
       "source": "tools/generate_sampling_config_matrix.py",
       "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
-      "sha256": "1cc059350bdc0792f5aee77f3b5d2fa9005f99f99451f0b1aa2205c60320e6c6",
+      "sha256": "057185e61d8e85ee0a2454d37497fac1d612338b11b9172e9c6106fb7c29b2d4",
       "license": "Apache-2.0",
       "generated_by": "tools/generate_sampling_config_matrix.py",
       "command": "python tools/generate_sampling_config_matrix.py --check fixtures/alignment/p02_sampling_config_matrix.json",
+      "required": true
+    },
+    {
+      "id": "p02-suppression-eos-vectors",
+      "path": "../fixtures/alignment/p02_suppression_eos_vectors.json",
+      "source": "tools/generate_suppression_eos_vectors.py",
+      "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+      "sha256": "2262db04921e477719d1e806be51aa4e7218e190a1d0498f9a13034a6c11956c",
+      "license": "Apache-2.0",
+      "generated_by": "tools/generate_suppression_eos_vectors.py",
+      "command": "python tools/generate_suppression_eos_vectors.py --check fixtures/alignment/p02_suppression_eos_vectors.json",
+      "required": true
+    },
+    {
+      "id": "p02-deterministic-token-sequences",
+      "path": "../fixtures/alignment/p02_deterministic_token_sequences.json",
+      "source": "tools/generate_deterministic_token_sequences.py",
+      "revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+      "sha256": "868dfc3be5014c0d9879c37a10296614e5b5bc840baf0724aa25e08b47fb6d63",
+      "license": "Apache-2.0",
+      "generated_by": "tools/generate_deterministic_token_sequences.py",
+      "command": "python tools/generate_deterministic_token_sequences.py --check",
+      "required": true
+    },
+    {
+      "id": "p02-deterministic-token-sequences-real",
+      "path": "../fixtures/alignment/p02_deterministic_token_sequences_real.json",
+      "source": "official patched PyTorch + qwentts.cpp Philox oracle",
+      "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+      "sha256": "6748ef16aa54f7d9237ed5d5296a91bc5b16c2c024321c0a02980c7acbbbcce6",
+      "license": "Apache-2.0",
+      "generated_by": "local pinned official model snapshot",
+      "command": "python tools/export_talker_fixtures.py --model <pinned local snapshot> --out-dir fixtures/alignment (then capture patched-PyTorch/qwentts Philox matrix)",
       "required": true
     }
   ],

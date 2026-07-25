@@ -37,11 +37,66 @@ impl CodePredictor {
         kv_caches: &mut [Option<(Tensor, Tensor)>],
         device: &Device,
     ) -> Result<Tensor> {
+        let mut observer = NoopStageDumpObserver::default();
+        self.first_step_logits_with_observer(
+            talker_hidden,
+            codebook_0_embed,
+            kv_caches,
+            device,
+            0,
+            &mut observer,
+        )
+    }
+
+    fn first_step_logits_with_observer<O: StageDumpObserver>(
+        &self,
+        talker_hidden: &Tensor,
+        codebook_0_embed: &Tensor,
+        kv_caches: &mut [Option<(Tensor, Tensor)>],
+        device: &Device,
+        frame_index: usize,
+        observer: &mut O,
+    ) -> Result<Tensor> {
+        let capture = observer.wants_capture();
         let prefill = Tensor::cat(&[talker_hidden.clone(), codebook_0_embed.clone()], 1)?;
         let prefill = self.project_input(&prefill)?;
+        if capture {
+            observer.on_stage(
+                &format!("code-predictor-prefill-frame{frame_index}-input-embed"),
+                &prefill,
+                "BTH",
+            )?;
+        }
         let (cos, sin) = self.compute_rope_for_positions(&[0, 1], device)?;
+        if capture {
+            let positions = Tensor::from_slice(&[0u32, 1], (1, 2), device)?;
+            observer.on_stage(
+                &format!("code-predictor-prefill-frame{frame_index}-position-ids"),
+                &positions,
+                "BT",
+            )?;
+            observer.on_stage(
+                &format!("code-predictor-prefill-frame{frame_index}-rope-cos"),
+                &cos,
+                "BBTH",
+            )?;
+            observer.on_stage(
+                &format!("code-predictor-prefill-frame{frame_index}-rope-sin"),
+                &sin,
+                "BBTH",
+            )?;
+        }
         let causal_mask = create_causal_mask(2, device)?;
-        let h = self.forward_layers(&prefill, &cos, &sin, Some(&causal_mask), kv_caches)?;
+        let h = self.forward_layers(
+            &prefill,
+            &cos,
+            &sin,
+            Some(&causal_mask),
+            kv_caches,
+            "prefill",
+            frame_index,
+            observer,
+        )?;
         let last_hidden = h.narrow(1, 1, 1)?;
         linear(&last_hidden, &self.lm_heads[0])?.squeeze(1)
     }
@@ -86,7 +141,14 @@ impl CodePredictor {
         let mut generated_ids: Vec<u32> = Vec::with_capacity(self.config.num_code_groups - 1);
         let capture = observer.wants_capture();
 
-        let logits = self.first_step_logits(talker_hidden, codebook_0_embed, kv_caches, device)?;
+        let logits = self.first_step_logits_with_observer(
+            talker_hidden,
+            codebook_0_embed,
+            kv_caches,
+            device,
+            frame_index,
+            observer,
+        )?;
         if capture {
             observer.on_code_predictor_step_logits(frame_index, 0, &logits)?;
         }
@@ -101,9 +163,30 @@ impl CodePredictor {
             let next_input_ids = Tensor::from_slice(&[next_val], (1, 1), device)?;
             let next_input = embedding_lookup(emb_weight, &next_input_ids)?;
             let next_input = self.project_input(&next_input)?;
+            if capture {
+                observer.on_stage(
+                    &format!("code-predictor-step{step}-frame{frame_index}-codec-embed"),
+                    &next_input,
+                    "BTH",
+                )?;
+            }
             let cos = step_cos.narrow(2, step - 1, 1)?;
             let sin = step_sin.narrow(2, step - 1, 1)?;
-            let h = self.forward_layers(&next_input, &cos, &sin, None, kv_caches)?;
+            let layer_phase = if capture {
+                Some(format!("step{step}"))
+            } else {
+                None
+            };
+            let h = self.forward_layers(
+                &next_input,
+                &cos,
+                &sin,
+                None,
+                kv_caches,
+                layer_phase.as_deref().unwrap_or("step"),
+                frame_index,
+                observer,
+            )?;
             let logits = linear(&h, &self.lm_heads[step])?.squeeze(1)?;
             if capture {
                 observer.on_code_predictor_step_logits(frame_index, step, &logits)?;
@@ -159,7 +242,14 @@ impl CodePredictor {
         let mut generated_ids: Vec<u32> = Vec::with_capacity(self.config.num_code_groups - 1);
         let capture = observer.wants_capture();
 
-        let logits = self.first_step_logits(talker_hidden, codebook_0_embed, kv_caches, device)?;
+        let logits = self.first_step_logits_with_observer(
+            talker_hidden,
+            codebook_0_embed,
+            kv_caches,
+            device,
+            frame_index,
+            observer,
+        )?;
         if capture {
             observer.on_code_predictor_step_logits(frame_index, 0, &logits)?;
         }
@@ -181,9 +271,30 @@ impl CodePredictor {
             let next_input_ids = Tensor::from_slice(&[next_val], (1, 1), device)?;
             let next_input = embedding_lookup(emb_weight, &next_input_ids)?;
             let next_input = self.project_input(&next_input)?;
+            if capture {
+                observer.on_stage(
+                    &format!("code-predictor-step{step}-frame{frame_index}-codec-embed"),
+                    &next_input,
+                    "BTH",
+                )?;
+            }
             let cos = step_cos.narrow(2, step - 1, 1)?;
             let sin = step_sin.narrow(2, step - 1, 1)?;
-            let h = self.forward_layers(&next_input, &cos, &sin, None, kv_caches)?;
+            let layer_phase = if capture {
+                Some(format!("step{step}"))
+            } else {
+                None
+            };
+            let h = self.forward_layers(
+                &next_input,
+                &cos,
+                &sin,
+                None,
+                kv_caches,
+                layer_phase.as_deref().unwrap_or("step"),
+                frame_index,
+                observer,
+            )?;
             let logits = linear(&h, &self.lm_heads[step])?.squeeze(1)?;
             if capture {
                 observer.on_code_predictor_step_logits(frame_index, step, &logits)?;
@@ -214,6 +325,9 @@ impl CodePredictor {
         sin: &Tensor,
         attention_mask: Option<&Tensor>,
         kv_caches: &mut [Option<(Tensor, Tensor)>],
+        phase: &str,
+        frame_index: usize,
+        observer: &mut impl StageDumpObserver,
     ) -> Result<Tensor> {
         let mut h = input.clone();
         for (layer_idx, layer) in self.layers.iter().enumerate() {
@@ -222,13 +336,35 @@ impl CodePredictor {
             } else {
                 None
             };
-            let (next_h, updated_cache) = layer.forward(&h, cos, sin, attention_mask, cache)?;
+            let (next_h, updated_cache) = if observer.wants_capture() {
+                let layer_phase = format!("{phase}-frame{frame_index}");
+                layer.forward_with_observer(
+                    &h,
+                    cos,
+                    sin,
+                    attention_mask,
+                    cache,
+                    layer_idx,
+                    &layer_phase,
+                    observer,
+                )?
+            } else {
+                layer.forward(&h, cos, sin, attention_mask, cache)?
+            };
             h = next_h;
             if layer_idx < kv_caches.len() {
                 kv_caches[layer_idx] = Some(updated_cache);
             }
         }
-        self.norm.forward(&h)
+        let h = self.norm.forward(&h)?;
+        if observer.wants_capture() {
+            observer.on_stage(
+                &format!("code-predictor-hidden-{phase}-frame{frame_index}-final"),
+                &h,
+                "BTH",
+            )?;
+        }
+        Ok(h)
     }
 
     fn compute_rope_for_positions(
@@ -283,7 +419,7 @@ mod tests {
             head_dim: 2,
             num_hidden_layers: 1,
             vocab_size: 8,
-            num_code_groups: 3,
+            num_code_groups: 16,
             max_position_embeddings: 32,
             rms_norm_eps: 1e-6,
             rope_theta: 10_000.0,
@@ -312,8 +448,8 @@ mod tests {
             SwiGLUMLP::new(zeros2(8, 4), zeros2(8, 4), zeros2(4, 8)),
         );
         let predictor = CodePredictor {
-            codec_embeddings: vec![zeros2(8, 4), zeros2(8, 4)],
-            lm_heads: vec![zeros2(8, 4), zeros2(8, 4)],
+            codec_embeddings: (0..15).map(|_| zeros2(8, 4)).collect(),
+            lm_heads: (0..15).map(|_| zeros2(8, 4)).collect(),
             layers: vec![layer],
             norm: super::RMSNorm::new(ones1(4), config.rms_norm_eps),
             small_to_mtp_proj: None,
@@ -328,10 +464,63 @@ mod tests {
             .generate(&talker_hidden, &c0_embed, &mut caches, &device)
             .unwrap();
 
-        assert_eq!(codes.dims(), &[1, 2]);
+        assert_eq!(codes.dims(), &[1, 15]);
         assert_eq!(updated.len(), 1);
         let (k, v) = updated[0].as_ref().expect("cache should be populated");
-        assert_eq!(k.dim(2).unwrap(), 3);
-        assert_eq!(v.dim(2).unwrap(), 3);
+        assert_eq!(k.dim(2).unwrap(), 16);
+        assert_eq!(v.dim(2).unwrap(), 16);
+
+        let mut sampled_sampler = Sampler::new(42);
+        let sampled_options = SamplingOptions {
+            temperature: 1.0,
+            top_k: 0,
+            top_p: 1.0,
+            repetition_penalty: 1.0,
+        };
+        predictor
+            .generate_sampled(
+                &talker_hidden,
+                &c0_embed,
+                &mut vec![None],
+                &device,
+                &mut sampled_sampler,
+                sampled_options,
+                true,
+            )
+            .unwrap();
+        let diagnostics = sampled_sampler.diagnostics();
+        assert_eq!(diagnostics.call_count, 15);
+        assert_eq!(diagnostics.sampled_calls, 15);
+        assert_eq!(diagnostics.history_nonempty_calls, 0);
+        assert_eq!(diagnostics.sequence_len, 15);
+        assert!(diagnostics.sequence[..15].iter().all(|&mode| mode == 1));
+
+        let mut reserved_predictor = predictor.clone();
+        reserved_predictor.config.vocab_size = 2048;
+        reserved_predictor.codec_embeddings = (0..15).map(|_| zeros2(2048, 4)).collect();
+        reserved_predictor.lm_heads = (0..15)
+            .map(|index| {
+                let mut weights = vec![0.0_f32; 2048 * 4];
+                if index == 0 {
+                    for value in &mut weights[1500 * 4..1501 * 4] {
+                        *value = 1.0;
+                    }
+                }
+                Tensor::from_slice(&weights, (2048, 4), &device).unwrap()
+            })
+            .collect();
+        let mut reserved_sampler = Sampler::new(11);
+        let (reserved_codes, _) = reserved_predictor
+            .generate_sampled(
+                &Tensor::ones((1, 1, 4), DType::F32, &device).unwrap(),
+                &Tensor::ones((1, 1, 4), DType::F32, &device).unwrap(),
+                &mut vec![None],
+                &device,
+                &mut reserved_sampler,
+                sampled_options,
+                false,
+            )
+            .unwrap();
+        assert_eq!(reserved_codes.to_vec2::<u32>().unwrap()[0][0], 1500);
     }
 }

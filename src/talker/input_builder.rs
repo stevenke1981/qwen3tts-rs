@@ -221,33 +221,67 @@ impl<'a> InputBuilder<'a> {
                 input_embeds = Tensor::cat(&[input_embeds, icl_input_embed], 1)?;
                 trailing_text_hidden
             } else {
-                let text_emb = self.talker.embed_text(&input_tensor.narrow(1, 3, 1)?)?;
-                let codec_last = codec_emb.narrow(1, codec_len - 1, 1)?;
-                let first_text_with_codec = (text_emb + codec_last)?;
-                input_embeds = Tensor::cat(&[input_embeds, first_text_with_codec], 1)?;
-
-                let trailing_len = text_seq_len.checked_sub(4 + 5).ok_or_else(|| {
+                let text_len = text_seq_len.checked_sub(3 + 5).ok_or_else(|| {
                     candle_core::Error::Msg(format!("invalid prompt body length: {text_seq_len}"))
                 })?;
-                let trailing_ids = input_tensor.narrow(1, 4, trailing_len)?;
-                let trailing_emb = self.talker.embed_text(&trailing_ids)?;
-                Tensor::cat(&[trailing_emb, tts_eos_embed], 1)?
+                if text_len == 0 {
+                    candle_core::bail!("prompt must contain at least one text token");
+                }
+                let text_body = self
+                    .talker
+                    .embed_text(&input_tensor.narrow(1, 3, text_len)?)?;
+                let text_with_codec_pad = (text_body
+                    + codec_emb.narrow(1, codec_len - 2, 1)?.expand((
+                        1,
+                        text_len,
+                        config.hidden_size,
+                    ))?)?;
+                let eos_with_codec_pad =
+                    (tts_eos_embed + codec_emb.narrow(1, codec_len - 2, 1)?)?;
+                let final_pad_bos =
+                    (tts_pad_embed.clone() + codec_emb.narrow(1, codec_len - 1, 1)?)?;
+                input_embeds = Tensor::cat(
+                    &[
+                        &input_embeds,
+                        &text_with_codec_pad,
+                        &eos_with_codec_pad,
+                        &final_pad_bos,
+                    ],
+                    1,
+                )?;
+                tts_pad_embed.clone()
             }
         } else {
-            // 文字部分
-            // text_emb + codec_last
-            let text_emb = self.talker.embed_text(&input_tensor.narrow(1, 3, 1)?)?; // first text token
-            let codec_last = codec_emb.narrow(1, codec_len - 1, 1)?;
-            let first_text_with_codec = (text_emb + codec_last)?;
-            input_embeds = Tensor::cat(&[input_embeds, first_text_with_codec], 1)?;
-
-            // 剩餘文字 (trailing_text_hidden)
-            let trailing_len = text_seq_len.checked_sub(4 + 5).ok_or_else(|| {
+            // Non-ICL prefill follows qwentts' complete layout: all text body
+            // rows plus tts_eos and the final (tts_pad + codec_bos) row are
+            // present before generation; trailing overlay is only tts_pad.
+            let text_len = text_seq_len.checked_sub(3 + 5).ok_or_else(|| {
                 candle_core::Error::Msg(format!("invalid prompt body length: {text_seq_len}"))
             })?;
-            let trailing_ids = input_tensor.narrow(1, 4, trailing_len)?;
-            let trailing_emb = self.talker.embed_text(&trailing_ids)?;
-            Tensor::cat(&[trailing_emb, tts_eos_embed], 1)?
+            if text_len == 0 {
+                candle_core::bail!("prompt must contain at least one text token");
+            }
+            let text_body = self
+                .talker
+                .embed_text(&input_tensor.narrow(1, 3, text_len)?)?;
+            let text_with_codec_pad = (text_body
+                + codec_emb.narrow(1, codec_len - 2, 1)?.expand((
+                    1,
+                    text_len,
+                    config.hidden_size,
+                ))?)?;
+            let eos_with_codec_pad = (tts_eos_embed + codec_emb.narrow(1, codec_len - 2, 1)?)?;
+            let final_pad_bos = (tts_pad_embed.clone() + codec_emb.narrow(1, codec_len - 1, 1)?)?;
+            input_embeds = Tensor::cat(
+                &[
+                    input_embeds,
+                    text_with_codec_pad,
+                    eos_with_codec_pad,
+                    final_pad_bos,
+                ],
+                1,
+            )?;
+            tts_pad_embed.clone()
         };
 
         // Attention mask
