@@ -6,6 +6,15 @@ status_values:
   - BLOCKED
   - GATE_FAILED
   - GATE_PASSED
+execution_model:
+  applies_from: P03-T05
+  implementation_owner: external_agent
+  accepted_external_models:
+    - DeepSeek V4 Flash
+    - GPT-5.3 Codex Spark
+    - user-designated external agent
+  architecture_review_gate_commit_push_owner: GPT-5.6 Sol
+  external_reports_are_unverified_until_sol_reruns_gate: true
 phases:
   - id: P00
     title: "Baseline and parity harness"
@@ -123,19 +132,19 @@ phases:
           - P03-T01
       - id: P03-T03
         title: "Verify Code Predictor frame-local prefill and 14 decode steps"
-        status: READY
+        status: GATE_PASSED
         evidence_dir: artifacts/alignment/P03/P03-T03
         depends_on:
           - P03-T02
       - id: P03-T04
         title: "Eliminate avoidable host transfers in acoustic prediction"
-        status: NOT_STARTED
+        status: GATE_PASSED
         evidence_dir: artifacts/alignment/P03/P03-T04
         depends_on:
           - P03-T03
       - id: P03-T05
         title: "Gate stage cosine and logit ranking thresholds"
-        status: NOT_STARTED
+        status: READY
         evidence_dir: artifacts/alignment/P03/P03-T05
         depends_on:
           - P03-T04

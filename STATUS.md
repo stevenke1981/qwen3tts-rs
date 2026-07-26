@@ -2,7 +2,7 @@
 
 - Overall: `IN_PROGRESS`
 - Current phase: `P03`
-- Current task: `P03-T05` (`NOT_STARTED`)
+- Current task: `P03-T05` (`READY` for an external implementer; Sol owns Gate)
 - Target baseline commit: `b08178964504d5a214565ffc4ff5ed592eb8f7ec`
 - qwentts.cpp reference commit: `82cd05b9f3a175612dc89fd6943e610fab096ef5`
 - Official Qwen3-TTS commit: `022e286b98fbec7e1e916cb940cdf532cd9f488e`
@@ -28,6 +28,20 @@
 - Review and Gate:
   `artifacts/alignment/P03/P03-T04/review.md`,
   `artifacts/alignment/P03/P03-T04/gate.json`.
+
+## Active External-Agent Workflow
+
+- Remaining work P03-T05 through P13 uses provider-neutral external
+  implementers, including DeepSeek V4 Flash when assigned.
+- External agents receive one bounded task card and may write implementation,
+  tests, raw metrics, and worker evidence only.
+- GPT-5.6 Sol independently reviews the actual diff, reruns required real
+  fixtures, owns Gate/status decisions, and performs accepted commits/pushes.
+- Workflow: `docs/alignment/agent-workflow/README.md`.
+- Next task card:
+  `artifacts/alignment/P03/P03-T05/assignment.md`.
+- Copyable external-agent prompt:
+  `artifacts/alignment/P03/P03-T05/external-agent-prompt.md`.
 
 ## Last Commands
 

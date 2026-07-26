@@ -159,7 +159,7 @@ Rust/Candle、核心解碼器禁用 GGUF、精度與效能限制；工作流程�
 Sol 必須：
 
 - 負責架構、任務拆分、驗收門檻與最終決策。
-- 分派前完整讀取 task card，每次只交付一個有邊界的 Spark 任務。
+- 分派前完整讀取 task card，每次只交付一個有邊界的外部代理任務。
 - 親自檢查 diff、執行測試並核對證據。
 - 測試被略過、fixture 缺失或使用 `continue-on-error` 時拒絕假成功。
 - 每個接受的任務後更新 `TODOS.md`、`STATUS.md` 與任務證據目錄。
@@ -167,15 +167,19 @@ Sol 必須：
 
 Sol 不得：
 
-- 將整個 Phase 當作模糊任務交給 Spark。
+- 將整個 Phase 當作模糊任務交給外部代理。
 - 只因可編譯就接受程式碼。
-- 允許 Spark 在任務外改變公開架構或驗收門檻。
+- 允許外部代理在任務外改變公開架構或驗收門檻。
 - 只依隨機權重測試宣稱對齊。
 - 覆蓋使用者工作或 force-push。
 
-#### GPT-5.3 Codex Spark — 範圍受控實作者
+#### External Implementer — 範圍受控實作者
 
-Spark 必須：
+External Implementer 可以是 DeepSeek V4 Flash、GPT-5.3 Codex Spark 或主人
+明確指定的其他外部模型。模型供應者不取得額外權限；所有實作者遵循同一份
+task card、allowed-files 與 evidence 契約。
+
+External Implementer 必須：
 
 - 只修改 assignment 指定的檔案與模組。
 - 修改前讀取引用的契約與測試，並隨行為變更新增或更新測試。
@@ -183,7 +187,7 @@ Spark 必須：
 - 回報修改檔案、設計選擇、命令、結果與剩餘風險。
 - 缺少必要模型 fixture 或參考輸出時停止並據實回報。
 
-Spark 不得：
+External Implementer 不得：
 
 - 重設無關架構、將任務標成完成、merge、push 或刪除使用者檔案。
 - 弱化門檻、跳過測試、以 `allow(dead_code)` 隱藏未完成工作或使用 stub 假裝完成。
@@ -196,7 +200,9 @@ DISCOVER → SPECIFY → TEST-FIRST → IMPLEMENT → LOCAL VERIFY
 → INDEPENDENT REVIEW → GATE → DOCUMENT → NEXT TASK
 ```
 
-實作者與獨立審查者不得是同一次 Spark invocation。
+實作者與獨立審查者不得是同一個代理、同一次 invocation 或同一份自我報告。
+外部代理的測試摘要只視為待驗證聲明；Sol 必須讀取實際輸出並親自重跑 Gate
+命令。
 
 ### 7.3 Gate 與 Evidence
 
@@ -219,6 +225,11 @@ DISCOVER → SPECIFY → TEST-FIRST → IMPLEMENT → LOCAL VERIFY
 - `test-results.txt`
 - `gate.json`
 
+其中外部代理只能寫 `worker-report.md`、`commands.txt`、
+`test-results.txt` 與 task card 明確允許的數值 artifact。`review.md`、
+`gate.json`、`STATUS.md`、`TODOS.md`、task index、commit、merge 與 push
+均由 Sol 在獨立驗收後處理。
+
 ### 7.4 Failure Classification
 
 - F1 Compile：型別、建置或連結錯誤。
@@ -235,4 +246,15 @@ DISCOVER → SPECIFY → TEST-FIRST → IMPLEMENT → LOCAL VERIFY
 ### 7.5 驗收狀態
 
 只有 P13 可以將整體狀態設為 `ALIGNED`。較早階段只能使用：
-`NOT_STARTED`、`IN_PROGRESS`、`BLOCKED`、`GATE_FAILED`、`GATE_PASSED`。
+`NOT_STARTED`、`READY`、`IN_PROGRESS`、`BLOCKED`、`GATE_FAILED`、
+`GATE_PASSED`。
+
+狀態轉換權限：
+
+- Sol 建立完整 task card 並確認依賴 Gate 後，才可
+  `NOT_STARTED → READY`。
+- 外部代理實際接受任務後，由 Sol 記錄 `READY → IN_PROGRESS`。
+- 外部代理只能在 worker report 建議 `BLOCKED` 或回報失敗；不得直接改
+  task index。
+- `GATE_FAILED`、`GATE_PASSED` 與任何 Phase Gate 只能由 Sol 在獨立驗收後
+  寫入。

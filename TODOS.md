@@ -37,6 +37,7 @@ Overall status: `IN_PROGRESS`
 - [x] `P03-T04` Eliminate avoidable host transfers in acoustic prediction
   (`GATE_PASSED`; terminal sentinel validation safety exception documented)
 - [ ] `P03-T05` Gate stage cosine and logit ranking thresholds
+  (`READY`: external implementer task card prepared; Sol owns final Gate)
 - [ ] `P03-GATE` Phase gate passed
 
 ## P04 — Tokenizer decoder offline parity
@@ -133,3 +134,10 @@ Overall status: `IN_PROGRESS`
 - [ ] `P13-T04` Generate SBOM, notices, model manifest and reproducible build notes
 - [ ] `P13-T05` Run final audit and produce alignment release report
 - [ ] `P13-GATE` Phase gate passed
+
+## Remaining-task ownership
+
+All unchecked P03-T05 through P13 tasks use an external implementer for bounded
+task-card execution. GPT-5.6 Sol independently reviews the diff and evidence,
+reruns required tests, decides each task/phase Gate, and alone updates status,
+commits, and pushes accepted work.

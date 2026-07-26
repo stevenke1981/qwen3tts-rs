@@ -80,6 +80,54 @@
 上方既有計畫完整保留作為歷史技術脈絡；若順序或範圍衝突，以本 Roadmap、
 `tasks/task-index.yaml` 與 Gate 文件為準。
 
+## External-Agent Execution Model (P03-T05 → P13)
+
+剩餘 Roadmap 採「外部代理實作、GPT-5.6 Sol 驗收」模式。外部代理可以是
+DeepSeek V4 Flash 或主人另行指定的模型；模型名稱不改變任務契約。
+
+| 階段 | External Implementer | GPT-5.6 Sol |
+|---|---|---|
+| Discover | 讀取指定 task card、契約、測試與既有證據 | 用 CBM 與真實 repo 建立 task card、限制範圍 |
+| Implement | 僅修改 allowed files，test-first，執行局部驗證 | 不代替外部報告作出通過判定 |
+| Report | 寫 `worker-report.md`、命令與原始結果 | 檢查實際 diff，不信任摘要或宣稱 |
+| Review | 不可自我驗收或調低門檻 | 親自重跑必要測試、檢查 fixture、數值、錯誤與效能 |
+| Gate | 不可更新 Gate、STATUS、TODOS、commit 或 push | 寫 `review.md`/`gate.json`，更新索引，接受後才 commit/push |
+
+每次只能交付一個 `Pxx-Tyy` task card。Sol 必須先建立：
+
+```text
+artifacts/alignment/<phase>/<task>/assignment.md
+```
+
+外部代理完成後至少交付：
+
+```text
+worker-report.md
+commands.txt
+test-results.txt
+```
+
+外部代理回報「全部測試通過」只視為待驗證聲明。Sol 必須確認沒有編譯失敗、
+ignored/skip、fixture 缺失、`continue-on-error`、門檻弱化、漏報 transfer、
+API 相容性或 backend-specific 安全問題，才可建立：
+
+```text
+review.md
+gate.json
+```
+
+工作循環固定為：
+
+```text
+SOL DISCOVER/SPECIFY → EXTERNAL TEST-FIRST/IMPLEMENT/LOCAL VERIFY
+→ SOL DIFF REVIEW/INDEPENDENT VERIFY → SOL GATE/DOCUMENT/COMMIT/PUSH
+```
+
+各 Phase 的技術任務順序維持不變。P03-T05 至 P13-T05 預設由 External
+Implementer 實作；每個 task Gate、每個 Phase Gate 與最終 `ALIGNED`
+判定皆由 Sol 持有。通用契約與模板位於
+`docs/alignment/agent-workflow/`。
+
 ## P00 — Baseline and parity harness
 
 1. Pin target/reference/upstream revisions and write baseline delta report (`P00-T01`)
@@ -200,4 +248,6 @@
 ## Sequencing Rule
 
 P00→P08 are core correctness/runtime prerequisites. P10–P12 must not mask incomplete core
-parity. P13 is the only final release gate.
+parity. External agents may not skip dependencies or work around a failed Gate.
+P13 is the only final release gate, and only Sol may set the overall status to
+`ALIGNED`.
