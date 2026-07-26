@@ -3,7 +3,7 @@
 use candle_core::{Device, Tensor};
 use qwen3tts::talker::primitives::{embedding_lookup, linear};
 use qwen3tts::talker::{TalkerConfig, TalkerWeightLoader};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
@@ -367,7 +367,7 @@ fn pinned_code_predictor_frame_matches_official_oracle() {
     assert_eq!(actual_codes, expected_codes);
 
     let mut production_cache = vec![None; 5];
-    let (production_codes, production_final_cache) = predictor
+    let (production_codes, _) = predictor
         .generate(
             &talker_hidden,
             &actual_c0_embedding,
@@ -379,8 +379,8 @@ fn pinned_code_predictor_frame_matches_official_oracle() {
         production_codes.to_vec2::<u32>().unwrap()[0],
         expected_codes
     );
-    for entry in production_final_cache {
-        assert_eq!(entry.unwrap().0.dim(2).unwrap(), 16);
+    for entry in &production_cache {
+        assert_eq!(entry.as_ref().unwrap().0.dim(2).unwrap(), 16);
     }
 
     let minimum_cosine = tensor_metrics

@@ -550,7 +550,7 @@ fn code_predictor_greedy_matches_pytorch_fixture() {
     .expect("c0 token");
     let c0_embed = talker.embed_codec(&c0).expect("c0 embed");
     let mut caches = vec![None; talker.config.code_predictor.num_hidden_layers];
-    let (codes, _updated_caches) = talker
+    let (codes, _) = talker
         .code_predictor
         .generate(&talker_hidden, &c0_embed, &mut caches, &device)
         .expect("code predictor greedy generate");

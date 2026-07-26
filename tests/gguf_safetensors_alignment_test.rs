@@ -29,7 +29,7 @@
 use std::path::{Path, PathBuf};
 
 use candle_core::{Device, Tensor};
-use qwen3tts::alignment_stage_dump::StageDumpObserver;
+use qwen3tts::alignment_stage_dump::{StageDumpObserver, TransferObserver};
 use qwen3tts::talker::weight_loader::TalkerWeightLoader;
 use qwen3tts::talker::TalkerConfig;
 use serde::Deserialize;
@@ -85,6 +85,8 @@ impl StageDumpObserver for LogitCapture {
         Ok(())
     }
 }
+
+impl TransferObserver for LogitCapture {}
 
 // ─── 模型搜尋輔助 ──────────────────────────────────────────────────
 
@@ -330,7 +332,9 @@ fn talker_gguf_vs_safetensors_token_match() {
     if cos >= 0.995 {
         println!("✅ 數值對齊通過 (cosine ≥ 0.995)");
     } else {
-        println!("⚠️  cosine {cos:.8} < 0.995 — 這是預期行為，因為目前測試用的 GGUF 是 Q4_K_M (4-bit) 格式。");
+        println!(
+            "⚠️  cosine {cos:.8} < 0.995 — 這是預期行為，因為目前測試用的 GGUF 是 Q4_K_M (4-bit) 格式。"
+        );
         println!("   下載 Q8_0 GGUF 應可達標: https://huggingface.co/Serveurperso/Qwen3-TTS-GGUF");
     }
 

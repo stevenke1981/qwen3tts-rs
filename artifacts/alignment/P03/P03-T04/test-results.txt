@@ -1,0 +1,55 @@
+P03-T04 verification summary
+
+PASS  rustfmt --check on all task-owned Rust files
+PASS  cargo check --no-default-features --features cpu
+PASS  cargo check --no-default-features --features cpu,stage-dump
+PASS  cargo test --lib
+      135 passed, 0 failed, 0 ignored
+PASS  cargo test --test acoustic_host_transfer_test --no-default-features
+      21 passed, 0 failed, 0 ignored
+      Includes CUDA-safe terminal sentinel validation and exact sampled event
+      direction/order.
+PASS  cargo test --test deterministic_token_sequence_test
+      2 passed, 0 failed
+PASS  cargo test --test suppression_eos_test
+      5 passed, 0 failed
+PASS  cargo test --test code_predictor_frame_test --no-default-features
+      8 passed, 0 failed
+PASS  cargo test --test code_predictor_frame_real_test -- --ignored --nocapture
+      1 passed; minimum cosine 0.999999999939; maximum abs 0.000438690186
+      Re-run after fixed-array single-cat assembly.
+PASS  cargo test --test stage_instrumentation_test --features stage-dump
+      1 passed, 0 failed
+PASS  cargo test --lib sampling
+      14 passed, 0 failed
+PASS  cargo test --lib talker
+      41 passed, 0 failed
+PASS  cargo test --test integration_test
+      12 passed, 0 failed
+PASS  cargo check --example synthesize --features candle-llm
+PASS  cargo check --example synthesize_batch --features candle-llm
+PASS  git diff --check on the reviewed working tree
+
+NOT EVIDENCE
+      cargo test --test talker_alignment_test reported 0 passed and 11 ignored.
+      These ignored cases are not counted as successful parity evidence.
+
+NON-TASK BASELINE FAILURE
+      cargo fmt --all -- --check fails on files introduced by three earlier
+      local, unpushed commits. Task-owned files pass direct rustfmt --check.
+      The task did not rewrite unrelated files to manufacture a green result.
+
+NON-TASK BASELINE FAILURE
+      repository-wide clippy with -D warnings reports 87 pre-existing warnings
+      across unrelated modules and existing APIs. The new transfer-observer
+      method's argument-count lint is explicitly scoped because it mirrors the
+      pinned sampler contract. No acoustic test dead-code warning remains.
+
+BOUNDED RUN
+      cargo test --tests was stopped by the 120-second command timeout after
+      the library, acoustic, Code Predictor, deterministic, GGUF, and part of
+      integration execution had passed. The required integration and real
+      oracle commands were run separately to completion above.
+
+KNOWN TOOLCHAIN WARNING
+      MSVC LNK4098 LIBCMT warning remains pre-existing.

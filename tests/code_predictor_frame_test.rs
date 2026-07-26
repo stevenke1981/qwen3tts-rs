@@ -1,9 +1,9 @@
 use candle_core::{DType, Device, Tensor};
-use qwen3tts::StageDumpObserver;
 use qwen3tts::talker::decoder_layer::StandardDecoderLayer;
-use qwen3tts::talker::primitives::{RMSNorm, SwiGLUMLP, embedding_lookup, linear};
+use qwen3tts::talker::primitives::{embedding_lookup, linear, RMSNorm, SwiGLUMLP};
 use qwen3tts::talker::talker_attention::StandardAttention;
 use qwen3tts::talker::{CodePredictor, CodePredictorConfig};
+use qwen3tts::StageDumpObserver;
 
 type CacheEntry = Option<(Tensor, Tensor)>;
 type CacheSnapshot = Vec<CacheEntry>;
@@ -142,12 +142,10 @@ fn private_trace(
         .forward_prefix_for_test(&prefill, &[0, 1], &mut cache)
         .unwrap();
     let last_hidden = hidden.narrow(1, 1, 1).unwrap();
-    let mut logits = vec![
-        linear(&last_hidden, &predictor.lm_heads[0])
-            .unwrap()
-            .squeeze(1)
-            .unwrap(),
-    ];
+    let mut logits = vec![linear(&last_hidden, &predictor.lm_heads[0])
+        .unwrap()
+        .squeeze(1)
+        .unwrap()];
     let mut snapshots = vec![cache.clone()];
     let mut next = logits[0]
         .argmax(1)
@@ -192,11 +190,11 @@ fn frame_prefill_and_fourteen_steps_grow_each_cache_to_sixteen() {
     let a = Tensor::ones((1, 1, 8), DType::F32, &d).unwrap();
     let b = Tensor::zeros((1, 1, 8), DType::F32, &d).unwrap();
     let mut cache = vec![None, None];
-    let (codes, updated) = p.generate(&a, &b, &mut cache, &d).unwrap();
+    let (codes, _) = p.generate(&a, &b, &mut cache, &d).unwrap();
     assert_eq!(codes.dims(), &[1, 15]);
-    assert_eq!(updated.len(), 2);
-    for entry in updated {
-        let (k, v) = entry.unwrap();
+    assert_eq!(cache.len(), 2);
+    for entry in &cache {
+        let (k, v) = entry.as_ref().unwrap();
         assert_eq!(k.dims(), &[1, 1, 16, 4]);
         assert_eq!(v.dims(), &[1, 1, 16, 4]);
     }
@@ -233,10 +231,10 @@ fn distinct_frames_do_not_share_cache_state() {
     let a = Tensor::ones((1, 1, 8), DType::F32, &d).unwrap();
     let b = Tensor::zeros((1, 1, 8), DType::F32, &d).unwrap();
     let mut fresh_a = vec![None, None];
-    let (codes_a, cache_a) = p.generate(&a, &b, &mut fresh_a, &d).unwrap();
+    let (codes_a, _) = p.generate(&a, &b, &mut fresh_a, &d).unwrap();
     let mut fresh_b = vec![None, None];
     let (codes_b, _) = p.generate(&b, &a, &mut fresh_b, &d).unwrap();
-    let mut reused = cache_a;
+    let mut reused = fresh_a;
     assert!(p.generate(&b, &a, &mut reused, &d).is_err());
     let mut logits_a_cache = vec![None, None];
     let logits_a = p
@@ -415,8 +413,8 @@ fn prefill_rejects_cache_reuse_and_fresh_frame_is_deterministic() {
     let a = Tensor::ones((1, 1, 8), DType::F32, &d).unwrap();
     let b = Tensor::zeros((1, 1, 8), DType::F32, &d).unwrap();
     let mut first = vec![None, None];
-    let (codes_a, first_cache) = p.generate(&a, &b, &mut first, &d).unwrap();
-    let mut reused = first_cache;
+    let (codes_a, _) = p.generate(&a, &b, &mut first, &d).unwrap();
+    let mut reused = first;
     assert!(p.generate(&a, &b, &mut reused, &d).is_err());
     let mut fresh = vec![None, None];
     let (codes_b, _) = p.generate(&a, &b, &mut fresh, &d).unwrap();
@@ -443,11 +441,9 @@ fn final_observer_failure_does_not_commit_staged_cache() {
     let codebook_0 = Tensor::zeros((1, 1, 8), DType::F32, &device).unwrap();
     let mut cache = vec![None, None];
     let mut observer = FailOnFinalHidden;
-    assert!(
-        predictor
-            .generate_with_observer(&hidden, &codebook_0, &mut cache, &device, 0, &mut observer,)
-            .is_err()
-    );
+    assert!(predictor
+        .generate_with_observer(&hidden, &codebook_0, &mut cache, &device, 0, &mut observer,)
+        .is_err());
     assert!(cache.iter().all(Option::is_none));
 }
 

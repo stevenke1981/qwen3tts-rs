@@ -1,7 +1,8 @@
 use candle_core::{Device, Result as CandleResult, Tensor};
-use qwen3tts::StageDumpObserver;
+use qwen3tts::alignment_stage_dump::TransferObserver;
 use qwen3tts::talker::sampling::{Sampler, SamplingOptions};
 use qwen3tts::talker::{InputBuilder, TalkerConfig, TalkerWeightLoader};
+use qwen3tts::StageDumpObserver;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
@@ -86,6 +87,8 @@ impl StageDumpObserver for FirstLogitsObserver {
         Ok(())
     }
 }
+
+impl TransferObserver for FirstLogitsObserver {}
 
 #[test]
 #[ignore = "requires pinned local 0.6B snapshot and candle-llm runtime"]

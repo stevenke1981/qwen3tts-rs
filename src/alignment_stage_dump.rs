@@ -20,6 +20,36 @@ use sha2::{Digest, Sha256};
 #[cfg(feature = "stage-dump")]
 use crate::{Error, Result};
 
+/// Transfer event kind for synchronization telemetry.
+///
+/// Reports remaining unavoidable host-device transfers without allocating
+/// or formatting in the production hot path. Default noop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransferEvent {
+    /// Codebook-0 scalar token: 1 element per frame (greedy, allowed).
+    Codebook0Scalar,
+    /// Sub-codebook scalar token: 1 element per step (sampled CP, unavoidable).
+    SubCodebookScalar,
+    /// Full logits vector: `vocab_size` elements per call (sampled, unavoidable).
+    FullLogitVector(usize),
+}
+
+/// Transfer telemetry collector with default noop.
+///
+/// On by default; collecting implementations switch to active capture.
+pub trait TransferObserver {
+    fn wants_transfer_capture(&self) -> bool {
+        false
+    }
+
+    /// Called when a host-device transfer crosses the boundary.
+    ///
+    /// `direction`: 0 = device→host, 1 = host→device
+    /// `event`: the kind of transfer
+    /// `elements`: number of scalar elements transferred
+    fn on_transfer(&mut self, _direction: u8, _event: TransferEvent, _elements: usize) {}
+}
+
 /// Metadata required by a stage-dump manifest.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StageDumpMetadata {
@@ -121,6 +151,41 @@ pub trait StageDumpObserver {
 pub struct NoopStageDumpObserver;
 
 impl StageDumpObserver for NoopStageDumpObserver {}
+
+impl TransferObserver for NoopStageDumpObserver {}
+
+/// Collecting transfer observer for tests and benchmarks.
+///
+/// Records each transfer event into a Vec for assertion and analysis.
+/// Not suitable for production hot path (allocates).
+#[derive(Debug, Default)]
+pub struct TransferCollector {
+    pub events: Vec<(u8, TransferEvent, usize)>,
+}
+
+impl TransferCollector {
+    pub fn new() -> Self {
+        Self { events: Vec::new() }
+    }
+
+    pub fn total_elements(&self) -> usize {
+        self.events.iter().map(|(_, _, elements)| elements).sum()
+    }
+
+    pub fn total_transfers(&self) -> usize {
+        self.events.len()
+    }
+}
+
+impl TransferObserver for TransferCollector {
+    fn wants_transfer_capture(&self) -> bool {
+        true
+    }
+
+    fn on_transfer(&mut self, direction: u8, event: TransferEvent, elements: usize) {
+        self.events.push((direction, event, elements));
+    }
+}
 
 /// Session-owned stage dump writer.
 #[cfg(feature = "stage-dump")]
@@ -441,6 +506,12 @@ impl StageDumpObserver for StageDumpWriter {
             .map_err(|err| CandleError::Msg(format!("failed to write manifest: {err}")))
     }
 }
+
+// Stage dumps and transfer telemetry are intentionally independent. The
+// default implementation keeps transfer reporting allocation-free and
+// formatting-free when only stage capture is enabled.
+#[cfg(feature = "stage-dump")]
+impl TransferObserver for StageDumpWriter {}
 
 #[cfg(all(test, feature = "stage-dump"))]
 mod tests {

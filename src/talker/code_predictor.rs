@@ -7,9 +7,11 @@ use candle_core::{Device, Result, Tensor};
 
 use super::config::CodePredictorConfig;
 use super::decoder_layer::StandardDecoderLayer;
-use super::primitives::{RMSNorm, create_causal_mask, embedding_lookup, linear, linear_with_bias};
+use super::primitives::{create_causal_mask, embedding_lookup, linear, linear_with_bias, RMSNorm};
 use super::sampling::{Sampler, SamplingOptions};
-use crate::alignment_stage_dump::{NoopStageDumpObserver, StageDumpObserver};
+use crate::alignment_stage_dump::{
+    NoopStageDumpObserver, StageDumpObserver, TransferEvent, TransferObserver,
+};
 
 /// 子碼本預測器
 #[derive(Debug, Clone)]
@@ -173,7 +175,28 @@ impl CodePredictor {
         frame_index: usize,
         observer: &mut O,
     ) -> Result<(Tensor, Vec<Option<(Tensor, Tensor)>>)> {
-        let mut generated_ids: Vec<u32> = Vec::with_capacity(self.config.num_code_groups - 1);
+        let codes = self.generate_tensor_with_observer(
+            talker_hidden,
+            codebook_0_embed,
+            kv_caches,
+            device,
+            frame_index,
+            observer,
+        )?;
+        Ok((codes, kv_caches.to_vec()))
+    }
+
+    /// Internal no-copy path used by Talker, where `kv_caches` is already
+    /// mutated in place and must not be cloned merely to return it.
+    pub(crate) fn generate_tensor_with_observer<O: StageDumpObserver>(
+        &self,
+        talker_hidden: &Tensor,
+        codebook_0_embed: &Tensor,
+        kv_caches: &mut [Option<(Tensor, Tensor)>],
+        device: &Device,
+        frame_index: usize,
+        observer: &mut O,
+    ) -> Result<Tensor> {
         let capture = observer.wants_capture();
 
         let logits = self.first_step_logits_with_observer(
@@ -187,16 +210,19 @@ impl CodePredictor {
         if capture {
             observer.on_code_predictor_step_logits(frame_index, 0, &logits)?;
         }
-        let next_token = logits.argmax(1)?;
-        let mut next_val = next_token.reshape(())?.to_scalar::<u32>()?;
-        generated_ids.push(next_val);
+        // Keep all 15 argmax tensors in a fixed stack array and concatenate
+        // once. This avoids both host transfers and the former 14 growing
+        // device allocations/copies.
+        let first_token = logits.argmax(1)?.reshape((1, 1))?;
+        let mut code_tokens: [Tensor; 15] = std::array::from_fn(|_| first_token.clone());
+        code_tokens[0] = first_token;
 
         let step_positions: Vec<u32> = (2..self.config.num_code_groups as u32).collect();
         let (step_cos, step_sin) = self.compute_rope_for_positions(&step_positions, device)?;
         for step in 1..(self.config.num_code_groups - 1) {
             let emb_weight = &self.codec_embeddings[step - 1];
-            let next_input_ids = Tensor::from_slice(&[next_val], (1, 1), device)?;
-            let next_input = embedding_lookup(emb_weight, &next_input_ids)?;
+            // Use the most recent code token directly from the on-device tensor.
+            let next_input = embedding_lookup(emb_weight, &code_tokens[step - 1])?;
             let next_input = self.project_input(&next_input)?;
             if capture {
                 observer.on_stage(
@@ -226,16 +252,15 @@ impl CodePredictor {
             if capture {
                 observer.on_code_predictor_step_logits(frame_index, step, &logits)?;
             }
-            let next_token = logits.argmax(1)?;
-            next_val = next_token.reshape(())?.to_scalar::<u32>()?;
-            generated_ids.push(next_val);
+            code_tokens[step] = logits.argmax(1)?.reshape((1, 1))?;
         }
 
-        let code_tensor = Tensor::from_slice(&generated_ids, (1, generated_ids.len()), device)?;
+        let code_refs: [&Tensor; 15] = std::array::from_fn(|index| &code_tokens[index]);
+        let all_codes = Tensor::cat(&code_refs, 1)?;
         if capture {
-            observer.on_code_predictor_final_codes(frame_index, &code_tensor)?;
+            observer.on_code_predictor_final_codes(frame_index, &all_codes)?;
         }
-        Ok((code_tensor, kv_caches.to_vec()))
+        Ok(all_codes)
     }
 
     pub fn generate_sampled(
@@ -274,7 +299,39 @@ impl CodePredictor {
         frame_index: usize,
         observer: &mut O,
     ) -> Result<(Tensor, Vec<Option<(Tensor, Tensor)>>)> {
-        let mut generated_ids: Vec<u32> = Vec::with_capacity(self.config.num_code_groups - 1);
+        let mut transfer_observer = NoopStageDumpObserver;
+        let codes = self.generate_sampled_tensor_with_observers(
+            talker_hidden,
+            codebook_0_embed,
+            kv_caches,
+            device,
+            sampler,
+            sampling,
+            do_sample,
+            frame_index,
+            observer,
+            &mut transfer_observer,
+        )?;
+        Ok((codes, kv_caches.to_vec()))
+    }
+
+    /// Telemetry-aware no-copy path. Existing public observer APIs remain
+    /// source compatible; Talker uses this method to avoid cloning caches.
+    #[doc(hidden)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn generate_sampled_tensor_with_observers<S: StageDumpObserver, T: TransferObserver>(
+        &self,
+        talker_hidden: &Tensor,
+        codebook_0_embed: &Tensor,
+        kv_caches: &mut [Option<(Tensor, Tensor)>],
+        device: &Device,
+        sampler: &mut Sampler,
+        sampling: SamplingOptions,
+        do_sample: bool,
+        frame_index: usize,
+        observer: &mut S,
+        transfer_observer: &mut T,
+    ) -> Result<Tensor> {
         let capture = observer.wants_capture();
 
         let logits = self.first_step_logits_with_observer(
@@ -296,15 +353,27 @@ impl CodePredictor {
                 ..sampling
             }
         };
-        let mut next_val = sampler.sample(&logits, sampling, None, None, &[])?;
-        generated_ids.push(next_val);
+        // CPU Philox downloads one logit vector and returns one host scalar.
+        let next_val = sampler.sample_with_transfer_observer(
+            &logits,
+            sampling,
+            None,
+            None,
+            &[],
+            transfer_observer,
+        )?;
+        let first_token = Tensor::new(&[next_val], device)?.reshape((1, 1))?;
+        let mut code_tokens: [Tensor; 15] = std::array::from_fn(|_| first_token.clone());
+        code_tokens[0] = first_token;
+        if transfer_observer.wants_transfer_capture() {
+            transfer_observer.on_transfer(1, TransferEvent::SubCodebookScalar, 1);
+        }
 
         let step_positions: Vec<u32> = (2..self.config.num_code_groups as u32).collect();
         let (step_cos, step_sin) = self.compute_rope_for_positions(&step_positions, device)?;
         for step in 1..(self.config.num_code_groups - 1) {
             let emb_weight = &self.codec_embeddings[step - 1];
-            let next_input_ids = Tensor::from_slice(&[next_val], (1, 1), device)?;
-            let next_input = embedding_lookup(emb_weight, &next_input_ids)?;
+            let next_input = embedding_lookup(emb_weight, &code_tokens[step - 1])?;
             let next_input = self.project_input(&next_input)?;
             if capture {
                 observer.on_stage(
@@ -334,15 +403,27 @@ impl CodePredictor {
             if capture {
                 observer.on_code_predictor_step_logits(frame_index, step, &logits)?;
             }
-            next_val = sampler.sample(&logits, sampling, None, None, &[])?;
-            generated_ids.push(next_val);
+            let next_val = sampler.sample_with_transfer_observer(
+                &logits,
+                sampling,
+                None,
+                None,
+                &[],
+                transfer_observer,
+            )?;
+            let next_token_2d = Tensor::new(&[next_val], device)?.reshape((1, 1))?;
+            if transfer_observer.wants_transfer_capture() {
+                transfer_observer.on_transfer(1, TransferEvent::SubCodebookScalar, 1);
+            }
+            code_tokens[step] = next_token_2d;
         }
 
-        let code_tensor = Tensor::from_slice(&generated_ids, (1, generated_ids.len()), device)?;
+        let code_refs: [&Tensor; 15] = std::array::from_fn(|index| &code_tokens[index]);
+        let all_codes = Tensor::cat(&code_refs, 1)?;
         if capture {
-            observer.on_code_predictor_final_codes(frame_index, &code_tensor)?;
+            observer.on_code_predictor_final_codes(frame_index, &all_codes)?;
         }
-        Ok((code_tensor, kv_caches.to_vec()))
+        Ok(all_codes)
     }
 
     fn project_input(&self, input: &Tensor) -> Result<Tensor> {
@@ -616,13 +697,15 @@ mod tests {
         let c0_embed = zeros3(1, 1, 4);
         let mut caches = vec![None];
 
-        let (codes, updated) = predictor
+        let (codes, returned_caches) = predictor
             .generate(&talker_hidden, &c0_embed, &mut caches, &device)
             .unwrap();
 
         assert_eq!(codes.dims(), &[1, 15]);
-        assert_eq!(updated.len(), 1);
-        let (k, v) = updated[0].as_ref().expect("cache should be populated");
+        assert_eq!(returned_caches.len(), caches.len());
+        // KV cache is updated in-place in `caches`:
+        assert_eq!(caches.len(), 1);
+        let (k, v) = caches[0].as_ref().expect("cache should be populated");
         assert_eq!(k.dim(2).unwrap(), 16);
         assert_eq!(v.dim(2).unwrap(), 16);
 

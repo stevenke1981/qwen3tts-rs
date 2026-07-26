@@ -1,0 +1,20 @@
+cargo fmt --all -- --check
+rustfmt --edition 2021 --check src/alignment_stage_dump.rs src/talker/sampling.rs src/talker/code_predictor.rs src/talker/talker.rs tests/acoustic_host_transfer_test.rs tests/code_predictor_frame_real_test.rs tests/code_predictor_frame_test.rs tests/deterministic_token_sequence_real_test.rs tests/gguf_safetensors_alignment_test.rs tests/talker_alignment_test.rs
+cargo check --no-default-features --features cpu
+cargo check --no-default-features --features cpu,stage-dump
+cargo test --lib
+cargo test --test acoustic_host_transfer_test --no-default-features
+cargo test --test deterministic_token_sequence_test
+cargo test --test suppression_eos_test
+cargo test --test code_predictor_frame_test --no-default-features
+cargo test --test code_predictor_frame_real_test -- --ignored --nocapture
+cargo test --test stage_instrumentation_test --features stage-dump
+cargo test --lib sampling
+cargo test --lib talker
+cargo test --test integration_test
+cargo test --test talker_alignment_test
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+cargo clippy --no-default-features --features cpu --lib --test acoustic_host_transfer_test --test code_predictor_frame_test -- -D warnings
+cargo test --tests
+git diff --check

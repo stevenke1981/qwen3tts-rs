@@ -2,7 +2,9 @@
 
 use std::cmp::Ordering;
 
-use candle_core::{Result, Tensor};
+use candle_core::{DType, Result, Tensor};
+
+use crate::alignment_stage_dump::{NoopStageDumpObserver, TransferEvent, TransferObserver};
 
 const DEFAULT_SAMPLER_CAPACITY: usize = 4096;
 const DIAGNOSTIC_CAPACITY: usize = 64;
@@ -55,6 +57,63 @@ pub fn greedy_select(
     }
     best.map(|(idx, _)| idx as u32)
         .ok_or_else(|| candle_core::Error::Msg("suppression left no finite candidate".to_string()))
+}
+
+/// Device-side greedy argmax that avoids downloading the full vocabulary.
+///
+/// Suppressed positions (idx >= `suppress_from`, unless `idx == allow_suppressed_token`)
+/// are set to -inf before argmax. Returns a `[1, 1]` Tensor suitable for direct
+/// embedding lookup — no host scalar transfer. If no finite candidate remains,
+/// the returned scalar equals `vocab_size`; a caller already synchronizing that
+/// scalar must convert the sentinel into an error.
+///
+/// Preserves deterministic lowest-index tie behavior (Candle argmax returns the
+/// first index with the maximum value).
+pub fn greedy_select_on_device(
+    logits: &Tensor,
+    suppress_from: Option<usize>,
+    allow_suppressed_token: Option<usize>,
+) -> Result<Tensor> {
+    let device = logits.device();
+    let (batch, vocab_size) = logits.dims2()?;
+    if batch != 1 {
+        return Err(candle_core::Error::Msg(format!(
+            "greedy selection requires batch=1, got {batch}"
+        )));
+    }
+    if vocab_size == 0 {
+        return Err(candle_core::Error::Msg(
+            "greedy selection requires a non-empty vocabulary".to_string(),
+        ));
+    }
+    let vocab_u32 = u32::try_from(vocab_size).map_err(|_| {
+        candle_core::Error::Msg(format!(
+            "greedy selection vocabulary exceeds u32: {vocab_size}"
+        ))
+    })?;
+    let indices = Tensor::arange(0u32, vocab_u32, device)?.reshape((1, vocab_size))?;
+    let index_allowed = match suppress_from {
+        Some(start) if start < vocab_size => {
+            let mut allowed = indices.lt(start as u32)?;
+            if let Some(token) = allow_suppressed_token.filter(|&token| token < vocab_size) {
+                allowed = (allowed + indices.eq(token as u32)?)?.gt(0u8)?;
+            }
+            allowed
+        }
+        _ => Tensor::ones((1, vocab_size), DType::U8, device)?,
+    };
+    let finite = logits.abs()?.le(f32::MAX)?;
+    let valid = (index_allowed * finite)?;
+    let invalid = Tensor::full(f32::NEG_INFINITY, (1, vocab_size), device)?;
+    let masked = valid.where_cond(logits, &invalid)?;
+
+    // A finite sentinel makes the all-invalid case fail closed without an
+    // additional host synchronization. Callers that already read the selected
+    // scalar treat `vocab_size` as "no finite candidate".
+    let sentinel = Tensor::full(f32::MIN, (1, 1), device)?;
+    Tensor::cat(&[&masked, &sentinel], 1)?
+        .argmax(1)?
+        .reshape((1, 1))
 }
 
 impl Default for SamplerDiagnostics {
@@ -129,14 +188,35 @@ impl Sampler {
         allow_suppressed_token: Option<usize>,
         history: &[u16],
     ) -> Result<u32> {
+        let mut observer = NoopStageDumpObserver;
+        self.sample_with_transfer_observer(
+            logits,
+            options,
+            suppress_from,
+            allow_suppressed_token,
+            history,
+            &mut observer,
+        )
+    }
+
+    pub fn sample_with_transfer_observer<O: TransferObserver>(
+        &mut self,
+        logits: &Tensor,
+        options: SamplingOptions,
+        suppress_from: Option<usize>,
+        allow_suppressed_token: Option<usize>,
+        history: &[u16],
+        observer: &mut O,
+    ) -> Result<u32> {
         let do_sample = options.temperature > 0.0;
-        self.sample_with_mode(
+        self.sample_with_mode_and_transfer_observer(
             logits,
             options,
             do_sample,
             suppress_from,
             allow_suppressed_token,
             history,
+            observer,
         )
     }
 
@@ -148,6 +228,31 @@ impl Sampler {
         suppress_from: Option<usize>,
         allow_suppressed_token: Option<usize>,
         history: &[u16],
+    ) -> Result<u32> {
+        let mut observer = NoopStageDumpObserver;
+        self.sample_with_mode_and_transfer_observer(
+            logits,
+            options,
+            do_sample,
+            suppress_from,
+            allow_suppressed_token,
+            history,
+            &mut observer,
+        )
+    }
+
+    // The arguments mirror the pinned public sampler contract; telemetry adds
+    // one orthogonal observer without bundling or reordering sampling inputs.
+    #[allow(clippy::too_many_arguments)]
+    pub fn sample_with_mode_and_transfer_observer<O: TransferObserver>(
+        &mut self,
+        logits: &Tensor,
+        options: SamplingOptions,
+        do_sample: bool,
+        suppress_from: Option<usize>,
+        allow_suppressed_token: Option<usize>,
+        history: &[u16],
+        observer: &mut O,
     ) -> Result<u32> {
         self.diagnostics.call_count = self.diagnostics.call_count.saturating_add(1);
         if do_sample {
@@ -166,6 +271,13 @@ impl Sampler {
             self.diagnostics.sequence_len += 1;
         }
         let logits = logits.flatten_all()?.to_vec1::<f32>()?;
+        if observer.wants_transfer_capture() {
+            observer.on_transfer(
+                0,
+                TransferEvent::FullLogitVector(logits.len()),
+                logits.len(),
+            );
+        }
         if !options.repetition_penalty.is_finite() || options.repetition_penalty <= 0.0 {
             return Err(candle_core::Error::Msg(
                 "invalid repetition_penalty: expected finite value > 0.0".to_string(),
@@ -669,8 +781,8 @@ fn cmp_logit_desc(a: &(usize, f32), b: &(usize, f32)) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::{
-        Sampler, SamplingOptions, apply_repetition_penalty, apply_temperature_in_place,
-        next_uniform, philox4x32_10, run_reference_sampler, sample_logits,
+        apply_repetition_penalty, apply_temperature_in_place, next_uniform, philox4x32_10,
+        run_reference_sampler, sample_logits, Sampler, SamplingOptions,
     };
     use candle_core::{Device, Tensor};
 
@@ -873,7 +985,11 @@ mod tests {
     }
 
     fn token_for_equal_logit_two_token(r: f64) -> u32 {
-        if r <= 0.5 { 0 } else { 1 }
+        if r <= 0.5 {
+            0
+        } else {
+            1
+        }
     }
 
     #[test]
@@ -919,11 +1035,9 @@ mod tests {
                 top_p: 1.0,
                 repetition_penalty: 1.0,
             };
-            assert!(
-                sampler
-                    .sample_with_mode(&logits, options, true, None, None, &[])
-                    .is_err()
-            );
+            assert!(sampler
+                .sample_with_mode(&logits, options, true, None, None, &[])
+                .is_err());
         }
         for top_p in [0.0, -1.0, 1.1, f64::NAN, f64::INFINITY] {
             let options = SamplingOptions {
@@ -932,11 +1046,9 @@ mod tests {
                 top_p,
                 repetition_penalty: 1.0,
             };
-            assert!(
-                sampler
-                    .sample_with_mode(&logits, options, true, None, None, &[])
-                    .is_err()
-            );
+            assert!(sampler
+                .sample_with_mode(&logits, options, true, None, None, &[])
+                .is_err());
         }
     }
 
