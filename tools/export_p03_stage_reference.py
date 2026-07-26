@@ -16,10 +16,126 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import struct
 import sys
 from pathlib import Path
 from typing import Any, Optional
+
+
+# ── Philox4x32-10 RNG (matches cuRAND / Candle sampling.rs) ───────────────
+PHILOX_M0 = 0xD2511F53
+PHILOX_M1 = 0xCD9E8D57
+PHILOX_W0 = 0x9E3779B9
+PHILOX_W1 = 0xBB67AE85
+CURAND_2POW32_INV = 2.3283064365386963e-10
+
+
+def _mulhilo32(a: int, b: int) -> tuple[int, int]:
+    prod = (a & 0xFFFFFFFF) * (b & 0xFFFFFFFF)
+    return (prod >> 32) & 0xFFFFFFFF, prod & 0xFFFFFFFF
+
+
+def _philox_round(state: list[int], k0: int, k1: int) -> list[int]:
+    hi0, lo0 = _mulhilo32(PHILOX_M0, state[0])
+    hi1, lo1 = _mulhilo32(PHILOX_M1, state[2])
+    return [
+        (hi1 ^ state[1] ^ k0) & 0xFFFFFFFF,
+        lo1,
+        (hi0 ^ state[3] ^ k1) & 0xFFFFFFFF,
+        lo0,
+    ]
+
+
+def philox4x32_10(ctr: list[int], seed_lo: int, seed_hi: int) -> list[int]:
+    k0 = seed_lo & 0xFFFFFFFF
+    k1 = seed_hi & 0xFFFFFFFF
+    state = _philox_round(ctr, k0, k1)
+    for _ in range(9):
+        k0 = (k0 + PHILOX_W0) & 0xFFFFFFFF
+        k1 = (k1 + PHILOX_W1) & 0xFFFFFFFF
+        state = _philox_round(state, k0, k1)
+    return state
+
+
+def philox_uniform(seed: int, subsequence: int, ctr_lo: int = 0) -> float:
+    seed_lo = seed & 0xFFFFFFFF
+    seed_hi = (seed >> 32) & 0xFFFFFFFF
+    ctr = [
+        ctr_lo & 0xFFFFFFFF,
+        0,
+        subsequence & 0xFFFFFFFF,
+        (subsequence >> 32) & 0xFFFFFFFF,
+    ]
+    words = philox4x32_10(ctr, seed_lo, seed_hi)
+    u = ((words[0] & 0xFFFFFFFF) + 0.5) * CURAND_2POW32_INV
+    return float(u)
+
+
+class PhiloxSampler:
+    """Philox-seeded sampler matching Candle's sampling.rs chain (f32 precision)."""
+
+    def __init__(self, seed: int):
+        self.seed = seed
+        self.subseq = 0
+
+    @staticmethod
+    def _f32(v: float) -> float:
+        """Truncate to f32 precision (matching Candle's f32 arithmetic)."""
+        return struct.unpack("f", struct.pack("f", v))[0]
+
+    def sample(self, logits: list[float], temperature: float, top_k: int,
+               top_p: float) -> int:
+        """Apply temperature → top-k → softmax → top-p → Philox multinomial.
+        All arithmetic in f32 to match Candle's sampling.rs."""
+        f32 = self._f32
+
+        if temperature <= 0:
+            return max(range(len(logits)), key=lambda i: logits[i])
+
+        # Build candidates (finite, sorted descending by logit)
+        candidates = [(i, f32(v)) for i, v in enumerate(logits) if math.isfinite(v)]
+        candidates.sort(key=lambda iv: -iv[1])
+
+        if not candidates:
+            return 0
+
+        # Temperature (f32)
+        inv_temp = f32(1.0 / f32(temperature))
+        candidates = [(i, f32(v * inv_temp)) for i, v in candidates]
+
+        # Top-k (truncate)
+        if top_k > 0 and top_k < len(candidates):
+            candidates = candidates[:top_k]
+
+        # Softmax (f32)
+        max_logit = candidates[0][1]
+        exp_vals = [(i, f32(math.exp(f32(v - max_logit)))) for i, v in candidates]
+        total = f32(sum(e for _, e in exp_vals))
+        probs = [(i, f32(e / total)) for i, e in exp_vals]
+
+        # Top-p / nucleus (f32)
+        if top_p < 1.0:
+            cumsum = f32(0.0)
+            cutoff = len(probs)
+            for idx, (i, p) in enumerate(probs):
+                cumsum = f32(cumsum + p)
+                if cumsum >= f32(top_p):
+                    cutoff = idx + 1
+                    break
+            probs = probs[:cutoff]
+            total = f32(sum(p for _, p in probs))
+            probs = [(i, f32(p / total)) for i, p in probs]
+
+        # Philox multinomial
+        u = f32(philox_uniform(self.seed, self.subseq))
+        self.subseq += 1
+        cumsum = f32(0.0)
+        for i, p in probs:
+            cumsum = f32(cumsum + p)
+            if u < cumsum:
+                return i
+        return probs[-1][0] if probs else 0
 
 
 def parse_args() -> argparse.Namespace:
@@ -451,8 +567,10 @@ def main() -> int:
             logits, "C",
         )
 
-        # Greedy sample first token
-        first_token = logits.argmax(dim=-1).reshape(1, 1)
+        # Philox-seeded sampling (matching Candle's subtalker sampling)
+        logits_list = logits[0].tolist()
+        first_token_id = cp_sampler.sample(logits_list, cp_temp, cp_top_k, cp_top_p)
+        first_token = torch.tensor([[first_token_id]], dtype=torch.long, device=device)
         code_tokens = [first_token]
 
         # Steps 1-14
@@ -520,7 +638,9 @@ def main() -> int:
                 f"code_predictor_step_logits_{frame_index:04}_{step:04}",
                 logits, "C",
             )
-            code_tokens.append(logits.argmax(dim=-1).reshape(1, 1))
+            logits_list = logits[0].tolist()
+            token_id = cp_sampler.sample(logits_list, cp_temp, cp_top_k, cp_top_p)
+            code_tokens.append(torch.tensor([[token_id]], dtype=torch.long, device=device))
 
         all_codes = torch.cat(code_tokens, dim=1)
         writer.record(
@@ -531,6 +651,13 @@ def main() -> int:
         return all_codes
 
     # ── Custom generation loop ─────────────────────────────────────────────
+    # Philox sampler for Code Predictor (subtalker)
+    # Fixture: subtalker do_sample=true, temperature=0.9, top_k=50, top_p=1.0
+    cp_sampler = PhiloxSampler(seed)
+    cp_temp = fixture["subtalker"]["temperature"]
+    cp_top_k = fixture["subtalker"]["top_k"]
+    cp_top_p = fixture["subtalker"]["top_p"]
+
     try:
         with torch.no_grad():
             # Compute position IDs for prefill
