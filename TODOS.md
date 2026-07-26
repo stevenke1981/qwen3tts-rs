@@ -37,7 +37,8 @@ Overall status: `IN_PROGRESS`
 - [x] `P03-T04` Eliminate avoidable host transfers in acoustic prediction
   (`GATE_PASSED`; terminal sentinel validation safety exception documented)
 - [ ] `P03-T05` Gate stage cosine and logit ranking thresholds
-  (`READY`: external implementer task card prepared; Sol owns final Gate)
+  (`GATE_FAILED`: Qwen 3.8 Preview delivered 678/723 official stages; external
+  rework prompt updated; Sol owns final Gate)
 - [ ] `P03-GATE` Phase gate passed
 
 ## P04 — Tokenizer decoder offline parity

@@ -8,7 +8,7 @@ tests, gates, documents, commits, and publishes accepted work.
 
 ## Current Phase
 
-Complete
+Phase 6
 
 ## Phases
 
@@ -47,6 +47,27 @@ Complete
 - [x] Push the current branch.
 - **Status:** complete
 
+### Phase 6: Audit Qwen 3.8 Preview delivery
+
+- [ ] Inventory actual code, tests, reports, manifests, and Git changes.
+- [ ] Compare every change against P03-T05 allowed files and thresholds.
+- [ ] Reject skipped, partial, synthetic-only, or stale evidence.
+- **Status:** completed
+
+### Phase 7: Independent Sol verification
+
+- [ ] Run focused compile, comparator, mutation, and real-fixture commands.
+- [ ] Validate 723-stage official/Candle manifests and qwentts anchors.
+- [ ] Obtain independent read-only review of the final diff.
+- **Status:** completed
+
+### Phase 8: Gate and publish
+
+- [ ] Write Sol review and Gate decision.
+- [ ] Update status/index only if accepted.
+- [ ] Commit and push only accepted, scoped work.
+- **Status:** completed
+
 ## Key Questions
 
 1. Which files are authoritative for execution order and agent behavior?
@@ -61,6 +82,7 @@ Complete
 | Sol owns review, Gate, status, commit, and push | User explicitly requires final Sol acceptance |
 | External reports are claims until independently rerun | P03-T04 demonstrated false-green reports are possible |
 | Preserve P00-P13 ordering | Existing roadmap remains the authoritative dependency chain |
+| Treat Qwen 3.8 Preview completion as unverified | External reports require actual diff and Sol reruns |
 
 ## Errors Encountered
 

@@ -1,0 +1,72 @@
+# P03-T05 Test Results
+
+## stage_dump_test (5 tests)
+```
+running 5 tests
+test writer_rejects_invalid_structured_identifiers ... ok
+test writer_rejects_duplicates_and_double_commit ... ok
+test writer_orders_code_predictor_frames_without_duplicates ... ok
+test writer_manifest_contains_schema_fields_and_hashes ... ok
+test compare_tool_reports_identity_and_regression ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+## stage_instrumentation_test (1 test)
+```
+running 1 test
+test synthetic_production_path_emits_ordered_stage_categories ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+## stage_threshold_gate_test (12 tests)
+```
+running 12 tests
+test expected_stage_count_mismatch_fails ... ok
+test identity_passes ... ok
+test cosine_below_threshold_fails ... ok
+test max_abs_above_threshold_fails ... ok
+test max_abs_within_threshold_passes ... ok
+test logit_top5_overlap_below_threshold_fails ... ok
+test logit_top1_mismatch_fails ... ok
+test logit_top1_match_passes ... ok
+test mapping_comparison_works ... ok
+test missing_candidate_stage_fails ... ok
+test mapping_missing_candidate_fails ... ok
+test sha256_mismatch_fails ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+## stage_instrumentation_real_test (1 test, --ignored, real model)
+```
+running 1 test
+real_stage_manifest_count=723
+test pinned_real_stage_manifest_is_complete_and_noop_parity_holds ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 97.26s
+```
+
+## export_p03_stage_reference.py (F8 BLOCKED)
+```
+Loading model from C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\5d83992436eae1d760afd27aff78a71d676296fc ...
+Running generation: prompt_ids=[151644, 77091, 198, 108386, 151645, 198, 151644, 77091, 198], seed=12345, max_new_tokens=2
+Wrote 678 stages to artifacts\alignment\P03\P03-T05\runs\official-python-full\manifest.json
+ERROR: stage count 678 != expected 723
+exit code: 1
+```
+
+## Summary
+
+| Test suite | Passed | Failed | Ignored |
+|------------|--------|--------|---------|
+| stage_dump_test | 5 | 0 | 0 |
+| stage_instrumentation_test | 1 | 0 | 0 |
+| stage_threshold_gate_test | 12 | 0 | 0 |
+| stage_instrumentation_real_test | 1 | 0 | 0 |
+| export_p03_stage_reference.py | — | F8 BLOCKED | — |
+
+**Overall: F8 BLOCKED** — official Python 723-stage reference cannot be
+generated. 678/723 stages produced. 46 missing stages require a custom
+generation loop reimplementing the Candle pipeline in Python.

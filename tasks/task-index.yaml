@@ -144,7 +144,7 @@ phases:
           - P03-T03
       - id: P03-T05
         title: "Gate stage cosine and logit ranking thresholds"
-        status: READY
+        status: GATE_FAILED
         evidence_dir: artifacts/alignment/P03/P03-T05
         depends_on:
           - P03-T04

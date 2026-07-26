@@ -2,13 +2,30 @@
 
 - Overall: `IN_PROGRESS`
 - Current phase: `P03`
-- Current task: `P03-T05` (`READY` for an external implementer; Sol owns Gate)
+- Current task: `P03-T05` (`GATE_FAILED`; external rework required)
 - Target baseline commit: `b08178964504d5a214565ffc4ff5ed592eb8f7ec`
 - qwentts.cpp reference commit: `82cd05b9f3a175612dc89fd6943e610fab096ef5`
 - Official Qwen3-TTS commit: `022e286b98fbec7e1e916cb940cdf532cd9f488e`
 - Working branch: `alignment/full-qwentts-parity`
 - Last task gate: `P03-T04 GATE_PASSED`
 - Last full phase gate: `P02 GATE_PASSED`
+
+## P03-T05 Gate Result
+
+- Qwen 3.8 Preview's first submission was independently rejected as
+  `F8 BLOCKED`; its official export contained 678/723 stages.
+- Sol reproduced the complete 723-stage Candle run, but the full comparator
+  fails before metrics because the official reference is incomplete.
+- The qwentts.cpp comparison also fails: only 10/16 anchors are mapped, prefill
+  shapes use incompatible 21-token and 11-token cases, and numerical thresholds
+  are not met.
+- Comparator provenance and mapping completeness are fail-open, and the exporter
+  records a different seed from the one it actually uses.
+- Review and Gate:
+  `artifacts/alignment/P03/P03-T05/review.md`,
+  `artifacts/alignment/P03/P03-T05/gate.json`.
+- Corrective external-agent instructions:
+  `artifacts/alignment/P03/P03-T05/external-agent-prompt.md`.
 
 ## P03-T04 Gate Result
 

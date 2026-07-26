@@ -1,0 +1,55 @@
+# P03-T05 Commands Executed
+
+## Environment
+```
+set "PATH=C:\Users\steven\.cargo\bin;%PATH%"
+set "QWEN3_TTS_REAL_MODEL_DIR=C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\5d83992436eae1d760afd27aff78a71d676296fc"
+set "QWEN3_TTS_OFFICIAL_SOURCE=C:\Users\steven\Qwen3-TTS"
+set "QWEN3_TTS_OFFICIAL_PYTHON=C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe"
+set "P03_STAGE_REFERENCE_DIR=artifacts\alignment\P03\P03-T05\runs\official-python-full"
+set "P03_STAGE_DUMP_DIR=artifacts\alignment\P03\P03-T05\runs\candle-full"
+```
+
+## Commands and Exit Codes
+
+```
+cargo check --no-default-features --features cpu,stage-dump
+# exit 0
+
+cargo test --test stage_dump_test --features stage-dump
+# exit 0 — 5 passed, 0 failed, 0 ignored
+
+cargo test --test stage_instrumentation_test --features stage-dump
+# exit 0 — 1 passed, 0 failed, 0 ignored
+
+cargo test --test stage_threshold_gate_test --features stage-dump -- --nocapture
+# exit 0 — 12 passed, 0 failed, 0 ignored
+
+rustfmt --edition 2021 --check tests/stage_dump_test.rs tests/stage_instrumentation_real_test.rs tests/stage_threshold_gate_test.rs
+# exit 1 — pre-existing formatting diffs in stage_dump_test.rs and stage_instrumentation_real_test.rs (not introduced by P03-T05)
+
+set "P03_STAGE_DUMP_DIR=artifacts\alignment\P03\P03-T05\runs\candle-full"
+cargo test --test stage_instrumentation_real_test --features stage-dump -- --ignored --nocapture
+# exit 0 — 1 passed, 0 failed, 0 ignored (97.26s, real_stage_manifest_count=723)
+
+"C:\Users\steven\Qwen3-TTS\.venv\Scripts\python.exe" tools/export_p03_stage_reference.py --official-source "C:\Users\steven\Qwen3-TTS" --official-revision 022e286b98fbec7e1e916cb940cdf532cd9f488e --model "C:\Users\steven\.cache\huggingface\hub\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\5d83992436eae1d760afd27aff78a71d676296fc" --model-revision 5d83992436eae1d760afd27aff78a71d676296fc --case-id p03-t01-real --seed 42 --output-dir "artifacts\alignment\P03\P03-T05\runs\official-python-full" --expected-stages 723
+# exit 1 — F8 BLOCKED: produced 678 stages, expected 723
+
+git diff --check -- tools/compare_stage_dumps.py tools/export_p03_stage_reference.py tests/stage_dump_test.rs tests/stage_instrumentation_real_test.rs tests/stage_threshold_gate_test.rs docs/alignment/p03-stage-threshold-gate.md artifacts/alignment/P03/P03-T05
+# exit 0 — no whitespace errors
+```
+
+## Commands NOT Run (blocked by F8)
+
+```
+# Cannot run: official reference does not exist at 723 stages
+python tools/compare_stage_dumps.py "$P03_STAGE_REFERENCE_DIR\manifest.json" "$P03_STAGE_DUMP_DIR\manifest.json" --min-cosine 0.999 --max-abs 0.001 --logit-top1-exact --min-logit-top5-overlap 0.8 --expected-stages 723 --report artifacts/alignment/P03/P03-T05/stage-metrics.json
+
+# Cannot run: depends on full official reference
+python tools/compare_stage_dumps.py artifacts/alignment/P00/P00-T05/runs/qwentts-zh-short/tensors/manifest.json "$P03_STAGE_DUMP_DIR\manifest.json" --mapping artifacts/alignment/P03/P03-T05/qwentts-stage-map.json --min-cosine 0.999 --max-abs 0.001 --logit-top1-exact --min-logit-top5-overlap 0.8 --require-all-reference-stages --report artifacts/alignment/P03/P03-T05/qwentts-anchor-metrics.json
+
+# Not run: aggregate test exceeds execution window
+cargo test --test talker_kv_cache_real_test -- --ignored --nocapture
+cargo test --test code_predictor_frame_real_test -- --ignored --nocapture
+cargo test --test deterministic_token_sequence_real_test -- --ignored --nocapture
+```

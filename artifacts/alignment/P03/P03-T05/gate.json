@@ -1,0 +1,44 @@
+{
+  "task": "P03-T05",
+  "status": "GATE_FAILED",
+  "failure_classification": [
+    "F8 Fixture",
+    "F2 Contract",
+    "F3 Numerical"
+  ],
+  "implementation_complete": false,
+  "independent_review": "REJECT",
+  "official_reference_stage_count": 678,
+  "candle_candidate_stage_count": 723,
+  "local_manifest_sha256": {
+    "official_reference": "8457a178054dcce343ac82162cc54091c998b471b830e6713130d2b9b5adbdbdd",
+    "candle_candidate": "5523ed65312928dfd753736743785f31357fe8b617e5e069a9a6d303b0ba37be"
+  },
+  "full_comparator": {
+    "status": "FAIL",
+    "reason": "reference stage count 678 != expected 723"
+  },
+  "qwentts_anchor_comparator": {
+    "status": "FAIL",
+    "reference_stage_count": 16,
+    "compared_stage_count": 10,
+    "minimum_observed_cosine": 0.8075071066722078,
+    "has_shape_mismatches": true
+  },
+  "focused_tests": {
+    "cargo_check": "PASS",
+    "stage_dump_test": "5 passed",
+    "stage_instrumentation_test": "1 passed",
+    "stage_threshold_gate_test": "12 passed",
+    "real_candle_stage_test": "1 passed; 723 stages; 101.99 s"
+  },
+  "blocking_defects": [
+    "official Python reference is incomplete",
+    "mapping mode bypasses require-all-reference-stages",
+    "six qwentts.cpp anchors are unmapped",
+    "pinned provenance is not validated",
+    "recorded seed differs from runtime seed",
+    "mapped layout transformations are not validated",
+    "real qwentts.cpp anchor metrics fail"
+  ]
+}

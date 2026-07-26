@@ -86,3 +86,33 @@
 | What's the goal? | External implementation with final Sol acceptance |
 | What have I learned? | See `findings.md` |
 | What have I done? | See above |
+
+## Session: 2026-07-27 — Qwen 3.8 Preview handoff
+
+### Phase 6: Audit external delivery
+
+- **Status:** in_progress
+- Actions taken:
+  - Received the user's report that Qwen 3.8 Preview completed P03-T05.
+  - Re-indexed the repository with CBM.
+  - Restored the file-based plan and started Sol-owned verification.
+  - Read the external worker report, commands, and test results.
+  - Confirmed the worker's actual result is `F8 BLOCKED`, not Gate completion:
+    the official reference export stopped at 678/723 stages and neither required
+    full-reference comparator command ran.
+  - Confirmed the changed audit files are indexed by CBM and preserved unrelated
+    worktree/generated-database changes outside the acceptance scope.
+  - Compared the two manifests directly: 46 Candle-only stage names, one
+    official-only stage name, and mismatched recorded/runtime seeds.
+  - Independently reran all 12 comparator mutation tests; they passed.
+  - Independently ran the qwentts.cpp anchor comparator. It failed numerically
+    and structurally after comparing only 10/16 anchors, proving both the Gate
+    failure and the mapping completeness defect.
+  - Independently reproduced the Candle real-model output: 723 stages, 1 test
+    passed in 101.99 seconds.
+  - Independent Luna review returned `REJECT / F8 BLOCKED` and identified
+    provenance, mapping completeness, mapped-layout, rank-margin, and unsafe
+    output-directory cleanup defects.
+  - Wrote Sol-owned `review.md` and `gate.json`, marked P03-T05 `GATE_FAILED`,
+    corrected the pinned fixture seed to 12345, and added a bounded rework
+    addendum for the next external-agent invocation.

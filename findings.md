@@ -6,6 +6,8 @@
 - Rewrite the remaining plan for implementation by external agents.
 - Keep GPT-5.6 Sol as the independent reviewer and final Gate owner.
 - Commit and push the rewritten workflow after validation.
+- Independently audit Qwen 3.8 Preview's claimed P03-T05 completion and accept
+  only if the actual diff and pinned real evidence satisfy the task card.
 
 ## Research Findings
 
@@ -65,6 +67,12 @@
 |-------|------------|
 | Worktree contains unrelated user changes and generated databases | Preserve them and stage only workflow-owned files |
 | Previously pushed history contains generated artifacts | User explicitly authorized the push after being informed |
+| Qwen 3.8 Preview was described as complete, but its own P03-T05 evidence says `F8 BLOCKED` | Reject Gate completion: official Python export produced 678/723 stages and the required full comparator was not run |
+| Worker report says 46 stages are missing although 723 - 678 = 45 | Treat the report count as unverified until the manifests and required-stage set are compared directly |
+| Manifest set comparison found 46 candidate-only names and one reference-only name (`talker-logits-step0`) | The arithmetic discrepancy is explained, but the reference and candidate schemas are not paired exactly |
+| Official manifest records seed 42 while the export log ran fixture seed 12345; Candle manifest uses seed 12345 | Provenance is internally inconsistent and cannot satisfy the pinned seed Gate |
+| Mapping mode bypasses `--require-all-reference-stages`; the map explicitly excludes 6/16 qwentts.cpp anchors | Comparator is not fail-closed for the required anchor Gate |
+| Sol reran the qwentts.cpp comparison: only 10/16 anchors were compared and the result failed | Cosines included 0.8416, 0.8075, and 0.9645; multiple prefill tensors also had 21-token versus 11-token element-count mismatches |
 
 ## Resources
 

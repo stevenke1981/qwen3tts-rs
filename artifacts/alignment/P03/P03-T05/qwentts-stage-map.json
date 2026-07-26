@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "description": "Maps qwentts.cpp P00-T05 anchor stage names to Candle P03-T01 stage names. Only stages with a verified structural equivalent in the Candle 723-stage manifest are mapped. Unmapped stages have no Candle structural equivalent and are excluded from the anchor Gate.",
+  "qwentts_cpp_revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+  "candle_source": "qwen3tts-rs",
+  "candle_case_id": "p03-t01-real",
+  "mappings": {
+    "next-emb-step0_0002": "next-emb-step0",
+    "talker-hidden-prefill-final_0005": "talker-hidden-prefill-final",
+    "talker-hidden-prefill-l0_0006": "talker-hidden-prefill-l0",
+    "talker-hidden-prefill-l14_0007": "talker-hidden-prefill-l14",
+    "talker-hidden-prefill-l21_0008": "talker-hidden-prefill-l21",
+    "talker-hidden-prefill-l27_0009": "talker-hidden-prefill-l27",
+    "talker-hidden-prefill-l7_0010": "talker-hidden-prefill-l7",
+    "talker-hidden-step1_0011": "talker-hidden-step1",
+    "talker-input-embed_0012": "talker-input-embed",
+    "talker-logits-prefill_0013": "talker-logits-prefill"
+  },
+  "logit_stages": [
+    "talker-logits-prefill_0013"
+  ],
+  "unmapped": {
+    "codes-full_0000": "Final code matrix; Candle emits talker_final_code_matrix via legacy hook (C layout), not a structured stage in the 723-stage manifest",
+    "codes-step0_0001": "First-frame code vector; no structured Candle equivalent in the 723-stage manifest",
+    "output-audio_0003": "Final PCM after vocoder; Candle emits codec_final_pcm via legacy hook, not a structured stage in the 723-stage manifest",
+    "prompt-ids_0004": "Input prompt token IDs; not captured as a numerical stage in Candle",
+    "trailing-text-hidden_0014": "Trailing text hidden state; not captured as a standalone stage in Candle",
+    "tts-pad-embed_0015": "TTS pad embedding; not captured as a standalone stage in Candle"
+  }
+}
