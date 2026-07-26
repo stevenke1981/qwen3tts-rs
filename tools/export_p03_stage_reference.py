@@ -185,6 +185,84 @@ def main() -> int:
 
     torch.manual_seed(seed)
 
+    # ── Replicate Candle InputBuilder exactly ──────────────────────────────
+    # Special token IDs from TalkerConfig
+    TTS_BOS = 151672
+    TTS_EOS = 151673
+    TTS_PAD = 151671
+    CODEC_PAD = 2148
+    CODEC_BOS = 2149
+    CODEC_THINK = 2154
+    CODEC_THINK_BOS = 2156
+    CODEC_THINK_EOS = 2157
+    CHINESE_LANG_ID = 2055
+
+    prompt_ids = fixture["prompt_ids"][0]
+    text_seq_len = len(prompt_ids)
+    text_len = text_seq_len - 3 - 5  # role(3) + tail(5)
+
+    input_ids_t = torch.tensor([prompt_ids], dtype=torch.long)
+
+    # Special token embeddings from text_embedding + text_projection
+    # (Candle's embed_text applies text_projection: fc1+GELU+fc2, 2048→1024)
+    def embed_text(ids):
+        return talker.text_projection(talker_model.text_embedding(ids))
+
+    special_ids = torch.tensor([[TTS_BOS, TTS_EOS, TTS_PAD]], dtype=torch.long)
+    special_embeds = embed_text(special_ids)  # [1, 3, 1024]
+    tts_bos_embed = special_embeds[:, 0:1, :]  # [1, 1, 1024]
+    tts_eos_embed = special_embeds[:, 1:2, :]
+    tts_pad_embed = special_embeds[:, 2:3, :]
+
+    # Codec conditioning: think + think_bos + language_id + think_eos + pad + bos
+    codec_prefill = [CODEC_THINK, CODEC_THINK_BOS, CHINESE_LANG_ID, CODEC_THINK_EOS]
+    codec_pad_bos = [CODEC_PAD, CODEC_BOS]
+    codec_all = codec_prefill + codec_pad_bos
+    codec_all_t = torch.tensor([codec_all], dtype=torch.long)
+    codec_emb = talker.get_input_embeddings()(codec_all_t)  # [1, 6, 1024]
+    codec_len = codec_emb.shape[1]  # 6
+
+    # Role embedding: first 3 tokens
+    role_tokens = input_ids_t[:, 0:3]
+    role_emb = embed_text(role_tokens)  # [1, 3, 1024]
+
+    # Codec input: tts_pad * (codec_len-2) + tts_bos, then add codec_emb[:-1]
+    pads = tts_pad_embed.expand(1, codec_len - 2, -1)  # [1, 4, 1024]
+    with_bos = torch.cat([pads, tts_bos_embed], dim=1)  # [1, 5, 1024]
+    codec_prefix = codec_emb[:, :codec_len - 1, :]  # [1, 5, 1024]
+    codec_input = with_bos + codec_prefix  # [1, 5, 1024]
+
+    # Full input: role + codec_input
+    input_embeds = torch.cat([role_emb, codec_input], dim=1)  # [1, 8, 1024]
+
+    # Text body: tokens 3..3+text_len
+    text_body_ids = input_ids_t[:, 3:3 + text_len]
+    text_body = embed_text(text_body_ids)  # [1, text_len, 1024]
+
+    # text_with_codec_pad = text_body + codec_emb[-2]
+    codec_pad_vec = codec_emb[:, codec_len - 2:codec_len - 1, :]  # [1, 1, 1024]
+    text_with_codec_pad = text_body + codec_pad_vec  # [1, text_len, 1024]
+
+    # eos_with_codec_pad = tts_eos + codec_emb[-2]
+    eos_with_codec_pad = tts_eos_embed + codec_pad_vec  # [1, 1, 1024]
+
+    # final_pad_bos = tts_pad + codec_emb[-1]
+    codec_bos_vec = codec_emb[:, codec_len - 1:codec_len, :]  # [1, 1, 1024]
+    final_pad_bos = tts_pad_embed + codec_bos_vec  # [1, 1, 1024]
+
+    # Concatenate all
+    input_embeds = torch.cat(
+        [input_embeds, text_with_codec_pad, eos_with_codec_pad, final_pad_bos],
+        dim=1,
+    )  # [1, 11, 1024]
+
+    # trailing_text_hidden = tts_pad_embed
+    trailing_text_hidden = tts_pad_embed.clone()  # [1, 1, 1024]
+
+    attention_mask = torch.ones(1, input_embeds.shape[1], dtype=torch.long)
+
+    print(f"Input embeds shape: {input_embeds.shape} (expected [1, 11, 1024])")
+
     # ── Helper: run Talker model forward and capture all layer stages ──────
     def run_talker_forward(inputs_embeds, attention_mask, position_ids,
                            past_key_values, phase, use_cache=True):
@@ -455,15 +533,6 @@ def main() -> int:
     # ── Custom generation loop ─────────────────────────────────────────────
     try:
         with torch.no_grad():
-            # Build input embeddings
-            input_ids = torch.tensor([prompt_ids], dtype=torch.long)
-            text_emb = talker_model.text_embedding(input_ids)
-            text_proj = talker.text_projection(text_emb)
-
-            attention_mask = torch.ones(1, len(prompt_ids), dtype=torch.long)
-            trailing_text_hidden = text_proj
-            tts_pad_embed = torch.zeros(1, 1, talker.config.hidden_size)
-
             # Compute position IDs for prefill
             position_ids = attention_mask.float().cumsum(-1) - 1
             position_ids.masked_fill_(attention_mask == 0, 1)
@@ -471,7 +540,7 @@ def main() -> int:
 
             # ── Prefill ──
             hidden, kv_cache = run_talker_forward(
-                text_proj, attention_mask, position_ids, None, "prefill"
+                input_embeds, attention_mask, position_ids, None, "prefill"
             )
 
             last_hidden = hidden[:, -1:, :]
@@ -504,7 +573,7 @@ def main() -> int:
                 ci_emb = code_predictor.get_input_embeddings()[i](ci_token)
                 sum_emb = sum_emb + ci_emb
 
-            text_add = trailing_text_hidden[:, 0:1, :] if trailing_text_hidden.shape[1] > 0 else tts_pad_embed
+            text_add = trailing_text_hidden[:, 0:1, :]
             next_input = sum_emb + text_add
             writer.record("next-emb-step0", next_input, "BTH")
 
