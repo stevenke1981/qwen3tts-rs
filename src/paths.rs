@@ -187,6 +187,7 @@ fn find_converter_program_from(cwd: &Path, exe_path: Option<&Path>) -> Option<Co
     None
 }
 
+#[allow(dead_code)]
 fn find_quantizer_program_from(cwd: &Path, exe_path: Option<&Path>) -> Option<PathBuf> {
     resolve_quantizer_exe_from(cwd, exe_path)
         .into_iter()
@@ -250,59 +251,14 @@ fn run_tokenizer_converter(converter: &ConverterProgram, output: &Path) -> Resul
 }
 
 fn try_build_q8_tokenizer_cache(
-    cwd: &Path,
-    exe_path: Option<&Path>,
-    f32_output: &Path,
+    _cwd: &Path,
+    _exe_path: Option<&Path>,
+    _f32_output: &Path,
 ) -> Option<PathBuf> {
-    let q8_output = q8_dir_for_f32_dir(f32_output);
-    if is_complete_tokenizer_weight_dir(&q8_output) {
-        return Some(q8_output);
-    }
-
-    let Some(quantizer) = find_quantizer_program_from(cwd, exe_path) else {
-        eprintln!(
-            "Q8 tokenizer auto-cache skipped: quantize_tokenizer.exe was not found next to the app."
-        );
-        return None;
-    };
-
-    eprintln!(
-        "Building Q8 tokenizer decoder cache with {}",
-        quantizer.display()
+    log::warn!(
+        "codec/vocoder 量化已停用（違反 AGENTS.md §3.2，聲碼器永不整數量化）；強制使用 F32 權重"
     );
-    eprintln!("Q8 tokenizer cache output: {}", q8_output.display());
-
-    let status = Command::new(&quantizer)
-        .arg("--input")
-        .arg(f32_output)
-        .arg("--output")
-        .arg(&q8_output)
-        .arg("--format")
-        .arg("q8_0")
-        .arg("--group-size")
-        .arg("64")
-        .arg("--min-cosine")
-        .arg("0.995")
-        .status();
-
-    match status {
-        Ok(status) if status.success() && is_complete_tokenizer_weight_dir(&q8_output) => {
-            Some(q8_output)
-        }
-        Ok(status) => {
-            eprintln!(
-                "Q8 tokenizer auto-cache skipped: quantize_tokenizer.exe exited with {status}; using F32 tokenizer weights."
-            );
-            None
-        }
-        Err(err) => {
-            eprintln!(
-                "Q8 tokenizer auto-cache skipped: could not launch {}: {err}; using F32 tokenizer weights.",
-                quantizer.display()
-            );
-            None
-        }
-    }
+    None
 }
 
 fn is_complete_tokenizer_weight_dir(path: &Path) -> bool {
@@ -311,6 +267,7 @@ fn is_complete_tokenizer_weight_dir(path: &Path) -> bool {
         .all(|file| path.join(file).exists())
 }
 
+#[allow(dead_code)]
 fn q8_dir_for_f32_dir(path: &Path) -> PathBuf {
     match path.file_name().and_then(|name| name.to_str()) {
         Some("tokenizer-12hz") => path.with_file_name("tokenizer-12hz-q8"),
@@ -321,6 +278,7 @@ fn q8_dir_for_f32_dir(path: &Path) -> PathBuf {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct QuantizationSummary {
     total_original_bytes: usize,
     total_stored_bytes: usize,
@@ -328,6 +286,8 @@ struct QuantizationSummary {
     preserved_tensors: usize,
 }
 
+#[allow(dead_code)]
+#[deprecated(note = "tokenizer 整數量化已停用，此函式保留僅供測試參考")]
 fn q8_weight_summary(path: &Path) -> Option<String> {
     if !is_q8_tokenizer_dir(path) {
         return None;
@@ -364,6 +324,7 @@ fn q8_weight_summary(path: &Path) -> Option<String> {
     ))
 }
 
+#[allow(dead_code)]
 fn is_q8_tokenizer_dir(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
@@ -372,9 +333,7 @@ fn is_q8_tokenizer_dir(path: &Path) -> bool {
 }
 
 fn log_tokenizer_weight_dir(path: &Path) {
-    if let Some(summary) = q8_weight_summary(path) {
-        eprintln!("{summary}");
-    }
+    eprintln!("使用 F32 tokenizer decoder 權重: {}", path.display());
 }
 
 fn missing_weights_error(candidates: &[PathBuf]) -> Error {
@@ -411,12 +370,15 @@ fn push_unique(candidates: &mut Vec<PathBuf>, path: PathBuf) {
 
 fn push_tokenizer_weight_candidates(candidates: &mut Vec<PathBuf>, root: &Path) {
     let weights = root.join("weights");
-    push_unique(candidates, weights.join("tokenizer-q8"));
+    // 注意：tokenizer-q8 已移除——codec/vocoder 依 AGENTS.md §3.2 永不整數量化，強制使用 F32 權重
     push_unique(candidates, weights.join("tokenizer"));
 }
 
 fn default_tokenizer_q8_cache_dir() -> Option<PathBuf> {
-    default_tokenizer_cache_root().map(|root| root.join("tokenizer-12hz-q8"))
+    log::warn!(
+        "codec/vocoder 量化已停用（違反 AGENTS.md §3.2，聲碼器永不整數量化）；強制使用 F32 權重"
+    );
+    None
 }
 
 fn default_tokenizer_cache_dir() -> Option<PathBuf> {
@@ -438,6 +400,7 @@ fn default_tokenizer_cache_root() -> Option<PathBuf> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::{
         is_complete_tokenizer_weight_dir, q8_dir_for_f32_dir, q8_weight_summary,
@@ -447,16 +410,21 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn resolves_q8_tokenizer_weights_before_f32_weights() {
+    fn resolves_f32_tokenizer_weights_only() {
         let candidates = resolve_tokenizer_weight_dir_from(
             Path::new("C:/run"),
             Some(Path::new("C:/app/qwen3tts.exe")),
         );
 
-        assert_eq!(candidates[0], Path::new("C:/run/weights/tokenizer-q8"));
-        assert_eq!(candidates[1], Path::new("C:/run/weights/tokenizer"));
-        assert_eq!(candidates[2], Path::new("C:/app/weights/tokenizer-q8"));
-        assert_eq!(candidates[3], Path::new("C:/app/weights/tokenizer"));
+        // tokenizer-q8 已移除，只保留 F32 路徑
+        assert_eq!(candidates[0], Path::new("C:/run/weights/tokenizer"));
+        assert_eq!(candidates[1], Path::new("C:/app/weights/tokenizer"));
+        // 檢查沒有任何 -q8 路徑出現在候選清單中
+        assert!(
+            !candidates
+                .iter()
+                .any(|p| p.to_string_lossy().contains("tokenizer-q8"))
+        );
     }
 
     #[test]
@@ -466,8 +434,7 @@ mod tests {
             Some(Path::new("C:/app/synthesize.exe")),
         );
 
-        assert_eq!(candidates[0], Path::new("C:/app/weights/tokenizer-q8"));
-        assert_eq!(candidates[1], Path::new("C:/app/weights/tokenizer"));
+        assert_eq!(candidates[0], Path::new("C:/app/weights/tokenizer"));
         assert_eq!(
             candidates
                 .iter()
@@ -522,6 +489,7 @@ mod tests {
         );
     }
 
+    #[allow(deprecated)]
     #[test]
     fn q8_weight_summary_uses_quantization_report_size_and_ratio() {
         let base = std::env::temp_dir()

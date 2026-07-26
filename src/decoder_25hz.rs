@@ -12,7 +12,7 @@
 
 use candle_core::{Device, Tensor};
 
-use crate::codec::{DiTConfig, FlowMatchingDecoder, OdeSolverConfig, OdeSolverType};
+use crate::codec::FlowMatchingDecoder;
 use crate::{DecoderConfig, Error, Result, TtsDecoder};
 
 /// 25Hz 高品質解碼器
@@ -31,36 +31,24 @@ pub struct Decoder25Hz {
     max_context_len: usize,
 }
 
+impl std::fmt::Debug for Decoder25Hz {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Decoder25Hz")
+            .field("max_context_len", &self.max_context_len)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Decoder25Hz {
-    /// 建立 25Hz 解碼器
+    /// 建立 25Hz 解碼器（目前回傳錯誤——此模式暫緩，無可參照的第三方實作）
     ///
     /// # 參數
     /// - `config`: 解碼器配置
-    /// - `device`: 運算裝置
-    pub fn new(config: DecoderConfig, device: &Device) -> Result<Self> {
-        let dit_config = DiTConfig {
-            hidden_size: config.dit_hidden_dim,
-            num_attention_heads: config.dit_num_heads,
-            num_hidden_layers: config.dit_num_blocks,
-            cond_dim: config.embedding_dim,
-            ..Default::default()
-        };
-
-        let solver_config = OdeSolverConfig {
-            solver_type: OdeSolverType::Euler,
-            num_steps: config.ode_steps,
-            ..Default::default()
-        };
-
-        let flow_matching = FlowMatchingDecoder::new(dit_config, solver_config, device);
-
-        Ok(Self {
-            _config: config,
-            device: device.clone(),
-            flow_matching,
-            context_window: Vec::with_capacity(8),
-            max_context_len: 8,
-        })
+    /// - `_device`: 運算裝置
+    pub fn new(_config: DecoderConfig, _device: &Device) -> Result<Self> {
+        Err(Error::Config(
+            "25Hz Flow-Matching decoder 尚未實作，且無可參照的第三方實作，暫緩此模式；如需啟用請參考 spec.md Phase 2".into(),
+        ))
     }
 }
 
@@ -95,10 +83,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_decoder_creation() {
+    fn test_decoder_creation_returns_error() {
         let device = Device::Cpu;
         let config = DecoderConfig::high_quality();
-        let decoder = Decoder25Hz::new(config, &device).unwrap();
-        assert_eq!(decoder.flow_matching.solver().config.num_steps, 32);
+        let err = Decoder25Hz::new(config, &device).expect_err("建構 25Hz decoder 應回傳錯誤");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("尚未實作"),
+            "錯誤訊息應提及「尚未實作」，實際: {msg}"
+        );
     }
 }

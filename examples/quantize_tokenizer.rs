@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,6 +10,7 @@ use qwen3tts::quantization::{
 };
 use serde::Serialize;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct Args {
     input_dir: PathBuf,
@@ -61,10 +64,11 @@ struct FileReport {
 }
 
 fn main() {
-    if let Err(err) = run() {
-        eprintln!("error: {err}");
-        std::process::exit(1);
-    }
+    eprintln!(
+        "error: codec/vocoder 整數量化已停用（違反 AGENTS.md §3.2，聲碼器永不整數量化）。\n       \
+         強制使用 F32 權重；此程式保留僅供未來 debug 用途，不再執行量化動作。"
+    );
+    std::process::exit(1);
 }
 
 fn run() -> Result<(), Box<dyn Error>> {

@@ -355,6 +355,16 @@ fn main() {
         }
     };
     let effective_mode = resolve_generation_mode(&validation_metadata, mode);
+
+    // 規則 7: --reference-text 需要 --reference-audio
+    if reference_text.is_some() && reference_audio.is_none() {
+        eprintln!(
+            "錯誤: --reference-text 必須搭配 --reference-audio 使用；\n\
+             語音複製需要參考音訊才能提取說話者嵌入向量。"
+        );
+        std::process::exit(1);
+    }
+
     if let Err(err) = validate_generation_request(
         &validation_metadata,
         effective_mode,

@@ -55,6 +55,15 @@ impl WeightLoader {
         })
     }
 
+    /// 從預先準備好的 HashMap 直接建立（主要供測試使用）
+    #[doc(hidden)]
+    pub fn from_tensors(tensors: HashMap<String, Tensor>, device: &Device) -> Self {
+        Self {
+            tensors,
+            device: device.clone(),
+        }
+    }
+
     /// 從目錄載入所有 `.safetensors` 檔案
     ///
     /// 合併多個檔案中的張量為一個載入器。
