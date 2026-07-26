@@ -35,6 +35,8 @@ Overall status: `IN_PROGRESS`
 - [x] `P03-T02` Verify Talker prefill and single-step KV cache (`GATE_PASSED`)
 - [x] `P03-T03` Verify Code Predictor frame-local prefill and 14 decode steps (`GATE_PASSED`)
 - [ ] `P03-T04` Eliminate avoidable host transfers in acoustic prediction
+  (`IN_PROGRESS`: external DeepSeek V4 Flash handoff prepared; current attempt
+  has blocking telemetry/evidence defects)
 - [ ] `P03-T05` Gate stage cosine and logit ranking thresholds
 - [ ] `P03-GATE` Phase gate passed
 

@@ -1,5 +1,9 @@
 # P03-T04 Assignment — Acoustic Prediction Host-Transfer Elimination
 
+> External DeepSeek V4 Flash must also read
+> `deepseek-v4-flash-handoff.md`, which records the current dirty-tree
+> implementation and blocking defects discovered by CBM inspection.
+
 ## Outcome
 
 Measure host synchronization in Talker and Code Predictor acoustic prediction,

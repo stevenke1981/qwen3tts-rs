@@ -2,13 +2,31 @@
 
 - Overall: `IN_PROGRESS`
 - Current phase: `P03`
-- Current task: `P03-T04` (`READY`, assignment pending)
+- Current task: `P03-T04` (`IN_PROGRESS`, assigned to external DeepSeek V4 Flash)
 - Target baseline commit: `b08178964504d5a214565ffc4ff5ed592eb8f7ec`
 - qwentts.cpp reference commit: `82cd05b9f3a175612dc89fd6943e610fab096ef5`
 - Official Qwen3-TTS commit: `022e286b98fbec7e1e916cb940cdf532cd9f488e`
 - Working branch: `alignment/full-qwentts-parity`
 - Last task gate: `P03-T03 GATE_PASSED`
 - Last full phase gate: `P02 GATE_PASSED`
+
+## Current External-Agent Handoff
+
+- P03-T04 task card: `artifacts/alignment/P03/P03-T04/assignment.md`
+- DeepSeek V4 Flash handoff:
+  `artifacts/alignment/P03/P03-T04/deepseek-v4-flash-handoff.md`
+- CBM confirmed that an incomplete working-tree implementation already changes
+  Talker, Code Predictor, sampling, stage telemetry, and a new transfer test.
+- The focused transfer test currently passes 14/14, but it is not Gate evidence:
+  the test explicitly infers transfers from stage callbacks instead of consuming
+  telemetry emitted at the real synchronization boundary.
+- Known blockers include disconnected telemetry, synthetic final-output transfer
+  events, allocation/formatting/`unwrap()` in `StageDumpWriter` telemetry,
+  remaining `kv_caches.to_vec()` copies, incomplete non-finite masking coverage,
+  and missing task evidence.
+- `cargo fmt --all -- --check` currently fails due to both task-owned formatting
+  drift and unrelated formatting drift in the three local unpushed commits.
+  The external worker must format only task-owned files.
 
 ## Last Commands
 
