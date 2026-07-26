@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 fn axis_interleaved(dim: usize, head_dim: usize, mrope_section: &[usize]) -> usize {
     let modality_num = mrope_section.len();
     let half_dim = head_dim / 2; // = 64
-                                 // 計算 (dim % half_dim) 而非全維度（mirror 第一半）
+    // 計算 (dim % half_dim) 而非全維度（mirror 第一半）
     let axis_dim = dim % half_dim;
     // axis 1..modality_num-1 對應非文字模態（audio, vision）
     for axis in 1..modality_num {
@@ -157,9 +157,9 @@ fn main() {
         let count = dims.len();
         let expected = if axis == 0 {
             48 // (24 pairs + 4 residue in 60-63)  Wait, let me compute:
-               // First half: 24 values for axis 0, but only 20 of them in the interleaved pattern (0, 3, 6, ... 57)
-               // Plus 4 extra (60, 61, 62, 63) = 24 in first half
-               // Total: 24 + 24 = 48 for axis 0
+        // First half: 24 values for axis 0, but only 20 of them in the interleaved pattern (0, 3, 6, ... 57)
+        // Plus 4 extra (60, 61, 62, 63) = 24 in first half
+        // Total: 24 + 24 = 48 for axis 0
         } else {
             40 // 20 in first half + 20 in second half
         };

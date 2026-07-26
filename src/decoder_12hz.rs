@@ -2,8 +2,8 @@ use candle_core::{Device, Tensor};
 
 use crate::alignment_stage_dump::{NoopStageDumpObserver, StageDumpObserver};
 use crate::codec::{
-    snake_beta, CausalConv1d, CausalConvConfig, CodebookLookup, DecoderBlock, KvRing,
-    ParallelCodebook, PreTransformer, PreTransformerConfig, UpsampleBlock,
+    CausalConv1d, CausalConvConfig, CodebookLookup, DecoderBlock, KvRing, ParallelCodebook,
+    PreTransformer, PreTransformerConfig, UpsampleBlock, snake_beta,
 };
 use crate::weights::WeightLoader;
 use crate::{DecoderConfig, Error, Result, TtsDecoder};

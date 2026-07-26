@@ -35,8 +35,8 @@ use crate::talker::{
     VoiceClonePrompt,
 };
 use crate::text_frontend::model_catalog::{
-    resolve_effective_sampling_plan, validate_generation_request, GenerationSamplingConfig,
-    ModelMetadata,
+    GenerationSamplingConfig, ModelMetadata, resolve_effective_sampling_plan,
+    validate_generation_request,
 };
 use crate::text_frontend::prompt_templates::{
     build_assistant_prompt, build_instruction_prompt, build_reference_prompt,
@@ -44,7 +44,7 @@ use crate::text_frontend::prompt_templates::{
 };
 use crate::text_frontend::token_parser::TokenParser;
 use crate::text_frontend::voice_clone::speaker_encoder::{
-    upstream_mel_spectrogram, NativeSpeakerEncoder,
+    NativeSpeakerEncoder, upstream_mel_spectrogram,
 };
 use crate::text_frontend::voice_clone::speech_tokenizer::NativeSpeechTokenizerEncoder;
 use crate::text_frontend::voice_clone::{

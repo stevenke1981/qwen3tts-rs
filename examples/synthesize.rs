@@ -39,8 +39,8 @@ use std::path::PathBuf;
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
 use qwen3tts::text_frontend::model_catalog::{
-    model_capability, model_table, resolve_generation_mode, validate_generation_request,
-    GenerationMode, ModelMetadata, SUPPORTED_LANGUAGES,
+    GenerationMode, ModelMetadata, SUPPORTED_LANGUAGES, model_capability, model_table,
+    resolve_generation_mode, validate_generation_request,
 };
 use qwen3tts::text_frontend::speaker_presets;
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend, TokenStream};
