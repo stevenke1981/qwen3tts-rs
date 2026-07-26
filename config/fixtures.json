@@ -176,6 +176,39 @@
       "generated_by": "local pinned official model snapshot",
       "command": "python tools/export_talker_fixtures.py --model <pinned local snapshot> --out-dir fixtures/alignment (then capture patched-PyTorch/qwentts Philox matrix)",
       "required": true
+    },
+    {
+      "id": "p03-code-predictor-frame-real",
+      "path": "../fixtures/alignment/p03_code_predictor_frame_real.json",
+      "source": "pinned official Qwen and qwentts.cpp Code Predictor frame contract",
+      "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+      "sha256": "a5f67f3aafed392129e4789f1534fb5cc7be83a6742ffeb495f7ba0146712ffa",
+      "license": "Apache-2.0",
+      "generated_by": "tools/generate_code_predictor_frame_fixture.py",
+      "command": "python tools/generate_code_predictor_frame_fixture.py --check fixtures/alignment/p03_code_predictor_frame_real.json",
+      "required": true
+    },
+    {
+      "id": "p03-code-predictor-official-oracle",
+      "path": "../artifacts/alignment/P03/P03-T03/official-oracle/manifest.json",
+      "source": "pinned official Qwen Code Predictor CPU F32 manual-loop and GenerationMixin cross-check",
+      "revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "sha256": "a9df23e259036b3f7c12333cd86e9f90900570b9658e5baa6b55681ac233a21b",
+      "license": "Apache-2.0",
+      "generated_by": "tools/generate_code_predictor_frame_fixture.py",
+      "command": "python tools/generate_code_predictor_frame_fixture.py --export --model <pinned local snapshot> --check fixtures/alignment/p03_code_predictor_frame_real.json",
+      "required": true
+    },
+    {
+      "id": "p03-code-predictor-real-metrics",
+      "path": "../artifacts/alignment/P03/P03-T03/real-metrics.json",
+      "source": "Candle CPU F32 versus pinned official Code Predictor tensor metrics",
+      "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+      "sha256": "0e43344bab257d9a1625b7adbe0b14eecdd8f3b5d313188d5c25dc21cea162c7",
+      "license": "Apache-2.0",
+      "generated_by": "tests/code_predictor_frame_real_test.rs",
+      "command": "cargo test --test code_predictor_frame_real_test -- --ignored --nocapture",
+      "required": true
     }
   ],
   "instructions": "Required alignment fixtures are checked in and hash-verified. Model binaries remain external; see P00-T05/model-provenance.json."

@@ -1,0 +1,134 @@
+{
+  "fixture_id": "p03-code-predictor-frame-real",
+  "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+  "snapshot_revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+  "official_qwen_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "qwentts_cpp_revision": "82cd05b9f3a175612dc89fd6943e610fab096ef5",
+  "source": {
+    "path": "C:\\Users\\steven\\Qwen3-TTS\\.venv\\Lib\\site-packages\\qwen_tts\\core\\models\\modeling_qwen3_tts.py",
+    "sha256": "25C42656BCF810F06EF6BC1839BD7083F3C8CFEDAC3A147C4060B4262B1C96A0",
+    "qwen_tts_version": "0.1.1",
+    "transformers_version": "4.57.3",
+    "torch_version": "2.5.1+cu121"
+  },
+  "model_hashes": {
+    "model.safetensors": "180B3B10EB1C9F1B4DB7806D5475BAE3071C0243C299D49926BAB1DA3B6946F6",
+    "config.json": "2E714C787C8EDB98B05432685CDDB634ADD2DE4D4E645F653D68251EF72BA011",
+    "generation_config.json": "F1B90B4513F3B34C62851049E2492D7B4C5940DAF1276F89C82B8EF04127F3AA"
+  },
+  "external_input": {
+    "path": "artifacts/alignment/P03/P03-T02/qwentts-direct-oracle/raw_tensor_dump/talker-hidden-prefill-final.bin",
+    "sha256": "D8C2C441FB0754E50A41225EC9C4F5056F3994E9AC3B77165E62326AF74AD1BA",
+    "row": -1,
+    "c0": 1995
+  },
+  "dtype": "float32",
+  "device": "cpu",
+  "attention_backend": "official-pinned-cpu",
+  "cache_lengths": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "manual_generate_codes_equal": true,
+  "manual_generate_logits_bit_equal": true,
+  "tensors": {
+    "projected_prefill": {
+      "path": "artifacts/alignment/P03/P03-T03/official-oracle/prefill-input.bin",
+      "shape": [
+        1,
+        2,
+        1024
+      ],
+      "dtype": "float32",
+      "byte_order": "little-endian",
+      "sha256": "BB1C2F37F3C0B351E479A39CB8912F315AF6CC9EA7780CAFDB030C7122AE7B46"
+    },
+    "projected_private_inputs": {
+      "path": "artifacts/alignment/P03/P03-T03/official-oracle/private-inputs.bin",
+      "shape": [
+        14,
+        1,
+        1024
+      ],
+      "dtype": "float32",
+      "byte_order": "little-endian",
+      "sha256": "5C80D8BD7181EEF8E62120AFA5F39906AD2BA3DE1BABD929E90FDEE23025151E"
+    },
+    "normalized_hidden": {
+      "path": "artifacts/alignment/P03/P03-T03/official-oracle/normalized-hidden.bin",
+      "shape": [
+        15,
+        1024
+      ],
+      "dtype": "float32",
+      "byte_order": "little-endian",
+      "sha256": "8732566D91D995B7DB3D2187D69D3FBD0B698E3CFC63D926C9FC50A18F20E8A2"
+    },
+    "logits": {
+      "path": "artifacts/alignment/P03/P03-T03/official-oracle/logits.bin",
+      "shape": [
+        15,
+        2048
+      ],
+      "dtype": "float32",
+      "byte_order": "little-endian",
+      "sha256": "7BE21B8C4E7A3C2B6B95EB1F0F5E5F3A2DE7346993AB291042B23DF5EAA31E97"
+    },
+    "final_cache_k": {
+      "path": "artifacts/alignment/P03/P03-T03/official-oracle/cache-k.bin",
+      "shape": [
+        5,
+        1,
+        8,
+        16,
+        128
+      ],
+      "dtype": "float32",
+      "byte_order": "little-endian",
+      "sha256": "BB31B7B3EA30CC2B1A08D11525A9A9DDB7DB5E2DF1EFA40F15F538821FF4B648"
+    },
+    "final_cache_v": {
+      "path": "artifacts/alignment/P03/P03-T03/official-oracle/cache-v.bin",
+      "shape": [
+        5,
+        1,
+        8,
+        16,
+        128
+      ],
+      "dtype": "float32",
+      "byte_order": "little-endian",
+      "sha256": "40F4B45728C52CE5168E639239AA64CF3980BEA8F1FA53F57EC770B33AF5A7C9"
+    },
+    "positions": {
+      "path": "artifacts/alignment/P03/P03-T03/official-oracle/positions.bin",
+      "shape": [
+        16
+      ],
+      "dtype": "int64",
+      "byte_order": "little-endian",
+      "sha256": "F23D672BB9B341F9AFA8498423B75DEB80E726145969391D4B9392464C2298EE"
+    }
+  },
+  "codes": {
+    "path": "artifacts/alignment/P03/P03-T03/official-oracle/codes.json",
+    "sha256": "E1ED928C470F91D7BF4D6775E8430C6656697DB42AAA8644D532D29508B3F4C2"
+  },
+  "cache_manifest": {
+    "path": "artifacts/alignment/P03/P03-T03/official-oracle/cache-manifest.json",
+    "sha256": "E9DF1A26D556186B6E5F00B9863D883A041B74DCBE16739FA949274D5EEB181A"
+  }
+}

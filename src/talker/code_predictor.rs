@@ -29,6 +29,40 @@ pub struct CodePredictor {
 }
 
 impl CodePredictor {
+    /// Diagnostic forward used by parity tests. It keeps all tensors on-device
+    /// and exposes the normalized hidden state plus staged per-layer KV cache.
+    #[doc(hidden)]
+    pub fn forward_prefix_for_test(
+        &self,
+        input: &Tensor,
+        positions: &[u32],
+        kv_caches: &mut [Option<(Tensor, Tensor)>],
+    ) -> Result<Tensor> {
+        let device = input.device();
+        let (cos, sin) = self.compute_rope_for_positions(positions, device)?;
+        let cache_len = kv_caches
+            .iter()
+            .find_map(|c| c.as_ref().map(|(k, _)| k.dim(2)))
+            .transpose()?;
+        let mask = if cache_len.unwrap_or(0) == 0 && positions.len() > 1 {
+            Some(create_causal_mask(positions.len(), device)?)
+        } else {
+            None
+        };
+        let mut observer = NoopStageDumpObserver;
+        let hidden = self.forward_layers(
+            input,
+            &cos,
+            &sin,
+            mask.as_ref(),
+            kv_caches,
+            "test",
+            0,
+            &mut observer,
+        )?;
+        Ok(hidden)
+    }
+
     /// Return codebook-1 logits after prefill `[talker_hidden, codebook_0_embed]`.
     pub fn first_step_logits(
         &self,
@@ -57,6 +91,7 @@ impl CodePredictor {
         frame_index: usize,
         observer: &mut O,
     ) -> Result<Tensor> {
+        self.validate_contract(talker_hidden, codebook_0_embed, device, kv_caches)?;
         let capture = observer.wants_capture();
         let prefill = Tensor::cat(&[talker_hidden.clone(), codebook_0_embed.clone()], 1)?;
         let prefill = self.project_input(&prefill)?;
@@ -153,7 +188,7 @@ impl CodePredictor {
             observer.on_code_predictor_step_logits(frame_index, 0, &logits)?;
         }
         let next_token = logits.argmax(1)?;
-        let mut next_val = next_token.to_vec1::<u32>()?[0];
+        let mut next_val = next_token.reshape(())?.to_scalar::<u32>()?;
         generated_ids.push(next_val);
 
         let step_positions: Vec<u32> = (2..self.config.num_code_groups as u32).collect();
@@ -192,7 +227,7 @@ impl CodePredictor {
                 observer.on_code_predictor_step_logits(frame_index, step, &logits)?;
             }
             let next_token = logits.argmax(1)?;
-            next_val = next_token.to_vec1::<u32>()?[0];
+            next_val = next_token.reshape(())?.to_scalar::<u32>()?;
             generated_ids.push(next_val);
         }
 
@@ -329,13 +364,82 @@ impl CodePredictor {
         frame_index: usize,
         observer: &mut impl StageDumpObserver,
     ) -> Result<Tensor> {
+        if kv_caches.len() != self.layers.len() || self.layers.len() > 5 {
+            return Err(candle_core::Error::Msg(
+                "invalid Code Predictor cache count/layer contract".into(),
+            ));
+        }
+        let (batch, seq_len, hidden) = input.dims3()?;
+        if hidden != self.config.hidden_size
+            || !input.device().same_device(cos.device())
+            || !input.device().same_device(sin.device())
+        {
+            return Err(candle_core::Error::Msg(
+                "invalid Code Predictor input/RoPE device or hidden size".into(),
+            ));
+        }
+        if cos.dims4()? != (1, 1, seq_len, self.config.head_dim)
+            || sin.dims4()? != (1, 1, seq_len, self.config.head_dim)
+        {
+            return Err(candle_core::Error::Msg(
+                "invalid Code Predictor RoPE shape".into(),
+            ));
+        }
+        let mut cache_len = None;
+        for (layer_idx, cache) in kv_caches.iter().enumerate() {
+            if let Some((k, v)) = cache {
+                let expected = (
+                    batch,
+                    self.layers[layer_idx].self_attn.num_kv_heads,
+                    self.config.head_dim,
+                );
+                if k.dims4()? != (expected.0, expected.1, k.dim(2)?, expected.2)
+                    || v.dims4()? != (expected.0, expected.1, v.dim(2)?, expected.2)
+                    || k.dim(2)? != v.dim(2)?
+                    || k.dtype() != input.dtype()
+                    || v.dtype() != input.dtype()
+                    || !k.device().same_device(input.device())
+                    || !v.device().same_device(input.device())
+                {
+                    return Err(candle_core::Error::Msg(
+                        "invalid Code Predictor KV cache shape/dtype/device".into(),
+                    ));
+                }
+                let len = k.dim(2)?;
+                if cache_len.is_some_and(|expected| expected != len) {
+                    return Err(candle_core::Error::Msg(
+                        "inconsistent Code Predictor KV cache sequence length".into(),
+                    ));
+                }
+                cache_len = Some(len);
+            }
+        }
+        let present = kv_caches.iter().filter(|cache| cache.is_some()).count();
+        if present != 0 && present != kv_caches.len() {
+            return Err(candle_core::Error::Msg(
+                "mixed Code Predictor KV cache presence".into(),
+            ));
+        }
+        if cache_len.unwrap_or(0) + seq_len > self.config.max_position_embeddings {
+            return Err(candle_core::Error::Msg(
+                "Code Predictor sequence exceeds maximum position embeddings".into(),
+            ));
+        }
+        if let Some(mask) = attention_mask {
+            let (mask_q, mask_k) = mask.dims2()?;
+            let expected_k = cache_len.unwrap_or(0) + seq_len;
+            if (mask_q, mask_k) != (seq_len, expected_k)
+                || !mask.device().same_device(input.device())
+            {
+                return Err(candle_core::Error::Msg(
+                    "invalid Code Predictor attention mask shape/device".into(),
+                ));
+            }
+        }
         let mut h = input.clone();
+        let mut staged: [Option<(Tensor, Tensor)>; 5] = std::array::from_fn(|_| None);
         for (layer_idx, layer) in self.layers.iter().enumerate() {
-            let cache = if layer_idx < kv_caches.len() {
-                kv_caches[layer_idx].as_ref().map(|(k, v)| (k, v))
-            } else {
-                None
-            };
+            let cache = kv_caches[layer_idx].as_ref().map(|(k, v)| (k, v));
             let (next_h, updated_cache) = if observer.wants_capture() {
                 let layer_phase = format!("{phase}-frame{frame_index}");
                 layer.forward_with_observer(
@@ -352,9 +456,7 @@ impl CodePredictor {
                 layer.forward(&h, cos, sin, attention_mask, cache)?
             };
             h = next_h;
-            if layer_idx < kv_caches.len() {
-                kv_caches[layer_idx] = Some(updated_cache);
-            }
+            staged[layer_idx] = Some(updated_cache);
         }
         let h = self.norm.forward(&h)?;
         if observer.wants_capture() {
@@ -364,7 +466,61 @@ impl CodePredictor {
                 "BTH",
             )?;
         }
+        for (dst, src) in kv_caches
+            .iter_mut()
+            .zip(staged[..self.layers.len()].iter_mut())
+        {
+            *dst = src.take();
+        }
         Ok(h)
+    }
+
+    fn validate_contract(
+        &self,
+        talker_hidden: &Tensor,
+        codebook_0_embed: &Tensor,
+        device: &Device,
+        kv_caches: &[Option<(Tensor, Tensor)>],
+    ) -> Result<()> {
+        if self.layers.len() > 5
+            || self.config.num_code_groups != 16
+            || self.config.max_position_embeddings < self.config.num_code_groups
+            || self.codec_embeddings.len() < 15
+            || self.lm_heads.len() < 15
+            || kv_caches.len() != self.layers.len()
+        {
+            return Err(candle_core::Error::Msg(
+                "invalid Code Predictor fixed frame contract".into(),
+            ));
+        }
+        let (b, t, h) = talker_hidden.dims3()?;
+        let projected_input = self
+            .small_to_mtp_proj
+            .as_ref()
+            .map(|(weight, _)| weight.dim(1))
+            .transpose()?;
+        if b != 1
+            || (b, t, h) != codebook_0_embed.dims3()?
+            || t != 1
+            || (h != self.config.hidden_size && Some(h) != projected_input)
+        {
+            return Err(candle_core::Error::Msg(
+                "invalid Code Predictor prefill input shape".into(),
+            ));
+        }
+        if !talker_hidden.device().same_device(device)
+            || !codebook_0_embed.device().same_device(device)
+        {
+            return Err(candle_core::Error::Msg(
+                "Code Predictor input is on the wrong device".into(),
+            ));
+        }
+        if kv_caches.iter().any(Option::is_some) {
+            return Err(candle_core::Error::Msg(
+                "Code Predictor prefill requires an empty frame-local KV cache".into(),
+            ));
+        }
+        Ok(())
     }
 
     fn compute_rope_for_positions(

@@ -1,0 +1,16 @@
+python tools/generate_code_predictor_frame_fixture.py --export --model %QWEN3_TTS_REAL_MODEL_DIR% --check fixtures/alignment/p03_code_predictor_frame_real.json
+python tools/generate_code_predictor_frame_fixture.py --check fixtures/alignment/p03_code_predictor_frame_real.json
+cargo fmt --all -- --check
+cargo check --no-default-features --features cpu
+cargo check --no-default-features --features cpu,stage-dump
+cargo test --test code_predictor_frame_test --no-default-features
+cargo test --test code_predictor_frame_real_test -- --ignored --nocapture
+cargo test --test stage_instrumentation_test --features stage-dump
+cargo test --test stage_instrumentation_real_test --features stage-dump -- --ignored --nocapture
+cargo test --lib code_predictor
+cargo test --test deterministic_token_sequence_test
+cargo check --example synthesize --features candle-llm
+cargo check --example synthesize_batch --features candle-llm
+cargo clippy --no-default-features --features cpu --lib --test code_predictor_frame_test --test code_predictor_frame_real_test --message-format short
+python tools/fixture_manifest.py config/fixtures.json
+git diff --check -- src/talker/code_predictor.rs tests/code_predictor_frame_test.rs tests/code_predictor_frame_real_test.rs fixtures/alignment/p03_code_predictor_frame_real.json tools/generate_code_predictor_frame_fixture.py docs/alignment/p03-code-predictor-frame.md config/fixtures.json artifacts/alignment/P03/P03-T03

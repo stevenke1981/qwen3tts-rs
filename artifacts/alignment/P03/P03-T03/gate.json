@@ -1,0 +1,19 @@
+{
+  "task": "P03-T03",
+  "status": "GATE_PASSED",
+  "oracle": "official CPU F32 pinned snapshot",
+  "official_manual_generate_crosscheck": "BIT_EQUAL",
+  "tiny_gate": "PASS",
+  "real_gate": "PASS",
+  "stage_regression": "PASS_723",
+  "fixture_manifest": "PASS_19_OF_19",
+  "independent_review": "ACCEPT",
+  "metrics": {
+    "minimum_cosine": 0.999999999939492,
+    "maximum_abs": 0.000438690185546875
+  },
+  "thresholds": {
+    "minimum_cosine": 0.999,
+    "maximum_abs": 0.001
+  }
+}

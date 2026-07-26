@@ -2,12 +2,12 @@
 
 - Overall: `IN_PROGRESS`
 - Current phase: `P03`
-- Current task: `P03-T03` (`READY`, assignment pending)
+- Current task: `P03-T04` (`READY`, assignment pending)
 - Target baseline commit: `b08178964504d5a214565ffc4ff5ed592eb8f7ec`
 - qwentts.cpp reference commit: `82cd05b9f3a175612dc89fd6943e610fab096ef5`
 - Official Qwen3-TTS commit: `022e286b98fbec7e1e916cb940cdf532cd9f488e`
 - Working branch: `alignment/full-qwentts-parity`
-- Last task gate: `P03-T02 GATE_PASSED`
+- Last task gate: `P03-T03 GATE_PASSED`
 - Last full phase gate: `P02 GATE_PASSED`
 
 ## Last Commands
@@ -101,6 +101,15 @@ git diff --check -- src/text_frontend/prompt_templates.rs src/text_frontend/mode
   qwentts next-embedding and step-1 hidden oracles, fixture hashes, and the
   723-stage instrumentation gate passed. Independent GPT-5.6 Luna review
   returned `ACCEPT`.
+- P03-T03 Code Predictor parity: production enforces a fresh frame-local
+  cache, stages all five layer updates transactionally, and follows the exact
+  two-token prefill plus fourteen private embedding/head steps. Tiny tests
+  prove growing-prefix hidden/logit/KV parity, bit-identical cache prefixes,
+  mutation sensitivity, reset behavior, and observer-error rollback. The
+  pinned official CPU-F32 oracle matched all 15 groups and cache lengths 2..16
+  with minimum cosine `0.999999999939492`, maximum absolute error
+  `0.000438690185546875`, and exact codes. The 723-stage regression and
+  independent review passed.
 - Source revisions: target and qwentts.cpp match the packaged baseline; no baseline delta file
   was required. Official semantics revision is now pinned.
 

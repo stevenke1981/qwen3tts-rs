@@ -1,0 +1,16 @@
+PASS official exporter: 15 manual steps; manual codes/logits bit-equal to official GenerationMixin; actual DynamicCache prefix remained bit-identical.
+PASS fixture checker: 7 tensor assets, metadata, sizes, and SHA256 verified.
+PASS cargo fmt --all -- --check.
+PASS CPU and CPU+stage-dump cargo checks.
+PASS Code Predictor tiny gate: 8 passed, including bit-identical K/V prefixes, every growing prefix, embedding/head/position mutations, and transactional observer failure.
+PASS Code Predictor real gate: 1 passed; minimum cosine=0.999999999939492, maximum_abs=0.000438690185546875, exact 15 codes.
+PASS stage instrumentation synthetic: 1 passed.
+PASS stage instrumentation pinned real: 1 passed; 723 stages.
+PASS library Code Predictor test: 1 passed.
+PASS deterministic token sequence: 2 passed.
+PASS synthesize and synthesize_batch candle-llm checks.
+PASS focused clippy command; no warning originates in the new tests/helper. Existing repository warnings remain.
+PASS fixture manifest: required=19 verified=19 optional_missing=0.
+PASS scoped git diff --check.
+KNOWN WARNING Windows linker LNK4098 (pre-existing).
+KNOWN BASELINE full all-tests clippy fails in unrelated tests/mrope_reference_test.rs on denied approx_constant.
