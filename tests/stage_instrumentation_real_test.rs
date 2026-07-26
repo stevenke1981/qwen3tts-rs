@@ -117,14 +117,23 @@ fn pinned_real_stage_manifest_is_complete_and_noop_parity_holds() {
         .unwrap();
     let mut base = qwen3tts::NoopStageDumpObserver;
     let expected = run(&talker, &mut base, &f, &d);
-    let mut out = std::env::temp_dir();
-    out.push(format!(
-        "qwen3tts-p03-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let out = if let Ok(dir) = std::env::var("P03_STAGE_DUMP_DIR") {
+        let p = PathBuf::from(dir);
+        if p.exists() {
+            std::fs::remove_dir_all(&p).expect("remove existing P03_STAGE_DUMP_DIR");
+        }
+        p
+    } else {
+        let mut tmp = std::env::temp_dir();
+        tmp.push(format!(
+            "qwen3tts-p03-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        tmp
+    };
     let mut w = StageDumpWriter::new(
         &out,
         StageDumpMetadata {
