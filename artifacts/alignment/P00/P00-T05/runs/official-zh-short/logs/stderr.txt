@@ -1,0 +1,23 @@
+
+********
+Warning: flash-attn is not installed. Will only run the manual PyTorch version. Please install flash-attn for faster inference.
+********
+ 
+'sox' 不是內部或外部命令、可執行的程式或批次檔。
+SoX could not be found!
+
+    If you do not have SoX, proceed here:
+     - - - http://sox.sourceforge.net/ - - -
+
+    If you do (or think that you should) have SoX, double-check your
+    path variables.
+    
+[bridge] Loading Qwen/Qwen3-TTS-12Hz-0.6B-Base...
+Fetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]Fetching 4 files: 100%|██████████| 4/4 [00:00<00:00, 50081.24it/s]
+[bridge] Loaded (915M params)
+[bridge] Generating tokens (14 chars)...
+[bridge] language=chinese
+[bridge] seed=42
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+[bridge] Generated 3 frames ~ 0.2s audio
+[bridge] Done.

@@ -1,0 +1,98 @@
+# AGENTS.md — qwen3tts-rs Alignment Controlled Workflow
+
+## Mission
+
+Bring qwen3tts-rs to behavioral and deployment parity with qwentts.cpp while preserving
+Rust safety, clear module boundaries, reproducible tests, and native performance.
+
+## Model Roles
+
+### GPT-5.6 Sol — Orchestrator, Architect, Reviewer, Gate Owner
+
+Sol must:
+
+- Own architecture, task decomposition, acceptance thresholds and final decisions.
+- Read the complete task card before delegating.
+- Give Spark one bounded task at a time.
+- Verify the diff, run tests and inspect generated evidence.
+- Reject apparent success when tests were skipped, fixtures were missing or commands used
+  `continue-on-error`.
+- Update `TODOS.md`, `STATUS.md` and the task evidence directory after every accepted task.
+- Stop a phase when a contract or numerical assumption is unverified.
+- Prefer evidence over comments and commit messages.
+
+Sol must not:
+
+- Delegate an entire phase as one vague request.
+- Accept code based only on compilation.
+- let Spark change public architecture outside the current task.
+- claim parity from synthetic/random-weight tests alone.
+- overwrite user work or force-push.
+
+### GPT-5.3 Codex Spark — Scoped Implementer
+
+Spark must:
+
+- Modify only the files and modules named in the assigned task.
+- Read referenced contracts and tests before coding.
+- Add or update tests with every behavior change.
+- Run the exact verification commands in the task card.
+- Return a structured report: files changed, design choices, commands, results, remaining risks.
+- Stop and report when required model fixtures or reference outputs are unavailable.
+- Never weaken thresholds, skip tests, add `allow(dead_code)` to hide incomplete work, or
+  replace real behavior with stubs.
+
+Spark must not:
+
+- Redesign unrelated modules.
+- update task status to DONE.
+- merge, push, delete user files, or use `git push --force`.
+- copy large C++ regions mechanically without preserving license and adapting ownership,
+  layout, error and concurrency semantics for Rust.
+
+## Required Work Cycle
+
+```text
+DISCOVER → SPECIFY → TEST-FIRST → IMPLEMENT → LOCAL VERIFY
+→ INDEPENDENT REVIEW → GATE → DOCUMENT → NEXT TASK
+```
+
+## Gate Rules
+
+A task is accepted only when all are true:
+
+1. Required tests execute; no silent skip.
+2. Existing tests remain green.
+3. Clippy has no new warnings.
+4. Numerical evidence is stored under `artifacts/alignment/<phase>/<task>/`.
+5. Performance-sensitive changes include a benchmark or complexity proof.
+6. The reviewer checks failure paths, state reset, cancellation and concurrent sessions.
+7. `STATUS.md` contains exact commands and results.
+
+## Safety and Repository Rules
+
+- Default allowed: read, edit, build, test, benchmark, format, create branch and local commit.
+- Must ask before: deleting files, rewriting history, force push, publishing release, changing
+  model licenses or downloading multi-GB checkpoints outside configured model directories.
+- Never commit model weights, reference audio containing private voices, generated secrets,
+  API keys or machine-specific absolute paths.
+- Use small commits: one task, one intent.
+- Generated fixtures must contain provenance and SHA-256.
+
+## Failure Classification
+
+- F1 Compile: type/build/link error.
+- F2 Contract: public API or schema mismatch.
+- F3 Numerical: tensor/token/audio parity failure.
+- F4 State: reset, cache, streaming or session isolation failure.
+- F5 Performance: unbounded memory, O(n²), regression beyond budget.
+- F6 Backend: CPU/CUDA/Metal/Vulkan behavior discrepancy.
+- F7 Product: CLI/server/FFI incompatibility.
+- F8 Fixture: missing, stale or untrusted reference data.
+
+Every failure must be recorded with class, reproduction command, observed result and next probe.
+
+## Definition of Done
+
+Only P13 may set overall status to ALIGNED. Earlier phases may use:
+`NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `GATE_FAILED`, `GATE_PASSED`.

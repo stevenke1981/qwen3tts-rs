@@ -2,8 +2,8 @@ use candle_core::{Device, Tensor};
 
 use crate::alignment_stage_dump::{NoopStageDumpObserver, StageDumpObserver};
 use crate::codec::{
-    CausalConv1d, CausalConvConfig, CodebookLookup, DecoderBlock, ParallelCodebook, PreTransformer,
-    PreTransformerConfig, UpsampleBlock, snake_beta,
+    snake_beta, CausalConv1d, CausalConvConfig, CodebookLookup, DecoderBlock, KvRing,
+    ParallelCodebook, PreTransformer, PreTransformerConfig, UpsampleBlock,
 };
 use crate::weights::WeightLoader;
 use crate::{DecoderConfig, Error, Result, TtsDecoder};
@@ -27,8 +27,10 @@ pub struct Decoder12Hz {
 
     temperature: f64,
 
-    // Streaming state: accumulated pre_conv outputs (latent_dim per frame)
-    pre_conv_buffer: Vec<f32>,
+    // Streaming state: accumulated PreTransformer step outputs (latent_dim per frame)
+    step_buffer: Vec<f32>,
+    /// KV ring buffers for each transformer layer (streaming attention cache)
+    kv_rings: Vec<KvRing>,
     /// Number of audio samples produced so far (for extracting only new samples)
     output_offset: usize,
 }
@@ -99,13 +101,15 @@ impl Decoder12Hz {
         );
 
         let cap = config.ring_buffer_capacity * config.latent_dim;
+        let kv_rings = PreTransformer::new_kv_rings(&pt_cfg);
 
         log::info!(
-            "Decoder12Hz loaded from safetensors: {} tensors",
+            "Decoder12Hz loaded from safetensors: {} tensors, {} kv_rings",
             loader.len(),
+            kv_rings.len(),
         );
         log::info!(
-            "Decoder12Hz streaming buffer capacity = {} frames (no trim – O(n²) for streaming, use batch decode_frames for bulk)",
+            "Decoder12Hz streaming step_buffer capacity = {} frames (O(SlidingWindow) per step via KvRing)",
             config.ring_buffer_capacity,
         );
 
@@ -122,7 +126,8 @@ impl Decoder12Hz {
             final_snake_a: fs_a,
             final_snake_b: fs_b,
             temperature: 1.0,
-            pre_conv_buffer: Vec::with_capacity(cap),
+            step_buffer: Vec::with_capacity(cap),
+            kv_rings,
             output_offset: 0,
         })
     }
@@ -286,18 +291,27 @@ impl Decoder12Hz {
         // Step 1: pre_conv step — maintains ring buffer state across frames
         let x = self.pre_conv.step_tensor(&frame_embed)?; // (1, latent_dim, 1)
 
-        // Step 2: Append pre_conv output to streaming buffer.
+        // Step 2: PreTransformer step (streaming with KvRing — O(SlidingWindow) per step)
+        // The ring buffer caches post-RoPE K and raw V across frames, avoiding
+        // O(total_frames²) attention recomputation.
+        let position = self.step_buffer.len() / self.config.latent_dim;
+        let h = self
+            .pre_transformer
+            .step(&x, &mut self.kv_rings, position)?; // (1, latent_dim, 1)
+
+        // Step 3: Append step output to streaming buffer.
         // NOTE: We accumulate ALL frames because the pipeline is not frame-independent.
         // ConvTranspose1d + dilated convs in downstream layers create inter-frame overlap
         // that prevents simple buffer trimming. Trimming would change the output length,
-        // breaking the output_offset tail extraction. For O(n²) mitigation, use batch
-        // decode_frames() for bulk decoding or GPU (CUDA) for hardware acceleration.
+        // breaking the output_offset tail extraction.
+        // The KvRing eliminates O(total_frames²) in the PreTransformer; downstream layers
+        // remain O(total_frames) due to conv overlap constraints.
         // Buffer stores frame-major: [f0_ch0..f0_chC-1, f1_ch0..f1_chC-1, ...]
-        let x_vec = x.squeeze(0)?.squeeze(1)?.to_vec1()?; // (latent_dim,)
-        self.pre_conv_buffer.extend(&x_vec);
-        let total_frames = self.pre_conv_buffer.len() / self.config.latent_dim;
+        let h_vec = h.squeeze(0)?.squeeze(2)?.to_vec1()?; // (latent_dim,)
+        self.step_buffer.extend(&h_vec);
+        let total_frames = self.step_buffer.len() / self.config.latent_dim;
 
-        // Step 3: Build accumulated tensor in channel-major order.
+        // Step 4: Build accumulated tensor in channel-major order.
         // Candle's C-order for shape (1, C, T) expects:
         //   [ch0_t0, ch0_t1, ..., ch0_tT-1, ch1_t0, ..., ch1_tT-1, ...]
         // Our buffer is frame-major:
@@ -305,17 +319,15 @@ impl Decoder12Hz {
         // So we build with shape (1, T, C) and transpose to (1, C, T).
         let latent_dim = self.config.latent_dim;
         let h_tensor = Tensor::from_slice(
-            &self.pre_conv_buffer,
+            &self.step_buffer,
             (1, total_frames, latent_dim),
             &self.device,
         )?
         .transpose(1, 2)?
         .contiguous()?;
 
-        // Step 4: Full pipeline on accumulated history
-        let h = self.pre_transformer.forward(&h_tensor)?;
-
-        let mut h = h;
+        // Step 5: Full pipeline on accumulated history
+        let mut h = h_tensor;
         for ub in &self.upsample_blocks {
             h = ub.forward(&h)?;
         }
@@ -367,7 +379,8 @@ impl TtsDecoder for Decoder12Hz {
 
     fn reset_state(&mut self) {
         self.pre_conv.reset_state();
-        self.pre_conv_buffer.clear();
+        PreTransformer::reset_kv_rings(&mut self.kv_rings);
+        self.step_buffer.clear();
         self.output_offset = 0;
     }
 }

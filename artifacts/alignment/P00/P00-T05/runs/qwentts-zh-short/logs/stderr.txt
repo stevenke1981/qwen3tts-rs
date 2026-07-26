@@ -1,0 +1,54 @@
+[Qwen] qwentts.cpp 82cd05b (2026-07-21)
+[Load] Talker backend: CPU (CPU threads: 8)
+[GGUF] E:\qwentts.cpp-reference\models\qwen-talker-0.6b-base-F32.gguf: 478 tensors, data at offset 5954304
+[WeightCtx] Loaded 316 tensors, 2915.3 MB into backend
+[Talker] Loaded: 28 layers, hidden 1024, heads 16/8, head_dim 128, FFN 3072, RoPE theta 1000000, mrope sections [24,20,20] interleaved=0
+[WeightCtx] Loaded 86 tensors, 540.0 MB into backend
+[CodePredictor] Loaded: 5 layers, hidden 1024, heads 16/8, head_dim 128, FFN 3072, RoPE theta 1000000, 15 acoustic codebooks (vocab 2048 each), mtp_proj identity
+[GGUF] E:\qwentts.cpp-reference\models\qwen-tokenizer-12hz-F32.gguf: 398 tensors, data at offset 29664
+[WeightCtx] Loaded 18 tensors, 33.0 MB into backend
+[Quantizer] Loaded: 16 codebooks (1 semantic + 15 acoustic), 2048 entries x 256 dim, hidden 512
+[WeightCtx] Loaded 93 tensors, 116.1 MB into backend
+[Transformer] Loaded: 8 layers, hidden 512, heads 16/16, head_dim 64, FFN 1024, RoPE theta 10000, sliding window 72
+[WeightCtx] Loaded 22 tensors, 80.1 MB into backend
+[Upsample] Loaded: 2 blocks (2x ratio per block), channels 1024, dwconv kernel 7
+[WeightCtx] Loaded 118 tensors, 142.9 MB into backend
+[DAC] Loaded: 4 blocks (strides 8/5/4/3), 24 kHz mono out, weights 142.9 MB
+[WeightCtx] Loaded 2 tensors, 3.0 MB into backend
+[Pipeline] Ready: hop 1920 samples @ 24000 Hz mono, 16 codebooks @ 12.5 Hz
+[KVCache] Allocated: 28 layers, 8 KV heads, head_dim 128, max_seq_len 4096, 1 sets -> 896 MB
+[KVCache] Allocated: 5 layers, 8 KV heads, head_dim 128, max_seq_len 16, 1 sets -> 0 MB
+[Pipeline] Loaded: arch=0b6 variant=base tokenizer=qwen3_tts_tokenizer_12hz codebooks=16 speaker_encoder=deferred speakers=0 fa=off clamp_fp16=off max_batch=1
+[BPE] Loaded from GGUF: 151676 vocab, 151291 merges, eos_id=151643
+[BPE] Registered 5 arch special tokens (total specials=6)
+[Prompt] Built: 19 ids, N_text=11, N_instruct=0, T_ctx=21, hidden=1024, lang=Chinese (id=2055), speaker=none (id=-1) ref_spk_emb=no icl=no
+[Debug] prompt-ids: [19] first4: 151644.000000 77091.000000 198.000000 108386.000000
+[Debug] talker-input-embed: [21, 1024] first4: -0.003174 0.000344 -0.000655 0.001412
+[Debug] trailing-text-hidden: [1, 1024] first4: 0.004777 -0.003806 -0.001696 0.003997
+[Debug] tts-pad-embed: [1024] first4: 0.004777 -0.003806 -0.001696 0.003997
+[Debug] talker-hidden-prefill-l0: [21, 1024] first4: -0.013957 0.030076 -0.034684 -0.006150
+[Debug] talker-hidden-prefill-l7: [21, 1024] first4: -3.864587 -4.012074 2.167825 -3.670160
+[Debug] talker-hidden-prefill-l14: [21, 1024] first4: -7.334855 -18.060179 -5.404225 -0.798704
+[Debug] talker-hidden-prefill-l21: [21, 1024] first4: -13.682684 -13.089251 -25.247856 8.874357
+[Debug] talker-hidden-prefill-l27: [21, 1024] first4: -7.202052 -15.667627 -27.046429 -5.324172
+[Debug] talker-hidden-prefill-final: [21, 1024] first4: -1.063705 -2.166097 -3.976374 -0.757627
+[Debug] talker-logits-prefill: [3072] first4: 0.020461 -5.019519 5.162453 -3.882153
+[Batch] Admit slot=0 T_ctx=21 prefill=221.8 ms build=2.1 ms (stall for 0 active slots)
+[Sample] step=0 c0=1995 u=-1.0000000000 subseq=0
+[Debug] codes-step0: [16] first4: 1995.000000 1159.000000 355.000000 22.000000
+[Debug] next-emb-step0: [1024] first4: 0.019191 -0.104941 0.009168 0.032176
+[Debug] talker-hidden-step1: [1024] first4: 6.843452 -5.813824 0.872140 -8.700135
+[Sample] step=1 c0=215 u=-1.0000000000 subseq=16
+[Pipeline] Generation done : 4 frames
+[Debug] codes-full: [4, 16] first4: 1995.000000 1159.000000 355.000000 22.000000
+[Debug] output-audio: [7680] first4: 0.000013 0.000014 0.000014 0.000015
+[Perf] PromptBuild 2.1 ms
+[Perf] Prefill 221.8 ms (T_ctx prefill)
+[Perf] TTFA 448.4 ms (first frame codes)
+[Perf] TalkerDecode 439.7 ms (4 frames, 109.91 ms/frame)
+[Perf] CodePredictor 1876.0 ms (468.99 ms/frame)
+[Perf] HostCompose 0.0 ms (c0 sample + next emb)
+[Perf] CodecDecode 392.0 ms
+[Perf] Total 2933.8 ms (4 frames, 578.91 ms/frame AR, audio 0.32 s, RTF 9.168)
+[WAV] Wrote E:\qwen3tts-rs\artifacts\alignment\P00\P00-T05\runs\qwentts-zh-short\output.wav: 7680 samples, 24000 Hz, mono S16
+[Pipeline] Wrote 7680 samples (0.32 s) -> E:\qwen3tts-rs\artifacts\alignment\P00\P00-T05\runs\qwentts-zh-short\output.wav

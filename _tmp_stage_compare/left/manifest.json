@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "source": "qwen3tts-rs",
+  "model": "unit-model",
+  "case_id": "case-compare",
+  "revision": null,
+  "seed": null,
+  "stages": [
+    {
+      "name": "codec_input_code_matrix",
+      "dtype": "f32",
+      "shape": [
+        2
+      ],
+      "file": "codec_input_code_matrix_0000.f32.bin",
+      "layout": "c",
+      "sha256": "a17ec4c6f153ab2951e556bd46ae2f0b76f84308ed7b5efa1bb0de79ea7dee13"
+    },
+    {
+      "name": "codec_final_pcm",
+      "dtype": "f32",
+      "shape": [
+        4
+      ],
+      "file": "codec_final_pcm_0000.f32.bin",
+      "layout": "c",
+      "sha256": "60e149114b4f32748184628fdb09cede3780c1a4f3c38bb4a78d861c21af4d17"
+    }
+  ]
+}

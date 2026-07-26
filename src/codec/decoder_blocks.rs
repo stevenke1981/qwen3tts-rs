@@ -1,9 +1,9 @@
 use candle_core::Tensor;
 use candle_nn::{ConvTranspose1d, ConvTranspose1dConfig, Linear, Module};
 
-use crate::Result;
 use crate::codec::{CausalConv1d, CausalConvConfig};
 use crate::weights::WeightLoader;
+use crate::Result;
 
 pub fn snake_beta(x: &Tensor, alpha: &Tensor, beta: &Tensor) -> Result<Tensor> {
     let alpha = alpha.reshape((1, alpha.elem_count(), 1))?.exp()?;

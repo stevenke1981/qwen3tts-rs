@@ -1,0 +1,10 @@
+{
+  "bytes_compressed": 7867932,
+  "bytes_raw": 15761408,
+  "exported_at": 1785066509,
+  "files": 378,
+  "format": "sqlite-zstd",
+  "project": "cbm+cbrlm+qwen3tts-rs",
+  "symbols": 2403,
+  "version": "0.1.0"
+}

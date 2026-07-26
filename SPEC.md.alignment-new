@@ -1,0 +1,82 @@
+# Product and Engineering Specification
+
+## Goal
+
+Deliver a native Rust Qwen3-TTS 12 Hz runtime whose model behavior and deployment surfaces are
+equivalent to qwentts.cpp for supported model families while retaining Rust-native APIs.
+
+## Supported Model Matrix
+
+Required:
+
+- Qwen3-TTS-12Hz-0.6B-Base
+- Qwen3-TTS-12Hz-0.6B-CustomVoice
+- Qwen3-TTS-12Hz-1.7B-Base
+- Qwen3-TTS-12Hz-1.7B-CustomVoice
+- Qwen3-TTS-12Hz-1.7B-VoiceDesign
+- shared Qwen3-TTS-Tokenizer-12Hz encoder and decoder
+
+## Functional Requirements
+
+### TTS Generation
+
+- Text input, language selection and automatic language mode.
+- Base default synthesis.
+- x-vector-only voice clone.
+- ICL voice clone with reference audio and transcript.
+- CustomVoice named speakers and dialect metadata.
+- VoiceDesign free-text instructions.
+- Separate Talker and Code Predictor sampling options.
+- deterministic seed behavior.
+
+### Streaming
+
+- Audio callback/chunk must occur before full token generation completes.
+- Every generated codec frame is immediately eligible for codec decode.
+- One frame produces 1920 samples at 24 kHz.
+- Persistent state must include convolution context, transposed-convolution overlap,
+  transformer KV window, absolute position and output bookkeeping.
+- Reset must reproduce clean offline zero-padding behavior.
+- Multiple sessions must have isolated states.
+
+### Tokenizer
+
+- Encode 24 kHz mono WAV into 16 RVQ codes at 12.5 Hz.
+- Decode codes into 24 kHz mono PCM.
+- Buffered chunk decode and true stateful stream decode.
+- Round-trip file format with version and model metadata.
+
+### Model Storage and Quantization
+
+- Metadata must be read from model/config files; no model-family behavior derived only from names.
+- Support F32/BF16 baseline.
+- Support native Q8_0 and Q4_K_M-class inference for eligible Talker tensors.
+- Sensitive RVQ codebooks, projections, speaker encoder and small/nonnormal tensors remain F32/F16
+  according to a documented policy.
+- Runtime must not materialize a full F32 copy of quantized backbone weights.
+
+### Product Surfaces
+
+- `qwen-tts`: text to WAV or streamed PCM.
+- `qwen-codec`: WAV to codes and codes to WAV.
+- `tts-server`: OpenAI-compatible `/v1/audio/speech`; streaming response.
+- Rust library API.
+- C ABI shared library.
+- Optional existing egui GUI remains supported.
+
+## Non-Functional Requirements
+
+- No O(n²) history recomputation in streaming.
+- Bounded per-session memory.
+- Cancellation is checked between generation/decode frames.
+- No global mutable session state.
+- Errors include phase and model context.
+- CPU correctness is the numerical reference.
+- CUDA and Metal use backend-specific performance gates.
+- Large models and fixtures are external assets with checksums.
+
+## Exclusions
+
+- 25 Hz Flow Matching decoder is not required for qwentts.cpp 12 Hz parity.
+- Training and fine-tuning are not part of this package.
+- Voice dataset management is out of scope.
