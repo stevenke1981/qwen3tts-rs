@@ -39,8 +39,8 @@ use std::path::PathBuf;
 
 use qwen3tts::paths::ensure_tokenizer_weight_dir;
 use qwen3tts::text_frontend::model_catalog::{
-    GenerationMode, ModelMetadata, SUPPORTED_LANGUAGES, model_capability, model_table,
-    resolve_generation_mode, validate_generation_request,
+    model_capability, model_table, resolve_generation_mode, validate_generation_request,
+    GenerationMode, ModelMetadata, SUPPORTED_LANGUAGES,
 };
 use qwen3tts::text_frontend::speaker_presets;
 use qwen3tts::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend, TokenStream};
@@ -60,6 +60,26 @@ enum BackendKind {
     Candle,
 }
 
+/// Talker 權重載入後端
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TalkerBackendKind {
+    /// 從 model.safetensors 載入（預設，現有行為）
+    Safetensors,
+    /// 從 GGUF 檔案載入（需 qwentts.cpp 格式的 .gguf）
+    #[cfg(feature = "candle-llm")]
+    Gguf,
+}
+
+impl TalkerBackendKind {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Safetensors => "safetensors",
+            #[cfg(feature = "candle-llm")]
+            Self::Gguf => "gguf",
+        }
+    }
+}
+
 fn default_backend() -> BackendKind {
     #[cfg(feature = "candle-llm")]
     {
@@ -69,6 +89,10 @@ fn default_backend() -> BackendKind {
     {
         BackendKind::Python
     }
+}
+
+fn default_talker_backend() -> TalkerBackendKind {
+    TalkerBackendKind::Safetensors
 }
 
 /// 自動尋找 HuggingFace 快取中的 Qwen3-TTS 模型 snapshot 目錄
@@ -194,6 +218,8 @@ fn main() {
     let mut max_new_tokens: u32 = 4096; // 最大生成 Token 數
     let mut model_dir: Option<String> = None; // 給 CandleLLM 用
     let mut backend = default_backend();
+    let mut talker_backend = default_talker_backend();
+    let mut talker_gguf: Option<String> = None;
     let mut speed = 1.0;
 
     let mut i = 1;
@@ -308,6 +334,32 @@ fn main() {
                 };
                 i += 2;
             }
+            "--talker-backend" => {
+                require_arg(&args, i, "--talker-backend");
+                talker_backend = match args[i + 1].as_str() {
+                    "safetensors" | "sf" => TalkerBackendKind::Safetensors,
+                    #[cfg(feature = "candle-llm")]
+                    "gguf" => TalkerBackendKind::Gguf,
+                    #[cfg(not(feature = "candle-llm"))]
+                    "gguf" => {
+                        eprintln!(
+                            "錯誤: --talker-backend gguf 需要 --features candle-llm。\n\
+                             重新編譯: cargo run --example synthesize --features candle-llm -- ..."
+                        );
+                        std::process::exit(1);
+                    }
+                    other => {
+                        eprintln!("未知 talker 後端: {other}（僅支援 safetensors / gguf）");
+                        std::process::exit(1);
+                    }
+                };
+                i += 2;
+            }
+            "--talker-gguf" => {
+                require_arg(&args, i, "--talker-gguf");
+                talker_gguf = Some(args[i + 1].clone());
+                i += 2;
+            }
             "--speed" => {
                 require_arg(&args, i, "--speed");
                 speed = args[i + 1].parse().unwrap_or_else(|_| {
@@ -410,6 +462,10 @@ fn main() {
         );
     }
     println!("後端    : {:?}", backend);
+    println!("talker   : {}", talker_backend.as_str());
+    if let Some(gguf) = &talker_gguf {
+        println!("gguf路徑 : {gguf}");
+    }
     println!("模式    : {}", effective_mode.as_str());
     println!("語言    : {language}");
     println!("輸出    : {output_path}");
@@ -520,11 +576,6 @@ fn main() {
                 // 決定模型目錄：--model-dir > QWEN3_TTS_MODEL_DIR > HF 快取掃描
                 let dir = resolve_model_dir(&model_id, model_dir.as_deref());
 
-                let sf_path = dir.join("model.safetensors");
-                if !sf_path.exists() {
-                    eprintln!("錯誤: {sf_path:?} 不存在");
-                    std::process::exit(1);
-                }
                 let tok_path = if let Some(path) = find_tokenizer_json_for_model(&model_id, &dir) {
                     path
                 } else {
@@ -537,27 +588,70 @@ fn main() {
                 };
 
                 let display_model = display_model_id(&model_id, &dir);
-                println!("[1/3] 載入 Candle LLM ({display_model}) 並生成 Token…");
-                println!("      model dir : {dir:?}");
-                println!("      （首次載入時間依模型大小與裝置而定，包含權重 BF16→F32）");
+                match talker_backend {
+                    TalkerBackendKind::Safetensors => {
+                        let sf_path = dir.join("model.safetensors");
+                        if !sf_path.exists() {
+                            eprintln!("錯誤: {sf_path:?} 不存在");
+                            std::process::exit(1);
+                        }
+                        println!("[1/3] 載入 Candle LLM ({display_model}) 並生成 Token…");
+                        println!("      talker 權重: {sf_path:?} (safetensors)");
+                        println!("      （首次載入時間依模型大小與裝置而定，包含權重 BF16→F32）");
 
-                let backend = CandleLLM::from_files(&sf_path, &tok_path, &device)
-                    .expect("載入 CandleLLM 失敗");
-                let options = SynthesisOptions {
-                    language,
-                    speaker,
-                    instruct,
-                    reference_audio,
-                    reference_text,
-                    seed,
-                    temperature: 0.9,
-                    top_k: 50,
-                    top_p: 1.0,
-                    max_new_tokens,
-                };
-                backend
-                    .synthesize(&text, &options)
-                    .expect("Candle LLM Token 生成失敗")
+                        let backend = CandleLLM::from_files(&sf_path, &tok_path, &device)
+                            .expect("載入 CandleLLM 失敗");
+                        let options = SynthesisOptions {
+                            language,
+                            speaker,
+                            instruct,
+                            reference_audio,
+                            reference_text,
+                            seed,
+                            temperature: 0.9,
+                            top_k: 50,
+                            top_p: 1.0,
+                            max_new_tokens,
+                        };
+                        backend
+                            .synthesize(&text, &options)
+                            .expect("Candle LLM Token 生成失敗")
+                    }
+                    TalkerBackendKind::Gguf => {
+                        let gguf_path = talker_gguf
+                            .as_ref()
+                            .map(std::path::PathBuf::from)
+                            .unwrap_or_else(|| dir.join("model.gguf"));
+                        if !gguf_path.exists() {
+                            eprintln!(
+                                "錯誤: GGUF talker 權重不存在: {gguf_path:?}\n\
+                                 (使用 --talker-gguf <路徑> 指定，或放 model.gguf 於模型目錄)"
+                            );
+                            std::process::exit(1);
+                        }
+                        println!("[1/3] 載入 Candle LLM ({display_model}) 並生成 Token…");
+                        println!("      talker 權重: {gguf_path:?} (GGUF)");
+                        println!("      （GGUF QTensor → F32 dequantize）");
+
+                        let backend = CandleLLM::from_gguf(&gguf_path, &tok_path, &device)
+                            .expect("載入 CandleLLM (GGUF) 失敗");
+                        let options = SynthesisOptions {
+                            language,
+                            speaker,
+                            instruct,
+                            reference_audio,
+                            reference_text,
+                            seed,
+                            temperature: 0.9,
+                            top_k: 50,
+                            top_p: 1.0,
+                            max_new_tokens,
+                        };
+                        backend
+                            .synthesize(&text, &options)
+                            .expect("Candle LLM Token 生成失敗")
+                    }
+                }
             }
         }
     };
@@ -743,6 +837,8 @@ fn print_usage() {
   --model <ID>       HuggingFace 模型 ID（預設: Qwen/Qwen3-TTS-12Hz-0.6B-Base）
   --model-dir <路徑> 本地模型目錄（適用於各後端，未提供時自動從 HF 快取找）
   --backend / -b     文字前端後端：python | candle（預設: {backend_default}）
+  --talker-backend   Talker 權重載入後端：safetensors | gguf（預設: safetensors）
+  --talker-gguf      GGUF talker 權重檔案路徑（預設: &lt;model-dir&gt;/model.gguf）
   --language / -l    語言（預設: auto）
   --speaker / -s     說話者名稱（可選）
                     內建: Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna, Sohee
@@ -774,6 +870,11 @@ fn print_usage() {
   cargo run --example synthesize --features candle-llm -- \\
       --text \"你好\" --backend candle \\
       --model-dir ~/.cache/huggingface/hub/models--Qwen--Qwen3-TTS-12Hz-0.6B-Base/snapshots/<sha>
+
+  # GGUF talker 權重（qwentts.cpp 格式，需 --features candle-llm）
+  cargo run --example synthesize --features candle-llm -- \\
+      --text \"你好\" --backend candle \\
+      --talker-backend gguf --talker-gguf qwen-talker-0.6b-base-q4_k_m.gguf
 
   # VoiceDesign 音色描述（建議使用 1.7B-VoiceDesign）
   cargo run --example synthesize --features \"candle-llm cuda\" -- \\

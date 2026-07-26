@@ -20,3 +20,6 @@ agent_temp*.py
 /story*.txt
 /run_synth*.ps1
 /py_test*.py
+
+# GGUF 測試檔案（大檔案，需手動下載）
+/gguf-test/

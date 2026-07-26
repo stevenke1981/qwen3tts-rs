@@ -35,8 +35,8 @@ use crate::talker::{
     VoiceClonePrompt,
 };
 use crate::text_frontend::model_catalog::{
-    GenerationSamplingConfig, ModelMetadata, resolve_effective_sampling_plan,
-    validate_generation_request,
+    resolve_effective_sampling_plan, validate_generation_request, GenerationSamplingConfig,
+    ModelMetadata,
 };
 use crate::text_frontend::prompt_templates::{
     build_assistant_prompt, build_instruction_prompt, build_reference_prompt,
@@ -44,7 +44,7 @@ use crate::text_frontend::prompt_templates::{
 };
 use crate::text_frontend::token_parser::TokenParser;
 use crate::text_frontend::voice_clone::speaker_encoder::{
-    NativeSpeakerEncoder, upstream_mel_spectrogram,
+    upstream_mel_spectrogram, NativeSpeakerEncoder,
 };
 use crate::text_frontend::voice_clone::speech_tokenizer::NativeSpeechTokenizerEncoder;
 use crate::text_frontend::voice_clone::{
@@ -217,6 +217,54 @@ impl CandleLLM {
         let talker = loader.build_talker(&config)?;
         log::info!(
             "CandleLLM loaded: hidden={} intermediate={} num_layers={} code_predictor_hidden={}",
+            config.hidden_size,
+            config.intermediate_size,
+            config.num_hidden_layers,
+            config.code_predictor.hidden_size
+        );
+        Ok(Self {
+            tokenizer: Arc::new(tokenizer),
+            metadata,
+            talker: Arc::new(talker),
+            config,
+            generation_sampling,
+            device: device.clone(),
+            parser: TokenParser::new(24000),
+        })
+    }
+
+    /// 從 GGUF 權重檔案載入（替代 `from_files` 的 GGUF 路徑）
+    ///
+    /// 使用 `TalkerWeightLoader::from_gguf()` 讀取 qwentts.cpp 格式的 GGUF 檔案，
+    /// dequantize 後建構完整的 `TalkerForConditionalGeneration`。
+    ///
+    /// # 參數
+    /// - `gguf_path`: `.gguf` 權重檔案路徑
+    /// - `tokenizer_path`: `tokenizer.json` 路徑
+    /// - `device`: 計算裝置
+    ///
+    /// # 注意
+    /// GGUF 檔案所在的目錄需要包含 `config.json`，用於解析 metadata
+    /// （特殊 token ID、語言對照表等）。
+    pub fn from_gguf(
+        gguf_path: impl AsRef<Path>,
+        tokenizer_path: impl AsRef<Path>,
+        device: &Device,
+    ) -> Result<Self> {
+        let gguf_path = gguf_path.as_ref();
+        let tokenizer = Tokenizer::from_file(tokenizer_path.as_ref())
+            .map_err(|e| Error::Config(format!("Failed to load tokenizer: {e}")))?;
+        let loader = TalkerWeightLoader::from_gguf(gguf_path, device)?;
+        let metadata = load_metadata_from_safetensors(gguf_path)?;
+        let generation_sampling =
+            GenerationSamplingConfig::from_model_dir(gguf_path.parent().ok_or_else(|| {
+                Error::Config("invalid gguf_path: missing parent directory".into())
+            })?)?;
+        let mut config = loader.infer_config()?;
+        apply_metadata_to_talker_config(&mut config, &metadata)?;
+        let talker = loader.build_talker(&config)?;
+        log::info!(
+            "CandleLLM loaded from GGUF: hidden={} intermediate={} num_layers={} code_predictor_hidden={}",
             config.hidden_size,
             config.intermediate_size,
             config.num_hidden_layers,

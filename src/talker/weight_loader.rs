@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use candle_core::quantized::gguf_file;
 use candle_core::{Device, Tensor};
 
 use crate::Error;
@@ -63,6 +64,49 @@ impl TalkerWeightLoader {
             };
             tensors.insert(name.to_string(), tensor);
         }
+
+        Ok(Self {
+            tensors,
+            device: device.clone(),
+        })
+    }
+
+    /// 從 GGUF 檔案載入 talker 權重
+    ///
+    /// 使用 candle-core 內建 `gguf_file` 模組讀取 qwentts.cpp 格式的 GGUF 檔案。
+    /// 所有量化權重會自動 dequantize 為 F32，並透過 `gguf_key_to_safetensors`
+    /// 將 GGUF tensor 名稱對應到與 `from_safetensors` 一致的鍵名，
+    /// 因此 `build_talker()` / `build_talker_model()` / `build_code_predictor()`
+    /// 可以無修改共用。
+    pub fn from_gguf(path: impl AsRef<std::path::Path>, device: &Device) -> Result<Self> {
+        let path = path.as_ref();
+        let mut file = std::fs::File::open(path)
+            .map_err(|e| Error::Weight(format!("Failed to open GGUF file {path:?}: {e}")))?;
+        let content = gguf_file::Content::read(&mut file).map_err(|e| {
+            Error::Weight(format!("Failed to read GGUF content from {path:?}: {e}"))
+        })?;
+
+        let mut tensors = HashMap::new();
+        for (gguf_name, info) in &content.tensor_infos {
+            let qtensor = info
+                .read(&mut file, content.tensor_data_offset, device)
+                .map_err(|e| {
+                    Error::Weight(format!("Failed to read GGUF tensor '{gguf_name}': {e}"))
+                })?;
+            let f32_tensor = qtensor.dequantize(device).map_err(|e| {
+                Error::Weight(format!(
+                    "Failed to dequantize GGUF tensor '{gguf_name}': {e}"
+                ))
+            })?;
+            let sf_name = gguf_key_to_safetensors(gguf_name);
+            if tensors.insert(sf_name.clone(), f32_tensor).is_some() {
+                log::warn!(
+                    "Duplicate tensor key after GGUF→safetensors mapping: {sf_name} (was {gguf_name})"
+                );
+            }
+        }
+
+        log::info!("Loaded {} tensors from GGUF file {path:?}", tensors.len());
 
         Ok(Self {
             tensors,
@@ -325,8 +369,240 @@ impl TalkerWeightLoader {
     }
 }
 
+/// 將 GGUF tensor 名稱轉換為 safetensors 風格的鍵名
+///
+/// GGUF 檔案使用 `blk.{i}.{component}.{param}` 的命名慣例（與 llama.cpp 生態一致），
+/// 而現有 `TalkerWeightLoader` 使用形如 `talker.model.layers.{i}.{component}.{param}` 的命名。
+/// 此函式實作完整的轉換對照表。
+///
+/// # 已知限制
+/// - GGUF 可能不包含 `codec_embedding.{i}.weight` 與 `lm_head.{i}.weight`（i=0..14）
+///   這些 tensor 如果遺漏，`build_code_predictor()` 會回傳 `Tensor not found` 錯誤。
+///   需要依實際 GGUF 檔案內容調整。
+fn gguf_key_to_safetensors(gguf_key: &str) -> String {
+    // ── Talker 主模型層 ──
+    // talker.blk.{i}.attn_q.weight  → talker.model.layers.{i}.self_attn.q_proj.weight
+    // 實際 GGUF 使用 flat 命名：attn_output.weight、attn_q_norm.weight、ffn_gate.weight 等
+    if let Some(rest) = gguf_key.strip_prefix("talker.blk.") {
+        let mapped = rest
+            .replace("attn_output.weight", "self_attn.o_proj.weight")
+            .replace("attn_q.weight", "self_attn.q_proj.weight")
+            .replace("attn_k.weight", "self_attn.k_proj.weight")
+            .replace("attn_v.weight", "self_attn.v_proj.weight")
+            .replace("attn_q_norm.weight", "self_attn.q_norm.weight")
+            .replace("attn_k_norm.weight", "self_attn.k_norm.weight")
+            .replace("attn_norm.weight", "input_layernorm.weight")
+            .replace("ffn_norm.weight", "post_attention_layernorm.weight")
+            .replace("ffn_gate.weight", "mlp.gate_proj.weight")
+            .replace("ffn_up.weight", "mlp.up_proj.weight")
+            .replace("ffn_down.weight", "mlp.down_proj.weight");
+        return format!("talker.model.layers.{mapped}");
+    }
+
+    // ── Code Predictor 層 ──
+    // code_pred.blk.{i}.attn_q.weight  → talker.code_predictor.model.layers.{i}.self_attn.q_proj.weight
+    if let Some(rest) = gguf_key.strip_prefix("code_pred.blk.") {
+        let mapped = rest
+            .replace("attn_output.weight", "self_attn.o_proj.weight")
+            .replace("attn_q.weight", "self_attn.q_proj.weight")
+            .replace("attn_k.weight", "self_attn.k_proj.weight")
+            .replace("attn_v.weight", "self_attn.v_proj.weight")
+            .replace("attn_q_norm.weight", "self_attn.q_norm.weight")
+            .replace("attn_k_norm.weight", "self_attn.k_norm.weight")
+            .replace("attn_norm.weight", "input_layernorm.weight")
+            .replace("ffn_norm.weight", "post_attention_layernorm.weight")
+            .replace("ffn_gate.weight", "mlp.gate_proj.weight")
+            .replace("ffn_up.weight", "mlp.up_proj.weight")
+            .replace("ffn_down.weight", "mlp.down_proj.weight");
+        return format!("talker.code_predictor.model.layers.{mapped}");
+    }
+
+    // ── 簡單對照的頂層 tensor ──
+    match gguf_key {
+        "talker.text_embd.weight" => "talker.model.text_embedding.weight".to_string(),
+        "talker.codec_embd.weight" => "talker.model.codec_embedding.weight".to_string(),
+        "talker.text_proj.fc1.weight" => "talker.text_projection.linear_fc1.weight".to_string(),
+        "talker.text_proj.fc1.bias" => "talker.text_projection.linear_fc1.bias".to_string(),
+        "talker.text_proj.fc2.weight" => "talker.text_projection.linear_fc2.weight".to_string(),
+        "talker.text_proj.fc2.bias" => "talker.text_projection.linear_fc2.bias".to_string(),
+        "talker.codec_head.weight" => "talker.codec_head.weight".to_string(),
+        "talker.output_norm.weight" => "talker.model.norm.weight".to_string(),
+        "code_pred.output_norm.weight" => "talker.code_predictor.model.norm.weight".to_string(),
+        "code_pred.mtp_proj.weight" => {
+            "talker.code_predictor.small_to_mtp_projection.weight".to_string()
+        }
+        "code_pred.mtp_proj.bias" => {
+            "talker.code_predictor.small_to_mtp_projection.bias".to_string()
+        }
+
+        // ── Code Predictor 的子碼本嵌入表 ──
+        // code_pred.codec_embd.{i}.weight → talker.code_predictor.model.codec_embedding.{i}.weight
+        // 注意：GGUF 使用 codec_embd（縮寫），safetensors 使用 codec_embedding（全稱）
+        _ if gguf_key.starts_with("code_pred.codec_embd.") => gguf_key.replacen(
+            "code_pred.codec_embd.",
+            "talker.code_predictor.model.codec_embedding.",
+            1,
+        ),
+
+        // ── Code Predictor lm_head ──
+        // code_pred.lm_head.{i}.weight → talker.code_predictor.lm_head.{i}.weight
+        _ if gguf_key.starts_with("talker.") => gguf_key.to_string(),
+        _ if gguf_key.starts_with("code_pred.") => {
+            let rest = gguf_key.strip_prefix("code_pred.").unwrap();
+            format!("talker.code_predictor.{rest}")
+        }
+
+        _ => {
+            log::warn!("Unknown GGUF tensor key: {gguf_key}, passing through as-is");
+            gguf_key.to_string()
+        }
+    }
+}
+
 // BF16 → F32 conversion
 fn bf16_to_f32(bits: u16) -> f32 {
     let extended = (bits as u32) << 16;
     f32::from_bits(extended)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gguf_key_to_safetensors;
+
+    #[test]
+    fn gguf_talker_layer_keys() {
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.0.attn_q.weight"),
+            "talker.model.layers.0.self_attn.q_proj.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.27.attn_k.weight"),
+            "talker.model.layers.27.self_attn.k_proj.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.5.attn_v.weight"),
+            "talker.model.layers.5.self_attn.v_proj.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.10.attn_output.weight"),
+            "talker.model.layers.10.self_attn.o_proj.weight"
+        );
+    }
+
+    #[test]
+    fn gguf_talker_layer_norm_keys() {
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.0.attn_norm.weight"),
+            "talker.model.layers.0.input_layernorm.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.1.ffn_norm.weight"),
+            "talker.model.layers.1.post_attention_layernorm.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.2.attn_q_norm.weight"),
+            "talker.model.layers.2.self_attn.q_norm.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.3.attn_k_norm.weight"),
+            "talker.model.layers.3.self_attn.k_norm.weight"
+        );
+    }
+
+    #[test]
+    fn gguf_talker_mlp_keys() {
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.3.ffn_gate.weight"),
+            "talker.model.layers.3.mlp.gate_proj.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.3.ffn_up.weight"),
+            "talker.model.layers.3.mlp.up_proj.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.blk.3.ffn_down.weight"),
+            "talker.model.layers.3.mlp.down_proj.weight"
+        );
+    }
+
+    #[test]
+    fn gguf_talker_top_level_keys() {
+        assert_eq!(
+            gguf_key_to_safetensors("talker.text_embd.weight"),
+            "talker.model.text_embedding.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.codec_embd.weight"),
+            "talker.model.codec_embedding.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.output_norm.weight"),
+            "talker.model.norm.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.codec_head.weight"),
+            "talker.codec_head.weight"
+        );
+    }
+
+    #[test]
+    fn gguf_text_proj_keys() {
+        assert_eq!(
+            gguf_key_to_safetensors("talker.text_proj.fc1.weight"),
+            "talker.text_projection.linear_fc1.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("talker.text_proj.fc2.bias"),
+            "talker.text_projection.linear_fc2.bias"
+        );
+    }
+
+    #[test]
+    fn gguf_code_pred_layer_keys() {
+        assert_eq!(
+            gguf_key_to_safetensors("code_pred.blk.0.attn_q.weight"),
+            "talker.code_predictor.model.layers.0.self_attn.q_proj.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("code_pred.blk.4.ffn_down.weight"),
+            "talker.code_predictor.model.layers.4.mlp.down_proj.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("code_pred.blk.2.attn_output.weight"),
+            "talker.code_predictor.model.layers.2.self_attn.o_proj.weight"
+        );
+    }
+
+    #[test]
+    fn gguf_code_pred_top_keys() {
+        assert_eq!(
+            gguf_key_to_safetensors("code_pred.output_norm.weight"),
+            "talker.code_predictor.model.norm.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("code_pred.mtp_proj.weight"),
+            "talker.code_predictor.small_to_mtp_projection.weight"
+        );
+    }
+
+    #[test]
+    fn gguf_code_pred_codec_embd() {
+        // code_pred.codec_embd.{i}.weight → talker.code_predictor.model.codec_embedding.{i}.weight
+        assert_eq!(
+            gguf_key_to_safetensors("code_pred.codec_embd.0.weight"),
+            "talker.code_predictor.model.codec_embedding.0.weight"
+        );
+        assert_eq!(
+            gguf_key_to_safetensors("code_pred.codec_embd.14.weight"),
+            "talker.code_predictor.model.codec_embedding.14.weight"
+        );
+    }
+
+    #[test]
+    fn gguf_lm_head_fallback() {
+        assert_eq!(
+            gguf_key_to_safetensors("code_pred.lm_head.0.weight"),
+            "talker.code_predictor.lm_head.0.weight"
+        );
+    }
 }

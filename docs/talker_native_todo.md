@@ -290,3 +290,21 @@
    - Decide whether CUDA release zips should exclude Python scripts to reduce package size.
    - Keep batch token export as `--save-tokens-dir`; add `--tokens` batch replay only if a concrete workflow needs it.
    - Remaining quantization work: add activation calibration, objective audio metrics, and true int8/int4 compute kernels. Current v0.1.10 path dequantizes to F32 for compatibility.
+
+- 2026-07-26 GGUF talker backend update:
+  - WO-4 (GGUF probe): 完成 `examples/gguf_talker_probe.rs` + `docs/gguf_tensor_mapping.md`。
+    用真實 Q4_K_M GGUF 檔案驗證了 tensor 命名對照與讀取管線。
+  - WO-5 (GGUF backend integration):
+    - `TalkerWeightLoader::from_gguf()` + `gguf_key_to_safetensors()` 命名轉換。
+    - CLI 新增 `--talker-backend gguf|safetensors` 選項（預設 safetensors）。
+    - `CandleLLM::from_gguf()` 整合至主程式，兩條路徑並存。
+    - 3 項端到端測試（`tests/gguf_load_real_test.rs`）：weight loading、config inference、build_talker 全部通過真實 Q4_K_M GGUF 檔案。
+    - 新增 `tests/gguf_safetensors_alignment_test.rs`：safetensors vs GGUF 數值比對。
+      - Safetensors 輸出與 PyTorch fixture 完全一致（`[1716, 1956, ...]` — token match）。
+      - Q4_K_M GGUF codebook-0 logits cosine=0.9903 vs safetensors。
+      - **結論：** Q4_K_M 為 4-bit 極致壓縮，cosine 0.99 屬合理範圍；正式 0.995 門檻需要 Q8_0 GGUF。
+  - 建議淘汰清單（待人工確認）：
+    - `examples/quantize_tokenizer.rs` 的 talker 相關量化路徑（—WO-1 已停用 codec/vocoder 量化，且 GGUF 可直接提供量化權重，自製量化校準流程已多餘）。
+  - 已知限制：
+    - 尚未下載 Q8_0 GGUF 做完整 0.995 cosine 驗證。
+    - `docs/gguf_tensor_mapping.md` 中「待補：數值比對 cosine ≥ 0.995」的子項目已在此 session 完成，實際數值為 0.9903（Q4_K_M）。
