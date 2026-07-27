@@ -136,9 +136,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.38593121351541587,
-      "max_abs": 38.0580940246582,
-      "passed": false
+      "cosine": 0.9999999999856883,
+      "max_abs": 0.0001220703125,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step1-frame0-l0",
@@ -154,9 +154,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.7450808271876119,
-      "max_abs": 1.6352607011795044,
-      "passed": false
+      "cosine": 0.9999999999996372,
+      "max_abs": 2.384185791015625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step1-frame0-l1",
@@ -172,9 +172,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5693551521543756,
-      "max_abs": 1.8577869534492493,
-      "passed": false
+      "cosine": 0.9999999999979953,
+      "max_abs": 3.814697265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step1-frame0-l2",
@@ -190,9 +190,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5410195808196818,
-      "max_abs": 2.1866469979286194,
-      "passed": false
+      "cosine": 0.9999999999970094,
+      "max_abs": 4.0531158447265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step1-frame0-l3",
@@ -208,9 +208,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.39662342787787097,
-      "max_abs": 2.5893200039863586,
-      "passed": false
+      "cosine": 0.9999999999906792,
+      "max_abs": 5.662441253662109e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step1-frame0-l4",
@@ -226,9 +226,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.347899621301134,
-      "max_abs": 18.236076593399048,
-      "passed": false
+      "cosine": 0.9999999999850328,
+      "max_abs": 4.0531158447265625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step10-frame0-final",
@@ -244,9 +244,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6958203987614137,
-      "max_abs": 17.392169713974,
-      "passed": false
+      "cosine": 0.9999999999870236,
+      "max_abs": 0.0001087188720703125,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step10-frame0-l0",
@@ -262,9 +262,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.47730823602592876,
-      "max_abs": 1.138393223285675,
-      "passed": false
+      "cosine": 0.9999999999997474,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step10-frame0-l1",
@@ -280,9 +280,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.464539001211852,
-      "max_abs": 1.3344094157218933,
-      "passed": false
+      "cosine": 0.9999999999990888,
+      "max_abs": 1.2516975402832031e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step10-frame0-l2",
@@ -298,9 +298,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.441401356904835,
-      "max_abs": 1.1709623634815216,
-      "passed": false
+      "cosine": 0.9999999999982171,
+      "max_abs": 1.4901161193847656e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step10-frame0-l3",
@@ -316,9 +316,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2655919548635297,
-      "max_abs": 2.3083348274230957,
-      "passed": false
+      "cosine": 0.9999999999712964,
+      "max_abs": 1.2069940567016602e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step10-frame0-l4",
@@ -334,9 +334,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5568165537513021,
-      "max_abs": 32.80998611450195,
-      "passed": false
+      "cosine": 0.999999999984562,
+      "max_abs": 7.677078247070312e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step11-frame0-final",
@@ -352,9 +352,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6834845916339625,
-      "max_abs": 19.29675579071045,
-      "passed": false
+      "cosine": 0.9999999999661202,
+      "max_abs": 0.00034236907958984375,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step11-frame0-l0",
@@ -370,9 +370,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.46179358184863173,
-      "max_abs": 1.1375902891159058,
-      "passed": false
+      "cosine": 0.9999999999997288,
+      "max_abs": 1.430511474609375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step11-frame0-l1",
@@ -388,9 +388,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.47348861426486116,
-      "max_abs": 1.152685135602951,
-      "passed": false
+      "cosine": 0.9999999999991022,
+      "max_abs": 3.4570693969726562e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step11-frame0-l2",
@@ -406,9 +406,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.43110902883594204,
-      "max_abs": 1.1626993417739868,
-      "passed": false
+      "cosine": 0.9999999999986503,
+      "max_abs": 3.337860107421875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step11-frame0-l3",
@@ -424,9 +424,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.25628520398235827,
-      "max_abs": 2.087920069694519,
-      "passed": false
+      "cosine": 0.9999999999941785,
+      "max_abs": 9.417533874511719e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step11-frame0-l4",
@@ -442,9 +442,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5912088311416638,
-      "max_abs": 28.40371263027191,
-      "passed": false
+      "cosine": 0.9999999999689608,
+      "max_abs": 0.000133514404296875,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step12-frame0-final",
@@ -460,9 +460,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6225047430507104,
-      "max_abs": 17.00218105316162,
-      "passed": false
+      "cosine": 0.9999999999908598,
+      "max_abs": 0.000148773193359375,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step12-frame0-l0",
@@ -478,9 +478,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.45445632657532453,
-      "max_abs": 1.253572940826416,
-      "passed": false
+      "cosine": 0.999999999999748,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step12-frame0-l1",
@@ -496,9 +496,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.46386445562394724,
-      "max_abs": 1.222957044839859,
-      "passed": false
+      "cosine": 0.9999999999994121,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step12-frame0-l2",
@@ -514,9 +514,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.42152860041269746,
-      "max_abs": 1.356691598892212,
-      "passed": false
+      "cosine": 0.9999999999991678,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step12-frame0-l3",
@@ -532,9 +532,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.21557232835160245,
-      "max_abs": 2.4662094116210938,
-      "passed": false
+      "cosine": 0.9999999999954703,
+      "max_abs": 2.6598572731018066e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step12-frame0-l4",
@@ -550,9 +550,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5414209142213714,
-      "max_abs": 22.55245065689087,
-      "passed": false
+      "cosine": 0.999999999990693,
+      "max_abs": 4.1484832763671875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step13-frame0-final",
@@ -568,9 +568,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6393496210047971,
-      "max_abs": 16.400867462158203,
-      "passed": false
+      "cosine": 0.9999999999901289,
+      "max_abs": 9.822845458984375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step13-frame0-l0",
@@ -586,9 +586,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4536662497332972,
-      "max_abs": 1.2090746760368347,
-      "passed": false
+      "cosine": 0.999999999999779,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step13-frame0-l1",
@@ -604,9 +604,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4764691772372624,
-      "max_abs": 1.2956529706716537,
-      "passed": false
+      "cosine": 0.9999999999995534,
+      "max_abs": 2.1457672119140625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step13-frame0-l2",
@@ -622,9 +622,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.41372946830448587,
-      "max_abs": 1.2101819515228271,
-      "passed": false
+      "cosine": 0.9999999999991678,
+      "max_abs": 2.86102294921875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step13-frame0-l3",
@@ -640,9 +640,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.19084232710190976,
-      "max_abs": 2.4626970291137695,
-      "passed": false
+      "cosine": 0.9999999999797394,
+      "max_abs": 1.0967254638671875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step13-frame0-l4",
@@ -658,9 +658,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.589877958736669,
-      "max_abs": 18.893261909484863,
-      "passed": false
+      "cosine": 0.9999999999889282,
+      "max_abs": 4.9114227294921875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step14-frame0-final",
@@ -676,9 +676,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6145370767061303,
-      "max_abs": 25.10320258140564,
-      "passed": false
+      "cosine": 0.9999999999904724,
+      "max_abs": 0.000118255615234375,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step14-frame0-l0",
@@ -694,9 +694,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4318792508496123,
-      "max_abs": 1.237665832042694,
-      "passed": false
+      "cosine": 0.9999999999997515,
+      "max_abs": 2.384185791015625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step14-frame0-l1",
@@ -712,9 +712,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.48143339448305444,
-      "max_abs": 1.1243914663791656,
-      "passed": false
+      "cosine": 0.9999999999995057,
+      "max_abs": 2.384185791015625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step14-frame0-l2",
@@ -730,9 +730,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4246109646018279,
-      "max_abs": 1.1796894073486328,
-      "passed": false
+      "cosine": 0.9999999999991872,
+      "max_abs": 2.86102294921875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step14-frame0-l3",
@@ -748,9 +748,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24401588334686247,
-      "max_abs": 2.272712469100952,
-      "passed": false
+      "cosine": 0.9999999999937889,
+      "max_abs": 7.3909759521484375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step14-frame0-l4",
@@ -766,9 +766,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5952617060312383,
-      "max_abs": 19.36741828918457,
-      "passed": false
+      "cosine": 0.9999999999897857,
+      "max_abs": 4.7206878662109375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step2-frame0-final",
@@ -784,9 +784,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6887481072801688,
-      "max_abs": 9.531883239746094,
-      "passed": false
+      "cosine": 0.9999999999962068,
+      "max_abs": 0.0001220703125,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step2-frame0-l0",
@@ -802,9 +802,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.7183762653019734,
-      "max_abs": 1.3223693370819092,
-      "passed": false
+      "cosine": 0.9999999999995066,
+      "max_abs": 9.834766387939453e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step2-frame0-l1",
@@ -820,9 +820,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5924546506496488,
-      "max_abs": 1.5530848503112793,
-      "passed": false
+      "cosine": 0.9999999999989435,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step2-frame0-l2",
@@ -838,9 +838,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5766673569530778,
-      "max_abs": 1.631853699684143,
-      "passed": false
+      "cosine": 0.9999999999982654,
+      "max_abs": 3.0994415283203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step2-frame0-l3",
@@ -856,9 +856,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4644727513884661,
-      "max_abs": 2.089589834213257,
-      "passed": false
+      "cosine": 0.9999999999971164,
+      "max_abs": 3.2782554626464844e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step2-frame0-l4",
@@ -874,9 +874,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6796129005178632,
-      "max_abs": 11.380487442016602,
-      "passed": false
+      "cosine": 0.9999999999957178,
+      "max_abs": 5.7220458984375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step3-frame0-final",
@@ -892,9 +892,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5967061358363559,
-      "max_abs": 18.77659511566162,
-      "passed": false
+      "cosine": 0.9999999999944403,
+      "max_abs": 0.00016021728515625,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step3-frame0-l0",
@@ -910,9 +910,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6422471516161128,
-      "max_abs": 1.3146714568138123,
-      "passed": false
+      "cosine": 0.9999999999997496,
+      "max_abs": 2.86102294921875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step3-frame0-l1",
@@ -928,9 +928,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5328416060902076,
-      "max_abs": 1.2346773743629456,
-      "passed": false
+      "cosine": 0.9999999999992344,
+      "max_abs": 3.814697265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step3-frame0-l2",
@@ -946,9 +946,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.49674684791742846,
-      "max_abs": 1.3751336932182312,
-      "passed": false
+      "cosine": 0.9999999999984491,
+      "max_abs": 4.76837158203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step3-frame0-l3",
@@ -964,9 +964,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3987256462086113,
-      "max_abs": 1.8755581378936768,
-      "passed": false
+      "cosine": 0.999999999994845,
+      "max_abs": 5.245208740234375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step3-frame0-l4",
@@ -982,9 +982,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5436119857268893,
-      "max_abs": 24.325761795043945,
-      "passed": false
+      "cosine": 0.9999999999933809,
+      "max_abs": 7.43865966796875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step4-frame0-final",
@@ -1000,9 +1000,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5842701504906729,
-      "max_abs": 17.228233337402344,
-      "passed": false
+      "cosine": 0.999999999996341,
+      "max_abs": 3.4332275390625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step4-frame0-l0",
@@ -1018,9 +1018,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.563095094283426,
-      "max_abs": 1.2635878324508667,
-      "passed": false
+      "cosine": 0.9999999999995034,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step4-frame0-l1",
@@ -1036,9 +1036,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4484868061022973,
-      "max_abs": 1.4880584478378296,
-      "passed": false
+      "cosine": 0.99999999999898,
+      "max_abs": 1.9073486328125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step4-frame0-l2",
@@ -1054,9 +1054,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.40133675513147654,
-      "max_abs": 1.7365539073944092,
-      "passed": false
+      "cosine": 0.9999999999980425,
+      "max_abs": 2.86102294921875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step4-frame0-l3",
@@ -1072,9 +1072,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.34543411048033174,
-      "max_abs": 2.633953809738159,
-      "passed": false
+      "cosine": 0.99999999999544,
+      "max_abs": 4.291534423828125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step4-frame0-l4",
@@ -1090,9 +1090,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5800229680380772,
-      "max_abs": 17.37676429748535,
-      "passed": false
+      "cosine": 0.9999999999961582,
+      "max_abs": 3.24249267578125e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step5-frame0-final",
@@ -1108,9 +1108,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6046709096764838,
-      "max_abs": 26.904769897460938,
-      "passed": false
+      "cosine": 0.9999999999929579,
+      "max_abs": 0.0001163482666015625,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step5-frame0-l0",
@@ -1126,9 +1126,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6009839936482531,
-      "max_abs": 1.1934209167957306,
-      "passed": false
+      "cosine": 0.9999999999996353,
+      "max_abs": 1.430511474609375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step5-frame0-l1",
@@ -1144,9 +1144,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.500993038542685,
-      "max_abs": 1.3898824751377106,
-      "passed": false
+      "cosine": 0.9999999999990421,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step5-frame0-l2",
@@ -1162,9 +1162,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.45780962730744523,
-      "max_abs": 1.6231598854064941,
-      "passed": false
+      "cosine": 0.9999999999983306,
+      "max_abs": 2.1457672119140625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step5-frame0-l3",
@@ -1180,9 +1180,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3737599960543468,
-      "max_abs": 2.3791993856430054,
-      "passed": false
+      "cosine": 0.9999999999893096,
+      "max_abs": 8.463859558105469e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step5-frame0-l4",
@@ -1198,9 +1198,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5981770495101845,
-      "max_abs": 14.727252006530762,
-      "passed": false
+      "cosine": 0.999999999991422,
+      "max_abs": 0.000118255615234375,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step6-frame0-final",
@@ -1216,9 +1216,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5749856991878984,
-      "max_abs": 21.095691680908203,
-      "passed": false
+      "cosine": 0.9999999999912841,
+      "max_abs": 0.0001659393310546875,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step6-frame0-l0",
@@ -1234,9 +1234,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6032557485285971,
-      "max_abs": 1.2333649396896362,
-      "passed": false
+      "cosine": 0.9999999999995576,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step6-frame0-l1",
@@ -1252,9 +1252,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4955503085253308,
-      "max_abs": 1.5394718647003174,
-      "passed": false
+      "cosine": 0.9999999999988763,
+      "max_abs": 1.5497207641601562e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step6-frame0-l2",
@@ -1270,9 +1270,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4565072898964779,
-      "max_abs": 1.7258681058883667,
-      "passed": false
+      "cosine": 0.9999999999979028,
+      "max_abs": 2.86102294921875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step6-frame0-l3",
@@ -1288,9 +1288,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33287223283639683,
-      "max_abs": 2.6816534996032715,
-      "passed": false
+      "cosine": 0.999999999990021,
+      "max_abs": 5.9604644775390625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step6-frame0-l4",
@@ -1306,9 +1306,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5362342118531876,
-      "max_abs": 22.782241344451904,
-      "passed": false
+      "cosine": 0.9999999999880893,
+      "max_abs": 0.0001163482666015625,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step7-frame0-final",
@@ -1324,9 +1324,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5870807863420954,
-      "max_abs": 22.177947998046875,
-      "passed": false
+      "cosine": 0.9999999999928008,
+      "max_abs": 8.20159912109375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step7-frame0-l0",
@@ -1342,9 +1342,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.45337193730499276,
-      "max_abs": 1.2020741999149323,
-      "passed": false
+      "cosine": 0.9999999999994922,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step7-frame0-l1",
@@ -1360,9 +1360,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4298302436760356,
-      "max_abs": 1.3686219453811646,
-      "passed": false
+      "cosine": 0.9999999999989942,
+      "max_abs": 2.0265579223632812e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step7-frame0-l2",
@@ -1378,9 +1378,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4424238169465847,
-      "max_abs": 1.5956847667694092,
-      "passed": false
+      "cosine": 0.9999999999980749,
+      "max_abs": 3.2186508178710938e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step7-frame0-l3",
@@ -1396,9 +1396,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.32979973368278304,
-      "max_abs": 2.155129909515381,
-      "passed": false
+      "cosine": 0.9999999999944899,
+      "max_abs": 2.9802322387695312e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step7-frame0-l4",
@@ -1414,9 +1414,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5485179956577397,
-      "max_abs": 27.10293436050415,
-      "passed": false
+      "cosine": 0.9999999999917955,
+      "max_abs": 4.38690185546875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step8-frame0-final",
@@ -1432,9 +1432,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6657686770008442,
-      "max_abs": 15.916868209838867,
-      "passed": false
+      "cosine": 0.9999999999886869,
+      "max_abs": 0.0001316070556640625,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step8-frame0-l0",
@@ -1450,9 +1450,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5285044505869623,
-      "max_abs": 0.985070988535881,
-      "passed": false
+      "cosine": 0.9999999999997501,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step8-frame0-l1",
@@ -1468,9 +1468,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.48751996728153085,
-      "max_abs": 1.0971789360046387,
-      "passed": false
+      "cosine": 0.9999999999991401,
+      "max_abs": 1.6093254089355469e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step8-frame0-l2",
@@ -1486,9 +1486,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4706405988597369,
-      "max_abs": 1.2844030857086182,
-      "passed": false
+      "cosine": 0.9999999999986237,
+      "max_abs": 1.430511474609375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step8-frame0-l3",
@@ -1504,9 +1504,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.34022573245963234,
-      "max_abs": 2.374863624572754,
-      "passed": false
+      "cosine": 0.9999999999896009,
+      "max_abs": 7.033348083496094e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step8-frame0-l4",
@@ -1522,9 +1522,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6109498385061622,
-      "max_abs": 27.925889015197754,
-      "passed": false
+      "cosine": 0.9999999999856568,
+      "max_abs": 9.5367431640625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step9-frame0-final",
@@ -1540,9 +1540,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.688719072565149,
-      "max_abs": 13.504751682281494,
-      "passed": false
+      "cosine": 0.9999999999954463,
+      "max_abs": 7.82012939453125e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step9-frame0-l0",
@@ -1558,9 +1558,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5096026362684358,
-      "max_abs": 0.9686366319656372,
-      "passed": false
+      "cosine": 0.9999999999997615,
+      "max_abs": 1.430511474609375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step9-frame0-l1",
@@ -1576,9 +1576,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.48307048596554597,
-      "max_abs": 1.1106604635715485,
-      "passed": false
+      "cosine": 0.9999999999991729,
+      "max_abs": 2.5033950805664062e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step9-frame0-l2",
@@ -1594,9 +1594,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.44874605489120256,
-      "max_abs": 1.3004902601242065,
-      "passed": false
+      "cosine": 0.9999999999988376,
+      "max_abs": 2.6226043701171875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step9-frame0-l3",
@@ -1612,9 +1612,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3069473710116915,
-      "max_abs": 2.2609325647354126,
-      "passed": false
+      "cosine": 0.9999999999955619,
+      "max_abs": 5.602836608886719e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-hidden-step9-frame0-l4",
@@ -1630,9 +1630,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6255687891821411,
-      "max_abs": 26.80621314048767,
-      "passed": false
+      "cosine": 0.999999999994959,
+      "max_abs": 3.7670135498046875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-prefill-frame0-input-embed",
@@ -2033,7 +2033,6 @@
       "candle_name": "code-predictor-prefill-frame0-rope-cos",
       "shape_ref": [
         1,
-        1,
         2,
         128
       ],
@@ -2052,7 +2051,6 @@
       "name": "code-predictor-prefill-frame0-rope-sin",
       "candle_name": "code-predictor-prefill-frame0-rope-sin",
       "shape_ref": [
-        1,
         1,
         2,
         128
@@ -2082,9 +2080,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.046359972933273486,
-      "max_abs": 0.135986328125,
-      "passed": false
+      "cosine": 1.0,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l0-attention-output",
@@ -2100,9 +2098,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5837034124353976,
-      "max_abs": 1.3146793842315674,
-      "passed": false
+      "cosine": 0.9999999999998014,
+      "max_abs": 3.337860107421875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l0-input-norm",
@@ -2118,9 +2116,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.07588205861547676,
-      "max_abs": 4.874335408210754,
-      "passed": false
+      "cosine": 0.9999999999999989,
+      "max_abs": 3.814697265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l0-mlp-output",
@@ -2136,9 +2134,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5401637295158721,
-      "max_abs": 0.5289531946182251,
-      "passed": false
+      "cosine": 0.9999999999996291,
+      "max_abs": 9.5367431640625e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l0-post-attention-norm",
@@ -2154,9 +2152,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4771186405094298,
-      "max_abs": 7.9706447115167975,
-      "passed": false
+      "cosine": 0.9999999999997126,
+      "max_abs": 2.180691808462143e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l1-attention-output",
@@ -2172,9 +2170,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6773796747557869,
-      "max_abs": 0.30296650528907776,
-      "passed": false
+      "cosine": 0.9999999999989739,
+      "max_abs": 7.152557373046875e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l1-input-norm",
@@ -2190,9 +2188,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6614146856522036,
-      "max_abs": 5.225749850273132,
-      "passed": false
+      "cosine": 0.9999999999995215,
+      "max_abs": 4.76837158203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l1-mlp-output",
@@ -2208,9 +2206,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.1966112518882246,
-      "max_abs": 0.639098584651947,
-      "passed": false
+      "cosine": 0.9999999999965006,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l1-post-attention-norm",
@@ -2226,9 +2224,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.45631503553234465,
-      "max_abs": 8.684141516685486,
-      "passed": false
+      "cosine": 0.9999999999988367,
+      "max_abs": 7.987022399902344e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l2-attention-output",
@@ -2244,9 +2242,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5078850301777168,
-      "max_abs": 0.3493081033229828,
-      "passed": false
+      "cosine": 0.9999999999958081,
+      "max_abs": 1.4901161193847656e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l2-input-norm",
@@ -2262,9 +2260,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.48232376799210785,
-      "max_abs": 5.088567495346069,
-      "passed": false
+      "cosine": 0.9999999999977095,
+      "max_abs": 1.049041748046875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l2-mlp-output",
@@ -2280,9 +2278,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.19411433278913287,
-      "max_abs": 0.8147945404052734,
-      "passed": false
+      "cosine": 0.9999999999948406,
+      "max_abs": 2.086162567138672e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l2-post-attention-norm",
@@ -2298,9 +2296,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.47430762525896153,
-      "max_abs": 8.949094772338867,
-      "passed": false
+      "cosine": 0.999999999997514,
+      "max_abs": 1.239776611328125e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l3-attention-output",
@@ -2316,9 +2314,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4155440398079651,
-      "max_abs": 0.45339385420084,
-      "passed": false
+      "cosine": 0.9999999999688375,
+      "max_abs": 2.9802322387695312e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l3-input-norm",
@@ -2334,9 +2332,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5525452311211281,
-      "max_abs": 7.7873311042785645,
-      "passed": false
+      "cosine": 0.9999999999971394,
+      "max_abs": 1.430511474609375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l3-mlp-output",
@@ -2352,9 +2350,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.25414945274644846,
-      "max_abs": 1.342756763100624,
-      "passed": false
+      "cosine": 0.9999999999848953,
+      "max_abs": 6.079673767089844e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l3-post-attention-norm",
@@ -2370,9 +2368,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4497898315285984,
-      "max_abs": 8.65954041481018,
-      "passed": false
+      "cosine": 0.9999999999916257,
+      "max_abs": 2.002716064453125e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l4-attention-output",
@@ -2388,9 +2386,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.30657591117260674,
-      "max_abs": 2.238685429096222,
-      "passed": false
+      "cosine": 0.9999999999846043,
+      "max_abs": 1.2278556823730469e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l4-input-norm",
@@ -2406,9 +2404,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.38816851636417987,
-      "max_abs": 7.716449797153473,
-      "passed": false
+      "cosine": 0.9999999999904524,
+      "max_abs": 2.1725893020629883e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l4-mlp-output",
@@ -2424,9 +2422,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3838628305468289,
-      "max_abs": 18.001532316207886,
-      "passed": false
+      "cosine": 0.9999999999841879,
+      "max_abs": 4.0531158447265625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step1-frame0-l4-post-attention-norm",
@@ -2442,9 +2440,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24895784732427426,
-      "max_abs": 10.929412364959717,
-      "passed": false
+      "cosine": 0.999999999987584,
+      "max_abs": 4.124641418457031e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-codec-embed",
@@ -2460,9 +2458,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.15810361471573708,
-      "max_abs": 0.0563201904296875,
-      "passed": false
+      "cosine": 1.0,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l0-attention-output",
@@ -2478,9 +2476,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5800777209125004,
-      "max_abs": 0.7206770777702332,
-      "passed": false
+      "cosine": 0.9999999999998584,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l0-input-norm",
@@ -2496,9 +2494,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.22205996317325094,
-      "max_abs": 6.8030669540166855,
-      "passed": false
+      "cosine": 0.9999999999999987,
+      "max_abs": 8.58306884765625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l0-mlp-output",
@@ -2514,9 +2512,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3476743267310429,
-      "max_abs": 0.637842059135437,
-      "passed": false
+      "cosine": 0.9999999999996645,
+      "max_abs": 3.390014171600342e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l0-post-attention-norm",
@@ -2532,9 +2530,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4943852124288186,
-      "max_abs": 6.262722373008728,
-      "passed": false
+      "cosine": 0.9999999999997787,
+      "max_abs": 2.5033950805664062e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l1-attention-output",
@@ -2550,9 +2548,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.16107454189909104,
-      "max_abs": 0.44499681890010834,
-      "passed": false
+      "cosine": 0.9999999999980942,
+      "max_abs": 1.0132789611816406e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l1-input-norm",
@@ -2568,9 +2566,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3976441006563497,
-      "max_abs": 5.696964681148529,
-      "passed": false
+      "cosine": 0.9999999999996766,
+      "max_abs": 2.1457672119140625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l1-mlp-output",
@@ -2586,9 +2584,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.20770367332482292,
-      "max_abs": 0.5789786875247955,
-      "passed": false
+      "cosine": 0.9999999999985804,
+      "max_abs": 9.5367431640625e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l1-post-attention-norm",
@@ -2604,9 +2602,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24219705719776502,
-      "max_abs": 9.13722276687622,
-      "passed": false
+      "cosine": 0.9999999999991483,
+      "max_abs": 5.125999450683594e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l2-attention-output",
@@ -2622,9 +2620,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.28328912913618126,
-      "max_abs": 0.5949495136737823,
-      "passed": false
+      "cosine": 0.9999999999979797,
+      "max_abs": 6.034970283508301e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l2-input-norm",
@@ -2640,9 +2638,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.34323704031124047,
-      "max_abs": 4.565359711647034,
-      "passed": false
+      "cosine": 0.9999999999988962,
+      "max_abs": 4.649162292480469e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l2-mlp-output",
@@ -2658,9 +2656,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.16463305248002472,
-      "max_abs": 0.8065223097801208,
-      "passed": false
+      "cosine": 0.9999999999971705,
+      "max_abs": 1.430511474609375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l2-post-attention-norm",
@@ -2676,9 +2674,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33997335040115734,
-      "max_abs": 7.266633749008179,
-      "passed": false
+      "cosine": 0.9999999999986806,
+      "max_abs": 1.0695308446884155e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l3-attention-output",
@@ -2694,9 +2692,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2650092874877403,
-      "max_abs": 1.4084871411323547,
-      "passed": false
+      "cosine": 0.9999999999728134,
+      "max_abs": 3.2782554626464844e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l3-input-norm",
@@ -2712,9 +2710,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.41375849956580874,
-      "max_abs": 5.292021989822388,
-      "passed": false
+      "cosine": 0.9999999999981537,
+      "max_abs": 8.165836334228516e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l3-mlp-output",
@@ -2730,9 +2728,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.45760843901381193,
-      "max_abs": 1.1988061666488647,
-      "passed": false
+      "cosine": 0.9999999999685716,
+      "max_abs": 8.64267349243164e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l3-post-attention-norm",
@@ -2748,9 +2746,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.41855972420709003,
-      "max_abs": 5.374710321426392,
-      "passed": false
+      "cosine": 0.9999999999922516,
+      "max_abs": 1.71661376953125e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l4-attention-output",
@@ -2766,9 +2764,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.30838248489347064,
-      "max_abs": 2.393733501434326,
-      "passed": false
+      "cosine": 0.9999999999544602,
+      "max_abs": 1.430511474609375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l4-input-norm",
@@ -2784,9 +2782,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24978653648570523,
-      "max_abs": 9.56102705001831,
-      "passed": false
+      "cosine": 0.9999999999717977,
+      "max_abs": 5.564093589782715e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l4-mlp-output",
@@ -2802,9 +2800,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5870518140737871,
-      "max_abs": 28.527668476104736,
-      "passed": false
+      "cosine": 0.999999999984744,
+      "max_abs": 9.059906005859375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step10-frame0-l4-post-attention-norm",
@@ -2820,9 +2818,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2729638803543707,
-      "max_abs": 11.30859899520874,
-      "passed": false
+      "cosine": 0.9999999999675736,
+      "max_abs": 7.009506225585938e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-codec-embed",
@@ -2838,9 +2836,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.00856601196323182,
-      "max_abs": 0.063232421875,
-      "passed": false
+      "cosine": 1.0,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l0-attention-output",
@@ -2856,9 +2854,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5816658310308525,
-      "max_abs": 0.6932633519172668,
-      "passed": false
+      "cosine": 0.9999999999998387,
+      "max_abs": 1.5497207641601562e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l0-input-norm",
@@ -2874,9 +2872,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.06286775799215095,
-      "max_abs": 5.864629149436951,
-      "passed": false
+      "cosine": 0.9999999999999987,
+      "max_abs": 5.245208740234375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l0-mlp-output",
@@ -2892,9 +2890,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33741503398964795,
-      "max_abs": 0.7685801982879639,
-      "passed": false
+      "cosine": 0.9999999999996482,
+      "max_abs": 3.5762786865234375e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l0-post-attention-norm",
@@ -2910,9 +2908,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.49564197023179307,
-      "max_abs": 6.6245399713516235,
-      "passed": false
+      "cosine": 0.9999999999997512,
+      "max_abs": 2.8014183044433594e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l1-attention-output",
@@ -2928,9 +2926,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.16890355316829203,
-      "max_abs": 0.4126923531293869,
-      "passed": false
+      "cosine": 0.9999999999981303,
+      "max_abs": 9.5367431640625e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l1-input-norm",
@@ -2946,9 +2944,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3818514088450062,
-      "max_abs": 6.195331394672394,
-      "passed": false
+      "cosine": 0.9999999999996548,
+      "max_abs": 4.76837158203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l1-mlp-output",
@@ -2964,9 +2962,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.23748526297609754,
-      "max_abs": 0.6333771962672472,
-      "passed": false
+      "cosine": 0.9999999999985311,
+      "max_abs": 3.0994415283203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l1-post-attention-norm",
@@ -2982,9 +2980,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.230350568097014,
-      "max_abs": 9.923955917358398,
-      "passed": false
+      "cosine": 0.9999999999991843,
+      "max_abs": 8.58306884765625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l2-attention-output",
@@ -3000,9 +2998,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.27486864321570476,
-      "max_abs": 0.6358132809400558,
-      "passed": false
+      "cosine": 0.9999999999978207,
+      "max_abs": 5.364418029785156e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l2-input-norm",
@@ -3018,9 +3016,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3527047235722718,
-      "max_abs": 4.462884157896042,
-      "passed": false
+      "cosine": 0.9999999999989023,
+      "max_abs": 6.67572021484375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l2-mlp-output",
@@ -3036,9 +3034,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.15659401715192334,
-      "max_abs": 0.7979288101196289,
-      "passed": false
+      "cosine": 0.9999999999973701,
+      "max_abs": 1.3783574104309082e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l2-post-attention-norm",
@@ -3054,9 +3052,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3467159685452173,
-      "max_abs": 7.773379325866699,
-      "passed": false
+      "cosine": 0.9999999999985656,
+      "max_abs": 1.0967254638671875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l3-attention-output",
@@ -3072,9 +3070,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2832036962551237,
-      "max_abs": 1.4309147596359253,
-      "passed": false
+      "cosine": 0.999999999989775,
+      "max_abs": 1.7285346984863281e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l3-input-norm",
@@ -3090,9 +3088,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.40217755192545324,
-      "max_abs": 5.9405854642391205,
-      "passed": false
+      "cosine": 0.9999999999986127,
+      "max_abs": 9.5367431640625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l3-mlp-output",
@@ -3108,9 +3106,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4830026149187347,
-      "max_abs": 1.0601869821548462,
-      "passed": false
+      "cosine": 0.999999999994942,
+      "max_abs": 4.410743713378906e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l3-post-attention-norm",
@@ -3126,9 +3124,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.41220384156116674,
-      "max_abs": 5.0698606967926025,
-      "passed": false
+      "cosine": 0.9999999999963527,
+      "max_abs": 1.1801719665527344e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l4-attention-output",
@@ -3144,9 +3142,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2931386917636587,
-      "max_abs": 2.387796640396118,
-      "passed": false
+      "cosine": 0.9999999999818964,
+      "max_abs": 1.0848045349121094e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l4-input-norm",
@@ -3162,9 +3160,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.23887245283916114,
-      "max_abs": 9.282356232404709,
-      "passed": false
+      "cosine": 0.9999999999943853,
+      "max_abs": 4.1961669921875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l4-mlp-output",
@@ -3180,9 +3178,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6160840115734237,
-      "max_abs": 24.160792112350464,
-      "passed": false
+      "cosine": 0.9999999999681177,
+      "max_abs": 0.0001354217529296875,
+      "passed": true
     },
     {
       "name": "code-predictor-step11-frame0-l4-post-attention-norm",
@@ -3198,9 +3196,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2423060417275374,
-      "max_abs": 11.24502182006836,
-      "passed": false
+      "cosine": 0.9999999999875294,
+      "max_abs": 5.1975250244140625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-codec-embed",
@@ -3216,9 +3214,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.08443332825501326,
-      "max_abs": 0.05126953125,
-      "passed": false
+      "cosine": 1.0000000000000002,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l0-attention-output",
@@ -3234,9 +3232,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5895454938065638,
-      "max_abs": 0.7094912230968475,
-      "passed": false
+      "cosine": 0.9999999999998097,
+      "max_abs": 1.3113021850585938e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l0-input-norm",
@@ -3252,9 +3250,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.1605992244307937,
-      "max_abs": 6.387111306190491,
-      "passed": false
+      "cosine": 0.9999999999999989,
+      "max_abs": 3.337860107421875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l0-mlp-output",
@@ -3270,9 +3268,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33884218908793207,
-      "max_abs": 0.7243358492851257,
-      "passed": false
+      "cosine": 0.9999999999994842,
+      "max_abs": 8.344650268554688e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l0-post-attention-norm",
@@ -3288,9 +3286,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5021364003778449,
-      "max_abs": 5.504692912101746,
-      "passed": false
+      "cosine": 0.9999999999997029,
+      "max_abs": 3.814697265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l1-attention-output",
@@ -3306,9 +3304,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.21121808906154005,
-      "max_abs": 0.39454492926597595,
-      "passed": false
+      "cosine": 0.999999999998784,
+      "max_abs": 8.344650268554688e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l1-input-norm",
@@ -3324,9 +3322,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.37931764138433466,
-      "max_abs": 5.027943402528763,
-      "passed": false
+      "cosine": 0.9999999999996896,
+      "max_abs": 4.0531158447265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l1-mlp-output",
@@ -3342,9 +3340,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.23324333581122234,
-      "max_abs": 0.5725135654211044,
-      "passed": false
+      "cosine": 0.9999999999990449,
+      "max_abs": 7.078051567077637e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l1-post-attention-norm",
@@ -3360,9 +3358,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.241273955618628,
-      "max_abs": 8.314417831599712,
-      "passed": false
+      "cosine": 0.9999999999993738,
+      "max_abs": 3.7923455238342285e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l2-attention-output",
@@ -3378,9 +3376,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.28741363060848507,
-      "max_abs": 0.5727763772010803,
-      "passed": false
+      "cosine": 0.9999999999983534,
+      "max_abs": 4.6193599700927734e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l2-input-norm",
@@ -3396,9 +3394,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3491378636343139,
-      "max_abs": 4.969699025154114,
-      "passed": false
+      "cosine": 0.99999999999929,
+      "max_abs": 3.337860107421875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l2-mlp-output",
@@ -3414,9 +3412,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.1494412068254532,
-      "max_abs": 0.863343358039856,
-      "passed": false
+      "cosine": 0.9999999999986275,
+      "max_abs": 1.1064112186431885e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l2-post-attention-norm",
@@ -3432,9 +3430,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.34572379315007096,
-      "max_abs": 6.25918972492218,
-      "passed": false
+      "cosine": 0.9999999999991125,
+      "max_abs": 5.900859832763672e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l3-attention-output",
@@ -3450,9 +3448,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3154585084186352,
-      "max_abs": 1.4623931646347046,
-      "passed": false
+      "cosine": 0.9999999999899198,
+      "max_abs": 1.9073486328125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l3-input-norm",
@@ -3468,9 +3466,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3964883441810819,
-      "max_abs": 5.96961522102356,
-      "passed": false
+      "cosine": 0.9999999999991414,
+      "max_abs": 8.106231689453125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l3-mlp-output",
@@ -3486,9 +3484,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5127347499185234,
-      "max_abs": 1.3448513746261597,
-      "passed": false
+      "cosine": 0.999999999996243,
+      "max_abs": 2.8014183044433594e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l3-post-attention-norm",
@@ -3504,9 +3502,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.42228576217362646,
-      "max_abs": 5.570640563964844,
-      "passed": false
+      "cosine": 0.9999999999967827,
+      "max_abs": 1.0371208190917969e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l4-attention-output",
@@ -3522,9 +3520,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.28317753191898715,
-      "max_abs": 2.5503854751586914,
-      "passed": false
+      "cosine": 0.9999999999884478,
+      "max_abs": 5.677342414855957e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l4-input-norm",
@@ -3540,9 +3538,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.21410586493335493,
-      "max_abs": 10.882913589477539,
-      "passed": false
+      "cosine": 0.9999999999955265,
+      "max_abs": 1.728534698486328e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l4-mlp-output",
@@ -3558,9 +3556,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5811272859101422,
-      "max_abs": 18.102282881736755,
-      "passed": false
+      "cosine": 0.9999999999907142,
+      "max_abs": 4.1961669921875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step12-frame0-l4-post-attention-norm",
@@ -3576,9 +3574,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.238777183065595,
-      "max_abs": 11.766370058059692,
-      "passed": false
+      "cosine": 0.9999999999924496,
+      "max_abs": 2.4318695068359375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-codec-embed",
@@ -3594,9 +3592,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.10922887337240249,
-      "max_abs": 0.0582275390625,
-      "passed": false
+      "cosine": 0.9999999999999999,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l0-attention-output",
@@ -3612,9 +3610,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5894685628123555,
-      "max_abs": 0.670493096113205,
-      "passed": false
+      "cosine": 0.9999999999998704,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l0-input-norm",
@@ -3630,9 +3628,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.187280631741148,
-      "max_abs": 6.966104507446289,
-      "passed": false
+      "cosine": 0.9999999999999986,
+      "max_abs": 5.7220458984375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l0-mlp-output",
@@ -3648,9 +3646,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.35643753792240457,
-      "max_abs": 0.7650625705718994,
-      "passed": false
+      "cosine": 0.9999999999995351,
+      "max_abs": 7.599592208862305e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l0-post-attention-norm",
@@ -3666,9 +3664,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5102775457063145,
-      "max_abs": 5.188803195953369,
-      "passed": false
+      "cosine": 0.9999999999998039,
+      "max_abs": 2.2649765014648438e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l1-attention-output",
@@ -3684,9 +3682,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.21276975977058657,
-      "max_abs": 0.41586513817310333,
-      "passed": false
+      "cosine": 0.9999999999987264,
+      "max_abs": 8.940696716308594e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l1-input-norm",
@@ -3702,9 +3700,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.37596548018998566,
-      "max_abs": 4.600299775600433,
-      "passed": false
+      "cosine": 0.9999999999997264,
+      "max_abs": 2.86102294921875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l1-mlp-output",
@@ -3720,9 +3718,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2316165010056763,
-      "max_abs": 0.6395096778869629,
-      "passed": false
+      "cosine": 0.9999999999990862,
+      "max_abs": 1.9073486328125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l1-post-attention-norm",
@@ -3738,9 +3736,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.23677922334150497,
-      "max_abs": 7.813751757144928,
-      "passed": false
+      "cosine": 0.9999999999994202,
+      "max_abs": 4.76837158203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l2-attention-output",
@@ -3756,9 +3754,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.28437648464165016,
-      "max_abs": 0.5774253904819489,
-      "passed": false
+      "cosine": 0.9999999999987004,
+      "max_abs": 4.880130290985107e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l2-input-norm",
@@ -3774,9 +3772,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.35973565912165656,
-      "max_abs": 5.251358389854431,
-      "passed": false
+      "cosine": 0.9999999999994491,
+      "max_abs": 5.245208740234375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l2-mlp-output",
@@ -3792,9 +3790,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.11024612919162076,
-      "max_abs": 0.8066711723804474,
-      "passed": false
+      "cosine": 0.9999999999987073,
+      "max_abs": 9.08970832824707e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l2-post-attention-norm",
@@ -3810,9 +3808,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.35328702922244937,
-      "max_abs": 6.617769479751587,
-      "passed": false
+      "cosine": 0.9999999999992074,
+      "max_abs": 5.3122639656066895e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l3-attention-output",
@@ -3828,9 +3826,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3377338715610363,
-      "max_abs": 1.495980978012085,
-      "passed": false
+      "cosine": 0.9999999999814314,
+      "max_abs": 3.516674041748047e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l3-input-norm",
@@ -3846,9 +3844,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3866139081938737,
-      "max_abs": 6.044415235519409,
-      "passed": false
+      "cosine": 0.9999999999991469,
+      "max_abs": 1.33514404296875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l3-mlp-output",
@@ -3864,9 +3862,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.49151217120374546,
-      "max_abs": 1.27671217918396,
-      "passed": false
+      "cosine": 0.9999999999804128,
+      "max_abs": 8.344650268554688e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l3-post-attention-norm",
@@ -3882,9 +3880,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4200379259124455,
-      "max_abs": 5.8208229541778564,
-      "passed": false
+      "cosine": 0.9999999999946566,
+      "max_abs": 1.800060272216797e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l4-attention-output",
@@ -3900,9 +3898,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2645840526323157,
-      "max_abs": 2.750175714492798,
-      "passed": false
+      "cosine": 0.9999999999781441,
+      "max_abs": 9.894371032714844e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l4-input-norm",
@@ -3918,9 +3916,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.19033508130409071,
-      "max_abs": 10.219711780548096,
-      "passed": false
+      "cosine": 0.9999999999803856,
+      "max_abs": 5.030632019042969e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l4-mlp-output",
@@ -3936,9 +3934,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6273652228107321,
-      "max_abs": 15.127604484558105,
-      "passed": false
+      "cosine": 0.9999999999894686,
+      "max_abs": 4.8160552978515625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step13-frame0-l4-post-attention-norm",
@@ -3954,9 +3952,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2301856422424903,
-      "max_abs": 12.807847261428833,
-      "passed": false
+      "cosine": 0.999999999981465,
+      "max_abs": 5.4836273193359375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-codec-embed",
@@ -3972,9 +3970,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.002598573868840844,
-      "max_abs": 0.064453125,
-      "passed": false
+      "cosine": 0.9999999999999999,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l0-attention-output",
@@ -3990,9 +3988,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6052185562178938,
-      "max_abs": 0.608291506767273,
-      "passed": false
+      "cosine": 0.999999999999869,
+      "max_abs": 2.2649765014648438e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l0-input-norm",
@@ -4008,9 +4006,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2148911226870874,
-      "max_abs": 5.550305485725403,
-      "passed": false
+      "cosine": 0.999999999999999,
+      "max_abs": 7.62939453125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l0-mlp-output",
@@ -4026,9 +4024,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3575240330560133,
-      "max_abs": 0.8213611841201782,
-      "passed": false
+      "cosine": 0.999999999999679,
+      "max_abs": 3.7997961044311523e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l0-post-attention-norm",
@@ -4044,9 +4042,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5262980733056756,
-      "max_abs": 5.272090911865234,
-      "passed": false
+      "cosine": 0.9999999999998123,
+      "max_abs": 3.814697265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l1-attention-output",
@@ -4062,9 +4060,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.21947642603372056,
-      "max_abs": 0.4246847555041313,
-      "passed": false
+      "cosine": 0.9999999999987078,
+      "max_abs": 6.556510925292969e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l1-input-norm",
@@ -4080,9 +4078,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.35956529915939817,
-      "max_abs": 4.569762200117111,
-      "passed": false
+      "cosine": 0.9999999999997051,
+      "max_abs": 4.76837158203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l1-mlp-output",
@@ -4098,9 +4096,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.27954219335548114,
-      "max_abs": 0.624339371919632,
-      "passed": false
+      "cosine": 0.9999999999990173,
+      "max_abs": 9.5367431640625e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l1-post-attention-norm",
@@ -4116,9 +4114,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.22629638445476785,
-      "max_abs": 7.671077623963356,
-      "passed": false
+      "cosine": 0.9999999999994336,
+      "max_abs": 5.7220458984375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l2-attention-output",
@@ -4134,9 +4132,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2908061551746158,
-      "max_abs": 0.47219760715961456,
-      "passed": false
+      "cosine": 0.9999999999984346,
+      "max_abs": 5.21540641784668e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l2-input-norm",
@@ -4152,9 +4150,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3771436774998288,
-      "max_abs": 4.191796898841858,
-      "passed": false
+      "cosine": 0.9999999999994051,
+      "max_abs": 4.76837158203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l2-mlp-output",
@@ -4170,9 +4168,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.14020856261975267,
-      "max_abs": 0.7545145452022552,
-      "passed": false
+      "cosine": 0.9999999999985824,
+      "max_abs": 9.08970832824707e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l2-post-attention-norm",
@@ -4188,9 +4186,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.36087079982703213,
-      "max_abs": 5.287448406219482,
-      "passed": false
+      "cosine": 0.999999999999217,
+      "max_abs": 7.62939453125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l3-attention-output",
@@ -4206,9 +4204,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3856630752807274,
-      "max_abs": 1.451013207435608,
-      "passed": false
+      "cosine": 0.999999999993466,
+      "max_abs": 1.7546117305755615e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l3-input-norm",
@@ -4224,9 +4222,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.39964130058130026,
-      "max_abs": 5.093800723552704,
-      "passed": false
+      "cosine": 0.9999999999991737,
+      "max_abs": 8.58306884765625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l3-mlp-output",
@@ -4242,9 +4240,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5560190120291191,
-      "max_abs": 1.2347644716501236,
-      "passed": false
+      "cosine": 0.9999999999942389,
+      "max_abs": 5.602836608886719e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l3-post-attention-norm",
@@ -4260,9 +4258,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.43335340774775843,
-      "max_abs": 5.076794773340225,
-      "passed": false
+      "cosine": 0.9999999999974672,
+      "max_abs": 1.0132789611816406e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l4-attention-output",
@@ -4278,9 +4276,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2863133737072592,
-      "max_abs": 2.691433548927307,
-      "passed": false
+      "cosine": 0.999999999985913,
+      "max_abs": 6.079673767089844e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l4-input-norm",
@@ -4296,9 +4294,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.25319222081928877,
-      "max_abs": 10.530856609344482,
-      "passed": false
+      "cosine": 0.9999999999939171,
+      "max_abs": 2.7894973754882812e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l4-mlp-output",
@@ -4314,9 +4312,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6245394593855328,
-      "max_abs": 14.454033374786377,
-      "passed": false
+      "cosine": 0.9999999999898042,
+      "max_abs": 5.1021575927734375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step14-frame0-l4-post-attention-norm",
@@ -4332,9 +4330,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2587176140678642,
-      "max_abs": 13.1760413646698,
-      "passed": false
+      "cosine": 0.9999999999903721,
+      "max_abs": 2.6904046535491943e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-codec-embed",
@@ -4350,9 +4348,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2146317661705946,
-      "max_abs": 0.0606689453125,
-      "passed": false
+      "cosine": 1.0000000000000002,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l0-attention-output",
@@ -4368,9 +4366,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6400435207537748,
-      "max_abs": 1.199013113975525,
-      "passed": false
+      "cosine": 0.9999999999997778,
+      "max_abs": 2.384185791015625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l0-input-norm",
@@ -4386,9 +4384,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3086936708952893,
-      "max_abs": 2.864916443824768,
-      "passed": false
+      "cosine": 0.9999999999999989,
+      "max_abs": 3.337860107421875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l0-mlp-output",
@@ -4404,9 +4402,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3793561891224458,
-      "max_abs": 0.2951348349452019,
-      "passed": false
+      "cosine": 0.9999999999991825,
+      "max_abs": 1.6689300537109375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l0-post-attention-norm",
@@ -4422,9 +4420,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5719767646341578,
-      "max_abs": 6.468383088707924,
-      "passed": false
+      "cosine": 0.9999999999996699,
+      "max_abs": 6.67572021484375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l1-attention-output",
@@ -4440,9 +4438,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2405288277882587,
-      "max_abs": 0.4388066828250885,
-      "passed": false
+      "cosine": 0.9999999999972693,
+      "max_abs": 1.1026859283447266e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l1-input-norm",
@@ -4458,9 +4456,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6336714116148472,
-      "max_abs": 4.67427670955658,
-      "passed": false
+      "cosine": 0.9999999999993058,
+      "max_abs": 4.291534423828125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l1-mlp-output",
@@ -4476,9 +4474,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.19822379781659136,
-      "max_abs": 0.6419329196214676,
-      "passed": false
+      "cosine": 0.9999999999976849,
+      "max_abs": 1.1920928955078125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l1-post-attention-norm",
@@ -4494,9 +4492,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4910323142612998,
-      "max_abs": 7.167453706264496,
-      "passed": false
+      "cosine": 0.9999999999987315,
+      "max_abs": 5.4836273193359375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l2-attention-output",
@@ -4512,9 +4510,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3822452332380509,
-      "max_abs": 0.5452350080013275,
-      "passed": false
+      "cosine": 0.9999999999963874,
+      "max_abs": 8.344650268554688e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l2-input-norm",
@@ -4530,9 +4528,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4805124360380861,
-      "max_abs": 4.300771236419678,
-      "passed": false
+      "cosine": 0.9999999999986836,
+      "max_abs": 4.4405460357666016e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l2-mlp-output",
@@ -4548,9 +4546,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.19317355272311973,
-      "max_abs": 0.6300483345985413,
-      "passed": false
+      "cosine": 0.99999999999572,
+      "max_abs": 1.6093254089355469e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l2-post-attention-norm",
@@ -4566,9 +4564,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4916635528959316,
-      "max_abs": 7.134840965270996,
-      "passed": false
+      "cosine": 0.9999999999984671,
+      "max_abs": 8.463859558105469e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l3-attention-output",
@@ -4584,9 +4582,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2079266979047537,
-      "max_abs": 1.0173304975032806,
-      "passed": false
+      "cosine": 0.9999999999926891,
+      "max_abs": 4.5299530029296875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l3-input-norm",
@@ -4602,9 +4600,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5635340350529011,
-      "max_abs": 7.0779194831848145,
-      "passed": false
+      "cosine": 0.9999999999982699,
+      "max_abs": 1.52587890625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l3-mlp-output",
@@ -4620,9 +4618,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.41523164032787235,
-      "max_abs": 1.0570805072784424,
-      "passed": false
+      "cosine": 0.9999999999962657,
+      "max_abs": 2.7418136596679688e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l3-post-attention-norm",
@@ -4638,9 +4636,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4804301841717145,
-      "max_abs": 7.533606991171837,
-      "passed": false
+      "cosine": 0.9999999999972428,
+      "max_abs": 1.0848045349121094e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l4-attention-output",
@@ -4656,9 +4654,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4441245394674781,
-      "max_abs": 0.9952788632363081,
-      "passed": false
+      "cosine": 0.9999999999937836,
+      "max_abs": 3.993511199951172e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l4-input-norm",
@@ -4674,9 +4672,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.43845503289407584,
-      "max_abs": 6.833308219909668,
-      "passed": false
+      "cosine": 0.9999999999970709,
+      "max_abs": 1.3828277587890625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l4-mlp-output",
@@ -4692,9 +4690,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6955193121529445,
-      "max_abs": 11.62943172454834,
-      "passed": false
+      "cosine": 0.9999999999957279,
+      "max_abs": 5.340576171875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step2-frame0-l4-post-attention-norm",
@@ -4710,9 +4708,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.39029846927975215,
-      "max_abs": 8.040359497070312,
-      "passed": false
+      "cosine": 0.9999999999960183,
+      "max_abs": 1.5854835510253906e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-codec-embed",
@@ -4728,9 +4726,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24271082310765152,
-      "max_abs": 0.082275390625,
-      "passed": false
+      "cosine": 1.0000000000000002,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l0-attention-output",
@@ -4746,9 +4744,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5907406868772686,
-      "max_abs": 1.3102839589118958,
-      "passed": false
+      "cosine": 0.9999999999998049,
+      "max_abs": 2.1457672119140625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l0-input-norm",
@@ -4764,9 +4762,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.31156846246107955,
-      "max_abs": 4.219235420227051,
-      "passed": false
+      "cosine": 0.9999999999999988,
+      "max_abs": 3.337860107421875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l0-mlp-output",
@@ -4782,9 +4780,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.28476354859557257,
-      "max_abs": 0.4142919182777405,
-      "passed": false
+      "cosine": 0.9999999999994605,
+      "max_abs": 5.960464477539062e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l0-post-attention-norm",
@@ -4800,9 +4798,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5267305240252842,
-      "max_abs": 7.524824619293213,
-      "passed": false
+      "cosine": 0.9999999999997142,
+      "max_abs": 3.814697265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l1-attention-output",
@@ -4818,9 +4816,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.12587716998505016,
-      "max_abs": 0.4681476354598999,
-      "passed": false
+      "cosine": 0.9999999999977917,
+      "max_abs": 9.685754776000977e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l1-input-norm",
@@ -4836,9 +4834,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5572976865767073,
-      "max_abs": 5.253330588340759,
-      "passed": false
+      "cosine": 0.9999999999996587,
+      "max_abs": 2.384185791015625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l1-mlp-output",
@@ -4854,9 +4852,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.22456848003801966,
-      "max_abs": 0.7551765888929367,
-      "passed": false
+      "cosine": 0.9999999999986561,
+      "max_abs": 8.493661880493164e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l1-post-attention-norm",
@@ -4872,9 +4870,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.42204529811505803,
-      "max_abs": 8.140157103538513,
-      "passed": false
+      "cosine": 0.9999999999991671,
+      "max_abs": 8.58306884765625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l2-attention-output",
@@ -4890,9 +4888,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.22492544545519721,
-      "max_abs": 0.9071492850780487,
-      "passed": false
+      "cosine": 0.9999999999974372,
+      "max_abs": 6.556510925292969e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l2-input-norm",
@@ -4908,9 +4906,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.41831196463204745,
-      "max_abs": 4.506290256977081,
-      "passed": false
+      "cosine": 0.999999999999059,
+      "max_abs": 8.58306884765625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l2-mlp-output",
@@ -4926,9 +4924,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.16862938730540694,
-      "max_abs": 0.6909372508525848,
-      "passed": false
+      "cosine": 0.9999999999969225,
+      "max_abs": 1.3485550880432129e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l2-post-attention-norm",
@@ -4944,9 +4942,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.425544708316741,
-      "max_abs": 8.203396320343018,
-      "passed": false
+      "cosine": 0.999999999998739,
+      "max_abs": 1.33514404296875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l3-attention-output",
@@ -4962,9 +4960,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.08927358175643543,
-      "max_abs": 1.2959484159946442,
-      "passed": false
+      "cosine": 0.9999999999907084,
+      "max_abs": 1.4454126358032227e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l3-input-norm",
@@ -4980,9 +4978,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.47664855484497887,
-      "max_abs": 8.25527811050415,
-      "passed": false
+      "cosine": 0.9999999999984797,
+      "max_abs": 2.09808349609375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l3-mlp-output",
@@ -4998,9 +4996,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.37879316023651616,
-      "max_abs": 1.2354587316513062,
-      "passed": false
+      "cosine": 0.9999999999928859,
+      "max_abs": 3.7103891372680664e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l3-post-attention-norm",
@@ -5016,9 +5014,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4232392007564497,
-      "max_abs": 8.39399003982544,
-      "passed": false
+      "cosine": 0.9999999999967988,
+      "max_abs": 1.1205673217773438e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l4-attention-output",
@@ -5034,9 +5032,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.37166790671549627,
-      "max_abs": 1.2833282351493835,
-      "passed": false
+      "cosine": 0.9999999999898367,
+      "max_abs": 6.556510925292969e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l4-input-norm",
@@ -5052,9 +5050,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.37684624392796173,
-      "max_abs": 7.932026952505112,
-      "passed": false
+      "cosine": 0.9999999999948855,
+      "max_abs": 2.3603439331054688e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l4-mlp-output",
@@ -5070,9 +5068,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5445876254637363,
-      "max_abs": 24.122663497924805,
-      "passed": false
+      "cosine": 0.9999999999931538,
+      "max_abs": 7.2479248046875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step3-frame0-l4-post-attention-norm",
@@ -5088,9 +5086,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3504388678445232,
-      "max_abs": 8.604600429534912,
-      "passed": false
+      "cosine": 0.9999999999928549,
+      "max_abs": 2.09808349609375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-codec-embed",
@@ -5106,9 +5104,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.1115184355691697,
-      "max_abs": 0.065673828125,
-      "passed": false
+      "cosine": 1.0,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l0-attention-output",
@@ -5124,9 +5122,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5595858373293043,
-      "max_abs": 0.9886704087257385,
-      "passed": false
+      "cosine": 0.9999999999998417,
+      "max_abs": 1.9073486328125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l0-input-norm",
@@ -5142,9 +5140,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.21762349572410586,
-      "max_abs": 5.162463426589966,
-      "passed": false
+      "cosine": 0.9999999999999984,
+      "max_abs": 8.58306884765625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l0-mlp-output",
@@ -5160,9 +5158,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.25639203298239516,
-      "max_abs": 0.450848288834095,
-      "passed": false
+      "cosine": 0.9999999999994329,
+      "max_abs": 4.172325134277344e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l0-post-attention-norm",
@@ -5178,9 +5176,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.49208855127712187,
-      "max_abs": 6.568341493606567,
-      "passed": false
+      "cosine": 0.9999999999997421,
+      "max_abs": 2.5033950805664062e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l1-attention-output",
@@ -5196,9 +5194,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.028737582010238134,
-      "max_abs": 0.46562232449650764,
-      "passed": false
+      "cosine": 0.9999999999975628,
+      "max_abs": 8.940696716308594e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l1-input-norm",
@@ -5214,9 +5212,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.48357889271404775,
-      "max_abs": 5.155707389116287,
-      "passed": false
+      "cosine": 0.9999999999993355,
+      "max_abs": 5.7220458984375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l1-mlp-output",
@@ -5232,9 +5230,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.13585804542199054,
-      "max_abs": 0.7414454407989979,
-      "passed": false
+      "cosine": 0.999999999997997,
+      "max_abs": 1.0728836059570312e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l1-post-attention-norm",
@@ -5250,9 +5248,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3436522286244583,
-      "max_abs": 7.542136505246162,
-      "passed": false
+      "cosine": 0.999999999998861,
+      "max_abs": 5.7220458984375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l2-attention-output",
@@ -5268,9 +5266,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.18943171408076195,
-      "max_abs": 0.8016400337219238,
-      "passed": false
+      "cosine": 0.999999999997363,
+      "max_abs": 6.463378667831421e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l2-input-norm",
@@ -5286,9 +5284,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3225382019382753,
-      "max_abs": 4.9314329624176025,
-      "passed": false
+      "cosine": 0.9999999999987326,
+      "max_abs": 4.4405460357666016e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l2-mlp-output",
@@ -5304,9 +5302,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.11492276492311586,
-      "max_abs": 0.7711410820484161,
-      "passed": false
+      "cosine": 0.9999999999965091,
+      "max_abs": 1.6540288925170898e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l2-post-attention-norm",
@@ -5322,9 +5320,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33707753514842076,
-      "max_abs": 6.66665506362915,
-      "passed": false
+      "cosine": 0.9999999999984078,
+      "max_abs": 1.1175870895385742e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l3-attention-output",
@@ -5340,9 +5338,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.07119776927245132,
-      "max_abs": 1.4659827798604965,
-      "passed": false
+      "cosine": 0.9999999999896055,
+      "max_abs": 1.5497207641601562e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l3-input-norm",
@@ -5358,9 +5356,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.37883668739328796,
-      "max_abs": 7.379268407821655,
-      "passed": false
+      "cosine": 0.9999999999980456,
+      "max_abs": 9.5367431640625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l3-mlp-output",
@@ -5376,9 +5374,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3855154530970751,
-      "max_abs": 1.0180495977401733,
-      "passed": false
+      "cosine": 0.9999999999944572,
+      "max_abs": 3.4570693969726562e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l3-post-attention-norm",
@@ -5394,9 +5392,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3376940519452531,
-      "max_abs": 7.432795524597168,
-      "passed": false
+      "cosine": 0.9999999999961265,
+      "max_abs": 1.1593103408813477e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l4-attention-output",
@@ -5412,9 +5410,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33130861877469214,
-      "max_abs": 1.9802424907684326,
-      "passed": false
+      "cosine": 0.9999999999890077,
+      "max_abs": 5.081295967102051e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l4-input-norm",
@@ -5430,9 +5428,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.31507419961348543,
-      "max_abs": 9.83050537109375,
-      "passed": false
+      "cosine": 0.9999999999954411,
+      "max_abs": 1.728534698486328e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l4-mlp-output",
@@ -5448,9 +5446,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5915207750418454,
-      "max_abs": 16.683347702026367,
-      "passed": false
+      "cosine": 0.9999999999961436,
+      "max_abs": 3.62396240234375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step4-frame0-l4-post-attention-norm",
@@ -5466,9 +5464,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.29113279629506394,
-      "max_abs": 10.402033805847168,
-      "passed": false
+      "cosine": 0.9999999999931313,
+      "max_abs": 2.1398067474365234e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-codec-embed",
@@ -5484,9 +5482,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2735013561808134,
-      "max_abs": 0.0592041015625,
-      "passed": false
+      "cosine": 1.0,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l0-attention-output",
@@ -5502,9 +5500,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5983593681490579,
-      "max_abs": 0.8037161752581596,
-      "passed": false
+      "cosine": 0.9999999999998431,
+      "max_abs": 1.7881393432617188e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l0-input-norm",
@@ -5520,9 +5518,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33414911312686263,
-      "max_abs": 5.957583904266357,
-      "passed": false
+      "cosine": 0.9999999999999989,
+      "max_abs": 6.67572021484375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l0-mlp-output",
@@ -5538,9 +5536,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3125267319442635,
-      "max_abs": 0.6774575561285019,
-      "passed": false
+      "cosine": 0.9999999999995008,
+      "max_abs": 5.960464477539062e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l0-post-attention-norm",
@@ -5556,9 +5554,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5112863903194963,
-      "max_abs": 6.072857737541199,
-      "passed": false
+      "cosine": 0.999999999999744,
+      "max_abs": 2.86102294921875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l1-attention-output",
@@ -5574,9 +5572,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.021350325609949285,
-      "max_abs": 0.5328043103218079,
-      "passed": false
+      "cosine": 0.999999999997267,
+      "max_abs": 1.4901161193847656e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l1-input-norm",
@@ -5592,9 +5590,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5049631314421996,
-      "max_abs": 5.11555939912796,
-      "passed": false
+      "cosine": 0.9999999999995072,
+      "max_abs": 3.814697265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l1-mlp-output",
@@ -5610,9 +5608,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.17053010152920933,
-      "max_abs": 0.6918308287858963,
-      "passed": false
+      "cosine": 0.9999999999982322,
+      "max_abs": 1.0728836059570312e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l1-post-attention-norm",
@@ -5628,9 +5626,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3450571762115507,
-      "max_abs": 7.699827075004578,
-      "passed": false
+      "cosine": 0.9999999999989122,
+      "max_abs": 5.364418029785156e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l2-attention-output",
@@ -5646,9 +5644,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.21953495909646817,
-      "max_abs": 0.7579542994499207,
-      "passed": false
+      "cosine": 0.999999999997644,
+      "max_abs": 6.686896085739136e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l2-input-norm",
@@ -5664,9 +5662,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.366776464122838,
-      "max_abs": 3.986777901649475,
-      "passed": false
+      "cosine": 0.9999999999987718,
+      "max_abs": 4.291534423828125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l2-mlp-output",
@@ -5682,9 +5680,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.18587825262983657,
-      "max_abs": 0.7794641852378845,
-      "passed": false
+      "cosine": 0.999999999997138,
+      "max_abs": 1.3709068298339844e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l2-post-attention-norm",
@@ -5700,9 +5698,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3650030075144181,
-      "max_abs": 6.100441157817841,
-      "passed": false
+      "cosine": 0.9999999999985812,
+      "max_abs": 8.106231689453125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l3-attention-output",
@@ -5718,9 +5716,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.09974173746497803,
-      "max_abs": 1.070912316441536,
-      "passed": false
+      "cosine": 0.9999999999844276,
+      "max_abs": 2.5331974029541016e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l3-input-norm",
@@ -5736,9 +5734,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4320286650266242,
-      "max_abs": 7.664000988006592,
-      "passed": false
+      "cosine": 0.9999999999983217,
+      "max_abs": 1.1444091796875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l3-mlp-output",
@@ -5754,9 +5752,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.36291590875014557,
-      "max_abs": 1.0415434539318085,
-      "passed": false
+      "cosine": 0.9999999999856856,
+      "max_abs": 5.900859832763672e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l3-post-attention-norm",
@@ -5772,9 +5770,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.37467479232208567,
-      "max_abs": 7.780123949050903,
-      "passed": false
+      "cosine": 0.9999999999945925,
+      "max_abs": 1.430511474609375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l4-attention-output",
@@ -5790,9 +5788,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3771167774880519,
-      "max_abs": 2.41553270816803,
-      "passed": false
+      "cosine": 0.9999999999839646,
+      "max_abs": 7.092952728271484e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l4-input-norm",
@@ -5808,9 +5806,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3325694913835882,
-      "max_abs": 9.290050029754639,
-      "passed": false
+      "cosine": 0.9999999999892052,
+      "max_abs": 3.4809112548828125e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l4-mlp-output",
@@ -5826,9 +5824,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6033586188192143,
-      "max_abs": 14.695724487304688,
-      "passed": false
+      "cosine": 0.9999999999909492,
+      "max_abs": 0.000118255615234375,
+      "passed": true
     },
     {
       "name": "code-predictor-step5-frame0-l4-post-attention-norm",
@@ -5844,9 +5842,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2975041378993174,
-      "max_abs": 11.723968029022217,
-      "passed": false
+      "cosine": 0.9999999999878799,
+      "max_abs": 3.910064697265625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-codec-embed",
@@ -5862,9 +5860,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.32974782833966065,
-      "max_abs": 0.05126953125,
-      "passed": false
+      "cosine": 1.0000000000000002,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l0-attention-output",
@@ -5880,9 +5878,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6383329820487922,
-      "max_abs": 0.8462089896202087,
-      "passed": false
+      "cosine": 0.9999999999996761,
+      "max_abs": 1.7881393432617188e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l0-input-norm",
@@ -5898,9 +5896,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.45467073335569125,
-      "max_abs": 2.8731857240200043,
-      "passed": false
+      "cosine": 0.9999999999999988,
+      "max_abs": 9.5367431640625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l0-mlp-output",
@@ -5916,9 +5914,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3333687193847626,
-      "max_abs": 0.6703855991363525,
-      "passed": false
+      "cosine": 0.9999999999993329,
+      "max_abs": 5.960464477539062e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l0-post-attention-norm",
@@ -5934,9 +5932,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5524730556176338,
-      "max_abs": 6.358718633651733,
-      "passed": false
+      "cosine": 0.9999999999994926,
+      "max_abs": 3.814697265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l1-attention-output",
@@ -5952,9 +5950,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.03875812543609739,
-      "max_abs": 0.4877159968018532,
-      "passed": false
+      "cosine": 0.9999999999978589,
+      "max_abs": 1.1920928955078125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l1-input-norm",
@@ -5970,9 +5968,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5174532527313713,
-      "max_abs": 5.350800812244415,
-      "passed": false
+      "cosine": 0.9999999999994112,
+      "max_abs": 4.76837158203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l1-mlp-output",
@@ -5988,9 +5986,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.17891190493302356,
-      "max_abs": 0.658842146396637,
-      "passed": false
+      "cosine": 0.9999999999980349,
+      "max_abs": 9.5367431640625e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l1-post-attention-norm",
@@ -6006,9 +6004,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3391905308951644,
-      "max_abs": 7.837223052978516,
-      "passed": false
+      "cosine": 0.9999999999988523,
+      "max_abs": 5.424022674560547e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l2-attention-output",
@@ -6024,9 +6022,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.22753454408928675,
-      "max_abs": 0.7230996489524841,
-      "passed": false
+      "cosine": 0.9999999999973477,
+      "max_abs": 8.046627044677734e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l2-input-norm",
@@ -6042,9 +6040,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.371908671704142,
-      "max_abs": 4.224142074584961,
-      "passed": false
+      "cosine": 0.9999999999986021,
+      "max_abs": 5.4836273193359375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l2-mlp-output",
@@ -6060,9 +6058,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.18260032283149472,
-      "max_abs": 0.700130820274353,
-      "passed": false
+      "cosine": 0.9999999999961873,
+      "max_abs": 1.6093254089355469e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l2-post-attention-norm",
@@ -6078,9 +6076,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3671556807396554,
-      "max_abs": 6.985633850097656,
-      "passed": false
+      "cosine": 0.9999999999982527,
+      "max_abs": 1.049041748046875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l3-attention-output",
@@ -6096,9 +6094,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.14072704734266925,
-      "max_abs": 1.3004097044467926,
-      "passed": false
+      "cosine": 0.9999999999786237,
+      "max_abs": 2.5853514671325684e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l3-input-norm",
@@ -6114,9 +6112,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4321067441726723,
-      "max_abs": 7.580397605895996,
-      "passed": false
+      "cosine": 0.9999999999978626,
+      "max_abs": 1.049041748046875e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l3-mlp-output",
@@ -6132,9 +6130,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33871182490820506,
-      "max_abs": 0.8328156173229218,
-      "passed": false
+      "cosine": 0.9999999999876815,
+      "max_abs": 3.829598426818848e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l3-post-attention-norm",
@@ -6150,9 +6148,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.37577129809038645,
-      "max_abs": 7.504198312759399,
-      "passed": false
+      "cosine": 0.9999999999937018,
+      "max_abs": 1.71661376953125e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l4-attention-output",
@@ -6168,9 +6166,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33615815400984733,
-      "max_abs": 2.7414145469665527,
-      "passed": false
+      "cosine": 0.9999999999852704,
+      "max_abs": 6.452202796936035e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l4-input-norm",
@@ -6186,9 +6184,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.29207471845217153,
-      "max_abs": 10.203760623931885,
-      "passed": false
+      "cosine": 0.9999999999899729,
+      "max_abs": 2.6941299438476562e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l4-mlp-output",
@@ -6204,9 +6202,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5665864511691988,
-      "max_abs": 18.95706844329834,
-      "passed": false
+      "cosine": 0.9999999999878519,
+      "max_abs": 0.00011348724365234375,
+      "passed": true
     },
     {
       "name": "code-predictor-step6-frame0-l4-post-attention-norm",
@@ -6222,9 +6220,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.25491411846961715,
-      "max_abs": 11.24451494216919,
-      "passed": false
+      "cosine": 0.9999999999888284,
+      "max_abs": 2.956390380859375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-codec-embed",
@@ -6240,9 +6238,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.05525324098193777,
-      "max_abs": 0.08544921875,
-      "passed": false
+      "cosine": 1.0,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l0-attention-output",
@@ -6258,9 +6256,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5301893512926662,
-      "max_abs": 0.8807237148284912,
-      "passed": false
+      "cosine": 0.9999999999997359,
+      "max_abs": 1.7881393432617188e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l0-input-norm",
@@ -6276,9 +6274,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.009355307849004374,
-      "max_abs": 7.151431202888489,
-      "passed": false
+      "cosine": 0.9999999999999989,
+      "max_abs": 4.76837158203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l0-mlp-output",
@@ -6294,9 +6292,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.25946660543222405,
-      "max_abs": 0.7765423059463501,
-      "passed": false
+      "cosine": 0.9999999999991942,
+      "max_abs": 4.731118679046631e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l0-post-attention-norm",
@@ -6312,9 +6310,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4263287038283374,
-      "max_abs": 7.756162166595459,
-      "passed": false
+      "cosine": 0.9999999999995944,
+      "max_abs": 3.337860107421875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l1-attention-output",
@@ -6330,9 +6328,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.07338211692997594,
-      "max_abs": 0.4778371900320053,
-      "passed": false
+      "cosine": 0.999999999997947,
+      "max_abs": 8.344650268554688e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l1-input-norm",
@@ -6348,9 +6346,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3656002585363073,
-      "max_abs": 6.7934250831604,
-      "passed": false
+      "cosine": 0.9999999999993584,
+      "max_abs": 4.76837158203125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l1-mlp-output",
@@ -6366,9 +6364,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.20003033894079833,
-      "max_abs": 0.7282689195126295,
-      "passed": false
+      "cosine": 0.9999999999980493,
+      "max_abs": 9.067589417099953e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l1-post-attention-norm",
@@ -6384,9 +6382,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.20787276287105358,
-      "max_abs": 10.403745412826538,
-      "passed": false
+      "cosine": 0.9999999999988938,
+      "max_abs": 6.198883056640625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l2-attention-output",
@@ -6402,9 +6400,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2478105129399435,
-      "max_abs": 0.7017713487148285,
-      "passed": false
+      "cosine": 0.9999999999977082,
+      "max_abs": 6.407499313354492e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l2-input-norm",
@@ -6420,9 +6418,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3014699905517565,
-      "max_abs": 5.065479755401611,
-      "passed": false
+      "cosine": 0.9999999999987511,
+      "max_abs": 5.9604644775390625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l2-mlp-output",
@@ -6438,9 +6436,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.19549503001516016,
-      "max_abs": 0.6823695451021194,
-      "passed": false
+      "cosine": 0.9999999999961784,
+      "max_abs": 1.6093254089355469e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l2-post-attention-norm",
@@ -6456,9 +6454,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.30476635142616876,
-      "max_abs": 8.826789855957031,
-      "passed": false
+      "cosine": 0.9999999999984829,
+      "max_abs": 9.5367431640625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l3-attention-output",
@@ -6474,9 +6472,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.16747530162740232,
-      "max_abs": 1.325303852558136,
-      "passed": false
+      "cosine": 0.9999999999868937,
+      "max_abs": 2.592802047729492e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l3-input-norm",
@@ -6492,9 +6490,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.418228096742172,
-      "max_abs": 7.175248861312866,
-      "passed": false
+      "cosine": 0.9999999999980439,
+      "max_abs": 1.52587890625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l3-mlp-output",
@@ -6510,9 +6508,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.360669946356542,
-      "max_abs": 0.9408239722251892,
-      "passed": false
+      "cosine": 0.9999999999938145,
+      "max_abs": 2.9802322387695312e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l3-post-attention-norm",
@@ -6528,9 +6526,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3931600469918354,
-      "max_abs": 7.1669394969940186,
-      "passed": false
+      "cosine": 0.9999999999953528,
+      "max_abs": 1.5735626220703125e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l4-attention-output",
@@ -6546,9 +6544,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.321272107386917,
-      "max_abs": 2.7962726354599,
-      "passed": false
+      "cosine": 0.999999999988254,
+      "max_abs": 4.887580871582031e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l4-input-norm",
@@ -6564,9 +6562,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.28732335239209794,
-      "max_abs": 10.116563320159912,
-      "passed": false
+      "cosine": 0.9999999999944571,
+      "max_abs": 1.9252300262451172e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l4-mlp-output",
@@ -6582,9 +6580,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5718330654861268,
-      "max_abs": 22.957730770111084,
-      "passed": false
+      "cosine": 0.9999999999917575,
+      "max_abs": 4.7206878662109375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step7-frame0-l4-post-attention-norm",
@@ -6600,9 +6598,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2743778233651074,
-      "max_abs": 11.04789686203003,
-      "passed": false
+      "cosine": 0.9999999999909573,
+      "max_abs": 2.4080276489257812e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-codec-embed",
@@ -6618,9 +6616,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.17391922278024002,
-      "max_abs": 0.06640625,
-      "passed": false
+      "cosine": 1.0000000000000002,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l0-attention-output",
@@ -6636,9 +6634,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6013689350599689,
-      "max_abs": 0.6192398220300674,
-      "passed": false
+      "cosine": 0.9999999999998327,
+      "max_abs": 1.5497207641601562e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l0-input-norm",
@@ -6654,9 +6652,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.22387538514734476,
-      "max_abs": 5.7645848002284765,
-      "passed": false
+      "cosine": 0.9999999999999988,
+      "max_abs": 6.67572021484375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l0-mlp-output",
@@ -6672,9 +6670,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.34083099219608554,
-      "max_abs": 0.7255970239639282,
-      "passed": false
+      "cosine": 0.9999999999995886,
+      "max_abs": 3.3527612686157227e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l0-post-attention-norm",
@@ -6690,9 +6688,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5120950334551498,
-      "max_abs": 6.750272750854492,
-      "passed": false
+      "cosine": 0.9999999999997382,
+      "max_abs": 2.6226043701171875e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l1-attention-output",
@@ -6708,9 +6706,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.09205057584326977,
-      "max_abs": 0.4656906872987747,
-      "passed": false
+      "cosine": 0.9999999999981513,
+      "max_abs": 1.1920928955078125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l1-input-norm",
@@ -6726,9 +6724,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4399874910085535,
-      "max_abs": 5.982798218727112,
-      "passed": false
+      "cosine": 0.9999999999996753,
+      "max_abs": 2.734363079071045e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l1-mlp-output",
@@ -6744,9 +6742,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2229480254507817,
-      "max_abs": 0.6727435030043125,
-      "passed": false
+      "cosine": 0.9999999999985882,
+      "max_abs": 8.009374141693115e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l1-post-attention-norm",
@@ -6762,9 +6760,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2754525601572519,
-      "max_abs": 9.280217409133911,
-      "passed": false
+      "cosine": 0.9999999999991657,
+      "max_abs": 4.202127456665039e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l2-attention-output",
@@ -6780,9 +6778,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2539877576056217,
-      "max_abs": 0.6631273925304413,
-      "passed": false
+      "cosine": 0.9999999999979357,
+      "max_abs": 6.258487701416016e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l2-input-norm",
@@ -6798,9 +6796,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.36795398329917905,
-      "max_abs": 4.552907407283783,
-      "passed": false
+      "cosine": 0.9999999999989366,
+      "max_abs": 5.7220458984375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l2-mlp-output",
@@ -6816,9 +6814,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.1956429083042936,
-      "max_abs": 0.7197586745023727,
-      "passed": false
+      "cosine": 0.9999999999975612,
+      "max_abs": 1.4603137969970703e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l2-post-attention-norm",
@@ -6834,9 +6832,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3564715101138398,
-      "max_abs": 7.905065178871155,
-      "passed": false
+      "cosine": 0.9999999999987227,
+      "max_abs": 8.58306884765625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l3-attention-output",
@@ -6852,9 +6850,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.21062551165251656,
-      "max_abs": 1.2972797751426697,
-      "passed": false
+      "cosine": 0.9999999999864121,
+      "max_abs": 2.1122395992279053e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l3-input-norm",
@@ -6870,9 +6868,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4477290379062471,
-      "max_abs": 5.4898011684417725,
-      "passed": false
+      "cosine": 0.9999999999985882,
+      "max_abs": 7.331371307373047e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l3-mlp-output",
@@ -6888,9 +6886,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4336798917929009,
-      "max_abs": 1.115931749343872,
-      "passed": false
+      "cosine": 0.9999999999861632,
+      "max_abs": 4.887580871582031e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l3-post-attention-norm",
@@ -6906,9 +6904,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.42029792642842445,
-      "max_abs": 5.346870183944702,
-      "passed": false
+      "cosine": 0.999999999995703,
+      "max_abs": 1.1324882507324219e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l4-attention-output",
@@ -6924,9 +6922,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3558325853963565,
-      "max_abs": 2.6664739847183228,
-      "passed": false
+      "cosine": 0.9999999999812664,
+      "max_abs": 5.558133125305176e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l4-input-norm",
@@ -6942,9 +6940,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3198016817526828,
-      "max_abs": 9.55611276626587,
-      "passed": false
+      "cosine": 0.9999999999896322,
+      "max_abs": 2.5987625122070312e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l4-mlp-output",
@@ -6960,9 +6958,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6400022416072702,
-      "max_abs": 23.594884872436523,
-      "passed": false
+      "cosine": 0.9999999999856893,
+      "max_abs": 9.632110595703125e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step8-frame0-l4-post-attention-norm",
@@ -6978,9 +6976,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.31671274146126155,
-      "max_abs": 11.62039852142334,
-      "passed": false
+      "cosine": 0.9999999999854071,
+      "max_abs": 3.933906555175781e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-codec-embed",
@@ -6996,9 +6994,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.08216690385283003,
-      "max_abs": 0.0660858154296875,
-      "passed": false
+      "cosine": 0.9999999999999999,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l0-attention-output",
@@ -7014,9 +7012,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5912466482277424,
-      "max_abs": 0.5287099927663803,
-      "passed": false
+      "cosine": 0.9999999999998821,
+      "max_abs": 1.5497207641601562e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l0-input-norm",
@@ -7032,9 +7030,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.14061975077216826,
-      "max_abs": 7.5522860288619995,
-      "passed": false
+      "cosine": 0.9999999999999989,
+      "max_abs": 5.7220458984375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l0-mlp-output",
@@ -7050,9 +7048,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.35845250982956073,
-      "max_abs": 0.6412556171417236,
-      "passed": false
+      "cosine": 0.9999999999996969,
+      "max_abs": 3.5762786865234375e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l0-post-attention-norm",
@@ -7068,9 +7066,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4992386294736464,
-      "max_abs": 5.840680956840515,
-      "passed": false
+      "cosine": 0.9999999999998102,
+      "max_abs": 3.814697265625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l1-attention-output",
@@ -7086,9 +7084,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.12809927149270006,
-      "max_abs": 0.39518991112709045,
-      "passed": false
+      "cosine": 0.9999999999976847,
+      "max_abs": 1.2516975402832031e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l1-input-norm",
@@ -7104,9 +7102,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.422152666354776,
-      "max_abs": 5.391569416970015,
-      "passed": false
+      "cosine": 0.9999999999996826,
+      "max_abs": 3.956258296966553e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l1-mlp-output",
@@ -7122,9 +7120,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.20526638760535168,
-      "max_abs": 0.6331690275110304,
-      "passed": false
+      "cosine": 0.9999999999983454,
+      "max_abs": 2.5033950805664062e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l1-post-attention-norm",
@@ -7140,9 +7138,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.25666780187774657,
-      "max_abs": 8.491046071052551,
-      "passed": false
+      "cosine": 0.9999999999990599,
+      "max_abs": 5.245208740234375e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l2-attention-output",
@@ -7158,9 +7156,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.28118371246565743,
-      "max_abs": 0.6156177073717117,
-      "passed": false
+      "cosine": 0.9999999999981177,
+      "max_abs": 5.662441253662109e-07,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l2-input-norm",
@@ -7176,9 +7174,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3612227874123688,
-      "max_abs": 3.8793050907552242,
-      "passed": false
+      "cosine": 0.9999999999989657,
+      "max_abs": 4.291534423828125e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l2-mlp-output",
@@ -7194,9 +7192,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.1755980405482598,
-      "max_abs": 0.7869215309619904,
-      "passed": false
+      "cosine": 0.9999999999978109,
+      "max_abs": 1.2069940567016602e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l2-post-attention-norm",
@@ -7212,9 +7210,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3591545405198637,
-      "max_abs": 6.700984060764313,
-      "passed": false
+      "cosine": 0.9999999999987819,
+      "max_abs": 8.821487426757812e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l3-attention-output",
@@ -7230,9 +7228,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2556713336138646,
-      "max_abs": 1.2891685664653778,
-      "passed": false
+      "cosine": 0.9999999999900412,
+      "max_abs": 2.384185791015625e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l3-input-norm",
@@ -7248,9 +7246,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4206646112293309,
-      "max_abs": 6.232975244522095,
-      "passed": false
+      "cosine": 0.9999999999988054,
+      "max_abs": 6.377696990966797e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l3-mlp-output",
@@ -7266,9 +7264,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.418554850043627,
-      "max_abs": 1.3081194758415222,
-      "passed": false
+      "cosine": 0.99999999999546,
+      "max_abs": 2.9653310775756836e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l3-post-attention-norm",
@@ -7284,9 +7282,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.40839979641784857,
-      "max_abs": 6.025125026702881,
-      "passed": false
+      "cosine": 0.9999999999964436,
+      "max_abs": 1.2636184692382812e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l4-attention-output",
@@ -7302,9 +7300,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.35993625578960875,
-      "max_abs": 2.242236375808716,
-      "passed": false
+      "cosine": 0.9999999999907306,
+      "max_abs": 4.455447196960449e-06,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l4-input-norm",
@@ -7320,9 +7318,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.27832871092627887,
-      "max_abs": 8.931774616241455,
-      "passed": false
+      "cosine": 0.9999999999956358,
+      "max_abs": 2.6702880859375e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l4-mlp-output",
@@ -7338,9 +7336,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6556596842565845,
-      "max_abs": 23.491016387939453,
-      "passed": false
+      "cosine": 0.999999999995113,
+      "max_abs": 3.814697265625e-05,
+      "passed": true
     },
     {
       "name": "code-predictor-step9-frame0-l4-post-attention-norm",
@@ -7356,9 +7354,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2773890770753786,
-      "max_abs": 8.746935367584229,
-      "passed": false
+      "cosine": 0.9999999999930738,
+      "max_abs": 2.384185791015625e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_final_code_matrix_0000",
@@ -7372,9 +7370,9 @@
         15
       ],
       "dtype": "f32",
-      "cosine": 0.6505881152348044,
-      "max_abs": 1805.0,
-      "passed": false
+      "cosine": 0.9999999999999999,
+      "max_abs": 0.0,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0000",
@@ -7404,9 +7402,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.6550241689480396,
-      "max_abs": 18.341458320617676,
-      "passed": false
+      "cosine": 0.9999999999932898,
+      "max_abs": 6.365776062011719e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0002",
@@ -7420,9 +7418,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.943203764369359,
-      "max_abs": 10.134551525115967,
-      "passed": false
+      "cosine": 0.9999999999997972,
+      "max_abs": 3.814697265625e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0003",
@@ -7436,9 +7434,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9456436016825915,
-      "max_abs": 13.852611541748047,
-      "passed": false
+      "cosine": 0.9999999999997072,
+      "max_abs": 3.4332275390625e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0004",
@@ -7452,9 +7450,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9249808480528613,
-      "max_abs": 15.649991035461426,
-      "passed": false
+      "cosine": 0.9999999999995819,
+      "max_abs": 3.910064697265625e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0005",
@@ -7468,9 +7466,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9529748926032019,
-      "max_abs": 14.273037433624268,
-      "passed": false
+      "cosine": 0.9999999999995683,
+      "max_abs": 4.673004150390625e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0006",
@@ -7484,9 +7482,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9505879177968172,
-      "max_abs": 22.288971424102783,
-      "passed": false
+      "cosine": 0.9999999999994929,
+      "max_abs": 5.7220458984375e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0007",
@@ -7500,9 +7498,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9708896951452985,
-      "max_abs": 12.209273338317871,
-      "passed": false
+      "cosine": 0.9999999999996673,
+      "max_abs": 5.626678466796875e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0008",
@@ -7516,9 +7514,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9753577045930246,
-      "max_abs": 12.940110206604004,
-      "passed": false
+      "cosine": 0.9999999999994894,
+      "max_abs": 5.91278076171875e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0009",
@@ -7532,9 +7530,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9840423479002841,
-      "max_abs": 11.362396240234375,
-      "passed": false
+      "cosine": 0.9999999999998238,
+      "max_abs": 4.38690185546875e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0010",
@@ -7548,9 +7546,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9827113229808435,
-      "max_abs": 10.274536609649658,
-      "passed": false
+      "cosine": 0.9999999999991656,
+      "max_abs": 7.724761962890625e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0011",
@@ -7564,9 +7562,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9870805973313204,
-      "max_abs": 11.016843795776367,
-      "passed": false
+      "cosine": 0.9999999999998342,
+      "max_abs": 5.340576171875e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0012",
@@ -7580,9 +7578,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9804189909424155,
-      "max_abs": 10.849456787109375,
-      "passed": false
+      "cosine": 0.9999999999997471,
+      "max_abs": 5.14984130859375e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0013",
@@ -7596,9 +7594,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9821133167161734,
-      "max_abs": 11.360837936401367,
-      "passed": false
+      "cosine": 0.9999999999996897,
+      "max_abs": 4.1961669921875e-05,
+      "passed": true
     },
     {
       "name": "code_predictor_step_logits_0000_0014",
@@ -7612,9 +7610,9 @@
         2048
       ],
       "dtype": "f32",
-      "cosine": 0.9873298848400999,
-      "max_abs": 11.708196640014648,
-      "passed": false
+      "cosine": 0.9999999999997949,
+      "max_abs": 4.291534423828125e-05,
+      "passed": true
     },
     {
       "name": "next-emb-step0",
@@ -7630,9 +7628,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.626926867280639,
-      "max_abs": 0.47356417775154114,
-      "passed": false
+      "cosine": 0.9999999999999967,
+      "max_abs": 2.384185791015625e-07,
+      "passed": true
     },
     {
       "name": "talker-codec-embed-frame0",
@@ -8188,8 +8186,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.05937283585236548,
-      "max_abs": 82.82127475738525,
+      "cosine": 0.07813201207301396,
+      "max_abs": 79.67348766326904,
       "passed": false
     },
     {
@@ -8206,8 +8204,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.05937283585236548,
-      "max_abs": 82.82127475738525,
+      "cosine": 0.07813201207301396,
+      "max_abs": 79.67348766326904,
       "passed": false
     },
     {
@@ -8224,8 +8222,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.416840186421006,
-      "max_abs": 1.385877888649702,
+      "cosine": 0.9991189382739553,
+      "max_abs": 0.05672907829284668,
       "passed": false
     },
     {
@@ -8242,8 +8240,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.29297218447766626,
-      "max_abs": 1.648101456463337,
+      "cosine": 0.9664359018362462,
+      "max_abs": 0.14177745580673218,
       "passed": false
     },
     {
@@ -8260,8 +8258,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.14218841836654186,
-      "max_abs": 3.537164568901062,
+      "cosine": 0.8302498415238945,
+      "max_abs": 1.397596836090088,
       "passed": false
     },
     {
@@ -8278,8 +8276,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.19712017062779513,
-      "max_abs": 3.613745093345642,
+      "cosine": 0.8376383193009538,
+      "max_abs": 2.011829376220703,
       "passed": false
     },
     {
@@ -8296,8 +8294,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2613340236753922,
-      "max_abs": 3.632739782333374,
+      "cosine": 0.848176753680451,
+      "max_abs": 1.7337586879730225,
       "passed": false
     },
     {
@@ -8314,8 +8312,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3491830355844934,
-      "max_abs": 3.7091325521469116,
+      "cosine": 0.8641360445525332,
+      "max_abs": 1.018045425415039,
       "passed": false
     },
     {
@@ -8332,8 +8330,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2625656578203068,
-      "max_abs": 3.754112958908081,
+      "cosine": 0.7391337162895232,
+      "max_abs": 0.9611500948667526,
       "passed": false
     },
     {
@@ -8350,8 +8348,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4298274539820694,
-      "max_abs": 3.8061927556991577,
+      "cosine": 0.6741460700033822,
+      "max_abs": 1.4265655875205994,
       "passed": false
     },
     {
@@ -8368,8 +8366,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.31128139308228364,
-      "max_abs": 3.7286386489868164,
+      "cosine": 0.6141882484734839,
+      "max_abs": 1.4267503321170807,
       "passed": false
     },
     {
@@ -8386,8 +8384,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.061015100563757134,
-      "max_abs": 7.448843628168106,
+      "cosine": 0.19939441698923144,
+      "max_abs": 4.959927722811699,
       "passed": false
     },
     {
@@ -8404,8 +8402,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.08658499385714717,
-      "max_abs": 7.431264042854309,
+      "cosine": 0.22509739727860237,
+      "max_abs": 5.5281418561935425,
       "passed": false
     },
     {
@@ -8422,8 +8420,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.06994627943373255,
-      "max_abs": 21.781312942504883,
+      "cosine": -0.03334892993490262,
+      "max_abs": 20.751620292663574,
       "passed": false
     },
     {
@@ -8440,8 +8438,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.31646251477014775,
-      "max_abs": 2.168565034866333,
+      "cosine": 0.8690207908729799,
+      "max_abs": 0.572240948677063,
       "passed": false
     },
     {
@@ -8458,8 +8456,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.052872395368175215,
-      "max_abs": 23.77564525604248,
+      "cosine": -0.019503273802185802,
+      "max_abs": 22.63648509979248,
       "passed": false
     },
     {
@@ -8476,8 +8474,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.046134474240729376,
-      "max_abs": 23.567484855651855,
+      "cosine": -0.012011287544165016,
+      "max_abs": 23.011920928955078,
       "passed": false
     },
     {
@@ -8494,8 +8492,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.13340183291886198,
-      "max_abs": 33.68404197692871,
+      "cosine": -0.0966621683671516,
+      "max_abs": 31.882532119750977,
       "passed": false
     },
     {
@@ -8512,8 +8510,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.17638363516725544,
-      "max_abs": 41.47808647155762,
+      "cosine": -0.14930501518929187,
+      "max_abs": 38.91182518005371,
       "passed": false
     },
     {
@@ -8530,8 +8528,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.16545932033442495,
-      "max_abs": 43.92219924926758,
+      "cosine": -0.1358552067707585,
+      "max_abs": 41.18290138244629,
       "passed": false
     },
     {
@@ -8548,8 +8546,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.09627855794263318,
-      "max_abs": 38.94617748260498,
+      "cosine": -0.05890897652080556,
+      "max_abs": 35.43434810638428,
       "passed": false
     },
     {
@@ -8566,8 +8564,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.06931230908371902,
-      "max_abs": 41.924574851989746,
+      "cosine": -0.0329983559973613,
+      "max_abs": 38.120585441589355,
       "passed": false
     },
     {
@@ -8584,8 +8582,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.05527520642454327,
-      "max_abs": 25.875821113586426,
+      "cosine": 0.08633149530239266,
+      "max_abs": 23.4489164352417,
       "passed": false
     },
     {
@@ -8602,8 +8600,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.40922553379694093,
-      "max_abs": 2.3709182739257812,
+      "cosine": 0.9150852686864057,
+      "max_abs": 0.6433172225952148,
       "passed": false
     },
     {
@@ -8620,8 +8618,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4442169309858676,
-      "max_abs": 2.5317912697792053,
+      "cosine": 0.9189634072349301,
+      "max_abs": 0.753441333770752,
       "passed": false
     },
     {
@@ -8638,8 +8636,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3644677727274193,
-      "max_abs": 2.709789752960205,
+      "cosine": 0.9017438520765031,
+      "max_abs": 0.9017388820648193,
       "passed": false
     },
     {
@@ -8656,8 +8654,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.39768949085176025,
-      "max_abs": 2.9900962114334106,
+      "cosine": 0.9138311450415645,
+      "max_abs": 0.561048686504364,
       "passed": false
     },
     {
@@ -8674,8 +8672,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.36192165646226115,
-      "max_abs": 3.156791090965271,
+      "cosine": 0.8715849038881439,
+      "max_abs": 0.8348031044006348,
       "passed": false
     },
     {
@@ -8692,8 +8690,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2628445064855514,
-      "max_abs": 3.2431880235671997,
+      "cosine": 0.8457780125537084,
+      "max_abs": 1.1831340789794922,
       "passed": false
     },
     {
@@ -8710,8 +8708,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.13452740000900332,
-      "max_abs": 3.4533495903015137,
+      "cosine": 0.8302759294769927,
+      "max_abs": 1.2014265060424805,
       "passed": false
     },
     {
@@ -8764,9 +8762,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.626926867280639,
-      "max_abs": 0.47356417775154114,
-      "passed": false
+      "cosine": 0.9999999999999967,
+      "max_abs": 2.384185791015625e-07,
+      "passed": true
     },
     {
       "name": "talker-logits-prefill",
@@ -8803,14 +8801,14 @@
         3072
       ],
       "dtype": "f32",
-      "cosine": 0.17829466464076718,
-      "max_abs": 31.361058950424194,
+      "cosine": 0.21210814163713967,
+      "max_abs": 30.87560725212097,
       "logit": {
         "top1_ref": 1771,
         "top1_cand": 215,
         "top1_match": false,
         "top5_overlap": 0.0,
-        "score_margin_at_diff": 12.425195693969727
+        "score_margin_at_diff": 12.977205276489258
       },
       "passed": false
     },
@@ -10850,13 +10848,43 @@
     },
     {
       "name": "talker-prefill-rope-cos",
-      "passed": false,
-      "reason": "element count mismatch: ref=4224 (shape=[3, 1, 1, 11, 128]), cand=1408 (shape=[1, 1, 11, 128])"
+      "candle_name": "talker-prefill-rope-cos",
+      "shape_ref": [
+        1,
+        1,
+        11,
+        128
+      ],
+      "shape_cand": [
+        1,
+        1,
+        11,
+        128
+      ],
+      "dtype": "f32",
+      "cosine": 0.8410156404020976,
+      "max_abs": 1.999998390674591,
+      "passed": false
     },
     {
       "name": "talker-prefill-rope-sin",
-      "passed": false,
-      "reason": "element count mismatch: ref=4224 (shape=[3, 1, 1, 11, 128]), cand=1408 (shape=[1, 1, 11, 128])"
+      "candle_name": "talker-prefill-rope-sin",
+      "shape_ref": [
+        1,
+        1,
+        11,
+        128
+      ],
+      "shape_cand": [
+        1,
+        1,
+        11,
+        128
+      ],
+      "dtype": "f32",
+      "cosine": 0.4204085266529079,
+      "max_abs": 1.1483799368143082,
+      "passed": false
     },
     {
       "name": "talker-step1-codec-embed",
@@ -10872,9 +10900,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.626926867280639,
-      "max_abs": 0.47356417775154114,
-      "passed": false
+      "cosine": 0.9999999999999967,
+      "max_abs": 2.384185791015625e-07,
+      "passed": true
     },
     {
       "name": "talker-step1-l0-attention-output",
@@ -10890,8 +10918,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.21808141464451533,
-      "max_abs": 0.3700554370880127,
+      "cosine": 0.9680847673489958,
+      "max_abs": 0.03384244441986084,
       "passed": false
     },
     {
@@ -10908,9 +10936,9 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5490170315534976,
-      "max_abs": 3.5030858516693115,
-      "passed": false
+      "cosine": 0.9999999999999977,
+      "max_abs": 3.337860107421875e-06,
+      "passed": true
     },
     {
       "name": "talker-step1-l0-mlp-output",
@@ -10926,8 +10954,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.11391155591752798,
-      "max_abs": 1.4155937433242798,
+      "cosine": 0.9991059005214369,
+      "max_abs": 0.02762293815612793,
       "passed": false
     },
     {
@@ -10944,8 +10972,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.38622364712765045,
-      "max_abs": 3.050650119781494,
+      "cosine": 0.9985900931976649,
+      "max_abs": 0.09392070770263672,
       "passed": false
     },
     {
@@ -10962,8 +10990,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3104035337191018,
-      "max_abs": 0.8857951425015926,
+      "cosine": 0.5770287338453655,
+      "max_abs": 0.29626571759581566,
       "passed": false
     },
     {
@@ -10980,8 +11008,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3170616886555016,
-      "max_abs": 2.184089183807373,
+      "cosine": 0.9976494824312977,
+      "max_abs": 0.12051582336425781,
       "passed": false
     },
     {
@@ -10998,8 +11026,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.8188123747636106,
-      "max_abs": 0.82621169090271,
+      "cosine": 0.97197562681157,
+      "max_abs": 0.31654858589172363,
       "passed": false
     },
     {
@@ -11016,8 +11044,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2686764083324944,
-      "max_abs": 4.4794546365737915,
+      "cosine": 0.9353044769894817,
+      "max_abs": 0.6725670099258423,
       "passed": false
     },
     {
@@ -11034,8 +11062,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.44691601214432763,
-      "max_abs": 0.19155043177306652,
+      "cosine": 0.49378404381264784,
+      "max_abs": 0.20068288501352072,
       "passed": false
     },
     {
@@ -11052,8 +11080,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24519105772724903,
-      "max_abs": 5.131078004837036,
+      "cosine": 0.6949690771115198,
+      "max_abs": 1.3366315364837646,
       "passed": false
     },
     {
@@ -11070,8 +11098,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.04644816908654687,
-      "max_abs": 0.7572365403175354,
+      "cosine": 0.52062175467668,
+      "max_abs": 0.4125647097826004,
       "passed": false
     },
     {
@@ -11088,8 +11116,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.18885616885900064,
-      "max_abs": 6.0166308879852295,
+      "cosine": 0.6939187134976855,
+      "max_abs": 2.3026906102895737,
       "passed": false
     },
     {
@@ -11106,8 +11134,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.47535365193024837,
-      "max_abs": 0.4177714604884386,
+      "cosine": 0.6160462218361041,
+      "max_abs": 0.08773406781256199,
       "passed": false
     },
     {
@@ -11124,8 +11152,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.29252784511918517,
-      "max_abs": 5.428671836853027,
+      "cosine": 0.701361142117508,
+      "max_abs": 1.6425938606262207,
       "passed": false
     },
     {
@@ -11142,8 +11170,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.12846464470341884,
-      "max_abs": 0.45231810212135315,
+      "cosine": 0.5679273405123935,
+      "max_abs": 0.5264983177185059,
       "passed": false
     },
     {
@@ -11160,8 +11188,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24056109678815535,
-      "max_abs": 4.604960083961487,
+      "cosine": 0.6903044496328085,
+      "max_abs": 2.4886709600687027,
       "passed": false
     },
     {
@@ -11178,8 +11206,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5417372856744556,
-      "max_abs": 0.0997086614370346,
+      "cosine": 0.6816710640155214,
+      "max_abs": 0.09094629064202309,
       "passed": false
     },
     {
@@ -11196,8 +11224,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3488397727210832,
-      "max_abs": 4.7338207215070724,
+      "cosine": 0.6941880574815551,
+      "max_abs": 1.8338311910629272,
       "passed": false
     },
     {
@@ -11214,8 +11242,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.28810341242290693,
-      "max_abs": 0.36887913942337036,
+      "cosine": 0.5541774024255922,
+      "max_abs": 0.32071687374264,
       "passed": false
     },
     {
@@ -11232,8 +11260,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2957101899886262,
-      "max_abs": 4.049279093742371,
+      "cosine": 0.6766878947266886,
+      "max_abs": 1.9016205966472626,
       "passed": false
     },
     {
@@ -11250,8 +11278,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2621814709899613,
-      "max_abs": 0.31248079240322113,
+      "cosine": 0.3012015978619477,
+      "max_abs": 0.16358768939971924,
       "passed": false
     },
     {
@@ -11268,8 +11296,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4102518458983174,
-      "max_abs": 4.302121430635452,
+      "cosine": 0.6861183179462852,
+      "max_abs": 1.583591341972351,
       "passed": false
     },
     {
@@ -11286,8 +11314,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3247343603280429,
-      "max_abs": 0.6674543619155884,
+      "cosine": 0.4818775101235355,
+      "max_abs": 0.5521252751350403,
       "passed": false
     },
     {
@@ -11304,8 +11332,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33387663120679095,
-      "max_abs": 3.2426097989082336,
+      "cosine": 0.641602973183019,
+      "max_abs": 2.2997127175331116,
       "passed": false
     },
     {
@@ -11322,8 +11350,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6173551383238525,
-      "max_abs": 0.9558142423629761,
+      "cosine": 0.574772944585983,
+      "max_abs": 1.9489015340805054,
       "passed": false
     },
     {
@@ -11340,8 +11368,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.44618051753578203,
-      "max_abs": 5.354446887969971,
+      "cosine": 0.6640764010896959,
+      "max_abs": 1.9610562324523926,
       "passed": false
     },
     {
@@ -11358,8 +11386,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.46071290617822613,
-      "max_abs": 0.6355969458818436,
+      "cosine": 0.4655500034476823,
+      "max_abs": 0.8905046582221985,
       "passed": false
     },
     {
@@ -11376,8 +11404,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3419075222960369,
-      "max_abs": 3.9897002577781677,
+      "cosine": 0.5289397452677469,
+      "max_abs": 2.987632632255554,
       "passed": false
     },
     {
@@ -11394,8 +11422,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.45258085876084564,
-      "max_abs": 0.3786008879542351,
+      "cosine": 0.4402656920983015,
+      "max_abs": 0.3569914326071739,
       "passed": false
     },
     {
@@ -11412,8 +11440,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.46385665385251906,
-      "max_abs": 4.138482570648193,
+      "cosine": 0.47956000315274405,
+      "max_abs": 2.463968515396118,
       "passed": false
     },
     {
@@ -11430,8 +11458,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.7863996535100692,
-      "max_abs": 1.470462143421173,
+      "cosine": 0.7632146263864801,
+      "max_abs": 1.560952365398407,
       "passed": false
     },
     {
@@ -11448,8 +11476,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.44543048692784626,
-      "max_abs": 3.077962040901184,
+      "cosine": 0.48040477967218,
+      "max_abs": 2.958484411239624,
       "passed": false
     },
     {
@@ -11466,8 +11494,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.7405958253015024,
-      "max_abs": 0.6175748035311699,
+      "cosine": 0.7828703072602865,
+      "max_abs": 0.4042099863290787,
       "passed": false
     },
     {
@@ -11484,8 +11512,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6839921314038836,
-      "max_abs": 3.575636863708496,
+      "cosine": 0.6863439494853953,
+      "max_abs": 2.76813805103302,
       "passed": false
     },
     {
@@ -11502,8 +11530,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.1545345259034639,
-      "max_abs": 1.4261131696403027,
+      "cosine": 0.20299864591502137,
+      "max_abs": 1.1054746322333813,
       "passed": false
     },
     {
@@ -11520,8 +11548,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5156790720900565,
-      "max_abs": 2.932809829711914,
+      "cosine": 0.553051931724493,
+      "max_abs": 2.836975932121277,
       "passed": false
     },
     {
@@ -11538,8 +11566,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.12536105279541696,
-      "max_abs": 0.221680149435997,
+      "cosine": 0.2761670224672394,
+      "max_abs": 0.22740690410137177,
       "passed": false
     },
     {
@@ -11556,8 +11584,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4121178334332759,
-      "max_abs": 5.1583685874938965,
+      "cosine": 0.47233819621684,
+      "max_abs": 2.63923442363739,
       "passed": false
     },
     {
@@ -11574,8 +11602,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.0030472527079306575,
-      "max_abs": 8.384617022238672,
+      "cosine": 0.008387850719940526,
+      "max_abs": 5.524372271262109,
       "passed": false
     },
     {
@@ -11592,8 +11620,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.31478868915895303,
-      "max_abs": 3.1986586451530457,
+      "cosine": 0.4185836786373224,
+      "max_abs": 2.89728219807148,
       "passed": false
     },
     {
@@ -11610,8 +11638,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.11981098810890552,
-      "max_abs": 0.6834684330970049,
+      "cosine": 0.1877564698308666,
+      "max_abs": 0.40847000665962696,
       "passed": false
     },
     {
@@ -11628,8 +11656,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.13282514219710112,
-      "max_abs": 7.469580829143524,
+      "cosine": 0.18900866741138417,
+      "max_abs": 7.3260451555252075,
       "passed": false
     },
     {
@@ -11646,8 +11674,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.12797743553317908,
-      "max_abs": 0.9320521950721741,
+      "cosine": 0.19177678455593747,
+      "max_abs": 0.970134824514389,
       "passed": false
     },
     {
@@ -11664,8 +11692,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.11001804405203555,
-      "max_abs": 5.947730351239443,
+      "cosine": 0.19177129632554743,
+      "max_abs": 5.5146220326423645,
       "passed": false
     },
     {
@@ -11682,8 +11710,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.12511497069249625,
-      "max_abs": 1.0066622346639633,
+      "cosine": 0.13170435140805836,
+      "max_abs": 0.9008834958076477,
       "passed": false
     },
     {
@@ -11700,8 +11728,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.16766712301970912,
-      "max_abs": 7.070769131183624,
+      "cosine": 0.2315474354757111,
+      "max_abs": 6.870705723762512,
       "passed": false
     },
     {
@@ -11718,8 +11746,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.0989677523192806,
-      "max_abs": 14.142906188964844,
+      "cosine": -0.11982571837391848,
+      "max_abs": 14.552022933959961,
       "passed": false
     },
     {
@@ -11736,8 +11764,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.12205528820699003,
-      "max_abs": 6.914701491594315,
+      "cosine": 0.21622519725558786,
+      "max_abs": 5.261175274848938,
       "passed": false
     },
     {
@@ -11754,8 +11782,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.11139719569706852,
-      "max_abs": 0.6843606382608414,
+      "cosine": 0.5620394248704919,
+      "max_abs": 0.39917586743831635,
       "passed": false
     },
     {
@@ -11772,8 +11800,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3836246784176749,
-      "max_abs": 5.6052329540252686,
+      "cosine": 0.9508219243502773,
+      "max_abs": 0.842025637626648,
       "passed": false
     },
     {
@@ -11790,8 +11818,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.31677260164688814,
-      "max_abs": 0.48077820241451263,
+      "cosine": 0.7105756201284943,
+      "max_abs": 0.5013060569763184,
       "passed": false
     },
     {
@@ -11808,8 +11836,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.19164058565996572,
-      "max_abs": 3.0223358869552612,
+      "cosine": 0.7220508839111087,
+      "max_abs": 1.8678913116455078,
       "passed": false
     },
     {
@@ -11826,8 +11854,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.04258756195436482,
-      "max_abs": 2.6760330200195312,
+      "cosine": -0.03578595988470573,
+      "max_abs": 2.687140107154846,
       "passed": false
     },
     {
@@ -11844,8 +11872,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.00933956375536397,
-      "max_abs": 7.603801816701889,
+      "cosine": 0.0258616150686565,
+      "max_abs": 7.083550542593002,
       "passed": false
     },
     {
@@ -11862,8 +11890,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.05987146321891672,
-      "max_abs": 4.670365631580353,
+      "cosine": 0.09601933581402905,
+      "max_abs": 4.572004348039627,
       "passed": false
     },
     {
@@ -11880,8 +11908,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.0027016995399410377,
-      "max_abs": 8.500731207430363,
+      "cosine": 0.04771124717641943,
+      "max_abs": 7.489616870880127,
       "passed": false
     },
     {
@@ -11898,8 +11926,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.04739260598028866,
-      "max_abs": 2.7972653806209564,
+      "cosine": 0.12367426972100244,
+      "max_abs": 2.3278503715991974,
       "passed": false
     },
     {
@@ -11916,8 +11944,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.002261729927004217,
-      "max_abs": 8.955837607383728,
+      "cosine": 0.03968107763070287,
+      "max_abs": 9.106355667114258,
       "passed": false
     },
     {
@@ -11934,8 +11962,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.0712946838655459,
-      "max_abs": 2.5891049057245255,
+      "cosine": 0.1090430516453185,
+      "max_abs": 2.7032864838838577,
       "passed": false
     },
     {
@@ -11952,8 +11980,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.007597261966342451,
-      "max_abs": 9.971809059381485,
+      "cosine": 0.057517089951444965,
+      "max_abs": 8.776996493339539,
       "passed": false
     },
     {
@@ -11970,8 +11998,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.14803014305857298,
-      "max_abs": 1.0039332956075668,
+      "cosine": 0.17185975787304977,
+      "max_abs": 0.8991631269454956,
       "passed": false
     },
     {
@@ -11988,8 +12016,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.004934169232311643,
-      "max_abs": 9.175307542085648,
+      "cosine": 0.04640308234681267,
+      "max_abs": 8.525959730148315,
       "passed": false
     },
     {
@@ -12006,8 +12034,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.012036255147258203,
-      "max_abs": 10.87454642355442,
+      "cosine": -0.0022491697387524625,
+      "max_abs": 9.462042227387428,
       "passed": false
     },
     {
@@ -12024,8 +12052,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.01765645709877111,
-      "max_abs": 10.658679760992527,
+      "cosine": 0.06990292303969348,
+      "max_abs": 9.36536693572998,
       "passed": false
     },
     {
@@ -12042,8 +12070,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.015026922740318768,
-      "max_abs": 5.152979731559753,
+      "cosine": -0.00722850238390378,
+      "max_abs": 4.8103049993515015,
       "passed": false
     },
     {
@@ -12060,8 +12088,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.04737221920792054,
-      "max_abs": 13.490322589874268,
+      "cosine": -0.004197809215574483,
+      "max_abs": 13.079382121562958,
       "passed": false
     },
     {
@@ -12078,8 +12106,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.0703516621993451,
-      "max_abs": 3.1630682945251465,
+      "cosine": -0.07361239887424774,
+      "max_abs": 2.9017525911331177,
       "passed": false
     },
     {
@@ -12096,8 +12124,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.06068101108442542,
-      "max_abs": 11.192993745207787,
+      "cosine": -0.005171154699527358,
+      "max_abs": 9.809339165687561,
       "passed": false
     },
     {
@@ -12114,8 +12142,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3283178865300203,
-      "max_abs": 1.8442477583885193,
+      "cosine": 0.3516354027346289,
+      "max_abs": 1.5647189021110535,
       "passed": false
     },
     {
@@ -12132,8 +12160,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.07692596232391832,
-      "max_abs": 17.69015336036682,
+      "cosine": -0.038091627644745156,
+      "max_abs": 17.492823839187622,
       "passed": false
     },
     {
@@ -12150,8 +12178,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.005964272454535781,
-      "max_abs": 2.408100515604019,
+      "cosine": 0.015392159827479367,
+      "max_abs": 2.256265476346016,
       "passed": false
     },
     {
@@ -12168,8 +12196,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.010579853871416032,
-      "max_abs": 11.967219062149525,
+      "cosine": 0.04919052519806224,
+      "max_abs": 10.535157203674316,
       "passed": false
     },
     {
@@ -12186,8 +12214,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.14808029644617998,
-      "max_abs": 4.036466807126999,
+      "cosine": 0.17089838038039218,
+      "max_abs": 3.570963352918625,
       "passed": false
     },
     {
@@ -12204,8 +12232,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.04706646902124234,
-      "max_abs": 14.248977303504944,
+      "cosine": 0.003528736524195483,
+      "max_abs": 14.254010319709778,
       "passed": false
     },
     {
@@ -12222,8 +12250,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.04375295366578813,
-      "max_abs": 9.276008307933807,
+      "cosine": -0.04058735404814892,
+      "max_abs": 9.642347991466522,
       "passed": false
     },
     {
@@ -12240,8 +12268,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.036544121633547734,
-      "max_abs": 11.702905654907227,
+      "cosine": 0.023942418677450294,
+      "max_abs": 11.67810833454132,
       "passed": false
     },
     {
@@ -12258,8 +12286,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24105463715283768,
-      "max_abs": 3.855971097946167,
+      "cosine": 0.24687350924757293,
+      "max_abs": 3.767512559890747,
       "passed": false
     },
     {
@@ -12276,8 +12304,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.0126156280211845,
-      "max_abs": 15.574428796768188,
+      "cosine": 0.026491652703753844,
+      "max_abs": 14.768107652664185,
       "passed": false
     },
     {
@@ -12294,8 +12322,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.06660000642623388,
-      "max_abs": 1.7111560106277466,
+      "cosine": 0.07588047055000285,
+      "max_abs": 1.7256228923797607,
       "passed": false
     },
     {
@@ -12312,8 +12340,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.010501991370160042,
-      "max_abs": 11.299148187041283,
+      "cosine": 0.04829216965334614,
+      "max_abs": 10.517999768257141,
       "passed": false
     },
     {
@@ -12330,8 +12358,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.17699586263787676,
-      "max_abs": 3.4600969552993774,
+      "cosine": 0.19796097146027766,
+      "max_abs": 2.5025405883789062,
       "passed": false
     },
     {
@@ -12348,8 +12376,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.01907713343130127,
-      "max_abs": 18.08309006690979,
+      "cosine": 0.05319142975847682,
+      "max_abs": 17.23353934288025,
       "passed": false
     },
     {
@@ -12366,8 +12394,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": -0.011039014023697634,
-      "max_abs": 12.588655650615692,
+      "cosine": 0.01961811838891647,
+      "max_abs": 12.169128060340881,
       "passed": false
     },
     {
@@ -12384,8 +12412,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.005977186936374812,
-      "max_abs": 17.69645643234253,
+      "cosine": 0.040710083475144924,
+      "max_abs": 17.648717880249023,
       "passed": false
     },
     {
@@ -12402,8 +12430,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3823309925060314,
-      "max_abs": 0.15701847523450851,
+      "cosine": 0.32098070942203066,
+      "max_abs": 0.16054561734199524,
       "passed": false
     },
     {
@@ -12420,8 +12448,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.33407026254214617,
-      "max_abs": 2.9147228002548218,
+      "cosine": 0.7525454233726225,
+      "max_abs": 1.5792497396469116,
       "passed": false
     },
     {
@@ -12438,8 +12466,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.18540683479751285,
-      "max_abs": 0.37089332938194275,
+      "cosine": 0.5508081765272101,
+      "max_abs": 0.20061545819044113,
       "passed": false
     },
     {
@@ -12456,8 +12484,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2296988135577595,
-      "max_abs": 3.112577199935913,
+      "cosine": 0.6552087356467113,
+      "max_abs": 1.5266385078430176,
       "passed": false
     },
     {
@@ -12474,8 +12502,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.5456269541660776,
-      "max_abs": 0.07173161953687668,
+      "cosine": 0.5786503051230972,
+      "max_abs": 0.14507070370018482,
       "passed": false
     },
     {
@@ -12492,8 +12520,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.4693445514693843,
-      "max_abs": 3.9121912717819214,
+      "cosine": 0.8162876903982528,
+      "max_abs": 1.0958566665649414,
       "passed": false
     },
     {
@@ -12510,8 +12538,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.281122254226327,
-      "max_abs": 0.27996575832366943,
+      "cosine": 0.6732674161695411,
+      "max_abs": 0.25519484281539917,
       "passed": false
     },
     {
@@ -12528,8 +12556,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.32402597908174074,
-      "max_abs": 4.366164803504944,
+      "cosine": 0.745915809564209,
+      "max_abs": 1.4677525162696838,
       "passed": false
     },
     {
@@ -12546,8 +12574,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.6077553034964129,
-      "max_abs": 0.28351181000471115,
+      "cosine": 0.5901905266809387,
+      "max_abs": 0.3060600087046623,
       "passed": false
     },
     {
@@ -12564,8 +12592,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.478811837013596,
-      "max_abs": 3.0776586532592773,
+      "cosine": 0.808446832050572,
+      "max_abs": 0.8470762372016907,
       "passed": false
     },
     {
@@ -12582,8 +12610,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.23217824830507192,
-      "max_abs": 0.40098265931010246,
+      "cosine": 0.6766016566869639,
+      "max_abs": 0.45435743033885956,
       "passed": false
     },
     {
@@ -12600,8 +12628,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.35618243943419764,
-      "max_abs": 6.160154342651367,
+      "cosine": 0.7951977693397384,
+      "max_abs": 1.6241905689239502,
       "passed": false
     },
     {
@@ -12618,8 +12646,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3268967666698484,
-      "max_abs": 0.22492718324065208,
+      "cosine": 0.5989195500720238,
+      "max_abs": 0.2168724164366722,
       "passed": false
     },
     {
@@ -12636,8 +12664,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.41050863371885976,
-      "max_abs": 2.407707929611206,
+      "cosine": 0.7739949451834289,
+      "max_abs": 0.7882919907569885,
       "passed": false
     },
     {
@@ -12654,8 +12682,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.21842731547767466,
-      "max_abs": 1.3493086695671082,
+      "cosine": 0.6265255814322105,
+      "max_abs": 0.5335493683815002,
       "passed": false
     },
     {
@@ -12672,8 +12700,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2644720496187766,
-      "max_abs": 7.079861879348755,
+      "cosine": 0.7770629709473069,
+      "max_abs": 1.7292088568210602,
       "passed": false
     },
     {
@@ -12690,8 +12718,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.12430361631137117,
-      "max_abs": 0.5594423934817314,
+      "cosine": 0.1580369667723284,
+      "max_abs": 0.6642917618155479,
       "passed": false
     },
     {
@@ -12708,8 +12736,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24799430885858062,
-      "max_abs": 4.6195632219314575,
+      "cosine": 0.8087400256995237,
+      "max_abs": 1.1921854317188263,
       "passed": false
     },
     {
@@ -12726,8 +12754,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.05612939907856911,
-      "max_abs": 0.4413207173347473,
+      "cosine": 0.5548568867271181,
+      "max_abs": 0.3281042128801346,
       "passed": false
     },
     {
@@ -12744,8 +12772,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.20139739497706183,
-      "max_abs": 6.618551969528198,
+      "cosine": 0.7478628121925291,
+      "max_abs": 1.64662766456604,
       "passed": false
     },
     {
@@ -12762,8 +12790,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.3589788792492072,
-      "max_abs": 0.1607128232717514,
+      "cosine": 0.42902798216446814,
+      "max_abs": 0.14813857665285468,
       "passed": false
     },
     {
@@ -12780,8 +12808,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.24968990932545604,
-      "max_abs": 4.176748752593994,
+      "cosine": 0.7111244374127642,
+      "max_abs": 1.2940026819705963,
       "passed": false
     },
     {
@@ -12798,8 +12826,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.09493520099600276,
-      "max_abs": 0.5497605800628662,
+      "cosine": 0.5456432366300493,
+      "max_abs": 0.3546813130378723,
       "passed": false
     },
     {
@@ -12816,8 +12844,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.17404905036729257,
-      "max_abs": 6.7293150424957275,
+      "cosine": 0.689440831235597,
+      "max_abs": 2.29791259765625,
       "passed": false
     },
     {
@@ -12834,8 +12862,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.2544418930682369,
-      "max_abs": 0.6458266973495483,
+      "cosine": 0.3886473740235296,
+      "max_abs": 0.2721291985362768,
       "passed": false
     },
     {
@@ -12852,8 +12880,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.1698690320535919,
-      "max_abs": 7.082930564880371,
+      "cosine": 0.6871305025713057,
+      "max_abs": 3.0298391580581665,
       "passed": false
     },
     {
@@ -12870,8 +12898,8 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.1494053215906558,
-      "max_abs": 0.46769237518310547,
+      "cosine": 0.5682352376696612,
+      "max_abs": 0.36779086547903717,
       "passed": false
     },
     {
@@ -12888,19 +12916,49 @@
         1024
       ],
       "dtype": "f32",
-      "cosine": 0.14766063265011178,
-      "max_abs": 7.7437660694122314,
+      "cosine": 0.7000124493596331,
+      "max_abs": 2.6858327388763428,
       "passed": false
     },
     {
       "name": "talker-step1-rope-cos",
-      "passed": false,
-      "reason": "element count mismatch: ref=384 (shape=[3, 1, 1, 1, 128]), cand=128 (shape=[1, 1, 1, 128])"
+      "candle_name": "talker-step1-rope-cos",
+      "shape_ref": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "shape_cand": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "dtype": "f32",
+      "cosine": 0.7069026437976781,
+      "max_abs": 1.9965404272079468,
+      "passed": false
     },
     {
       "name": "talker-step1-rope-sin",
-      "passed": false,
-      "reason": "element count mismatch: ref=384 (shape=[3, 1, 1, 1, 128]), cand=128 (shape=[1, 1, 1, 128])"
+      "candle_name": "talker-step1-rope-sin",
+      "shape_ref": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "shape_cand": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "dtype": "f32",
+      "cosine": 0.29869380130274076,
+      "max_abs": 1.4121087193489075,
+      "passed": false
     },
     {
       "name": "talker_codebook0_logits_0000",
@@ -12930,8 +12988,8 @@
         3072
       ],
       "dtype": "f32",
-      "cosine": 0.17829466464076718,
-      "max_abs": 31.361058950424194,
+      "cosine": 0.21210814163713967,
+      "max_abs": 30.87560725212097,
       "passed": false
     },
     {
@@ -12946,9 +13004,9 @@
         16
       ],
       "dtype": "f32",
-      "cosine": 0.7079480193636802,
-      "max_abs": 1805.0,
-      "passed": false
+      "cosine": 0.9999999999999999,
+      "max_abs": 0.0,
+      "passed": true
     }
   ]
 }

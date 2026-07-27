@@ -149,6 +149,13 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--output-dir", required=True, type=Path)
     ap.add_argument("--expected-stages", type=int, default=723)
     ap.add_argument(
+        "--candle-manifest",
+        type=Path,
+        default=None,
+        help="Path to Candle manifest.json. When provided, tokens are extracted "
+        "from Candle stages instead of sampling (Plan A: token-driven parity).",
+    )
+    ap.add_argument(
         "--fixture",
         type=Path,
         default=Path("fixtures/alignment/p02_deterministic_token_sequences_real.json"),
@@ -379,6 +386,43 @@ def main() -> int:
 
     print(f"Input embeds shape: {input_embeds.shape} (expected [1, 11, 1024])")
 
+    # ── Extract tokens from Candle manifest (Plan A) ───────────────────────
+    candle_c0_tokens = []  # codebook 0 tokens per frame
+    candle_cp_codes = []   # CP codes (15 per frame)
+    if args.candle_manifest:
+        import array as _array
+
+        candle_dir = args.candle_manifest.parent
+        cm = json.loads(args.candle_manifest.read_text(encoding="utf-8"))
+        candle_stages = {s["name"]: s for s in cm["stages"]}
+
+        def read_stage_f32(name: str) -> list[float]:
+            st = candle_stages[name]
+            raw = (candle_dir / st["file"]).read_bytes()
+            arr = _array.array("f")
+            arr.frombytes(raw)
+            return arr.tolist()
+
+        # Codebook 0 tokens: argmax of logits
+        for frame in range(2):
+            logits_name = f"talker_codebook0_logits_{frame:04}"
+            if logits_name in candle_stages:
+                logits = read_stage_f32(logits_name)
+                c0 = max(range(len(logits)), key=lambda i: logits[i])
+                candle_c0_tokens.append(c0)
+                print(f"  Candle c0 token frame {frame}: {c0}")
+
+        # CP codes: from final_code_matrix
+        for frame in range(2):
+            cm_name = f"code_predictor_final_code_matrix_{frame:04}"
+            if cm_name in candle_stages:
+                codes = read_stage_f32(cm_name)
+                candle_cp_codes.append([int(c) for c in codes])
+                print(f"  Candle CP codes frame {frame}: {[int(c) for c in codes]}")
+
+        if not candle_c0_tokens:
+            print("WARNING: --candle-manifest provided but no token stages found", file=sys.stderr)
+
     # ── Helper: run Talker model forward and capture all layer stages ──────
     def run_talker_forward(inputs_embeds, attention_mask, position_ids,
                            past_key_values, phase, use_cache=True):
@@ -388,15 +432,28 @@ def main() -> int:
         if phase == "prefill":
             writer.record("talker-prefill-position-ids", position_ids, "ABT")
 
-        # Compute RoPE
+        # Compute RoPE — HF returns [3, batch, seq, head_dim] for 3D MRoPE.
+        # Candle concatenates sections [24,20,20] → [48,40,40] along head_dim
+        # producing [batch, 1, seq, 128]. Replicate that here.
         position_embeddings = talker_model.rotary_emb(inputs_embeds, position_ids)
-        cos, sin = position_embeddings
+        cos_raw, sin_raw = position_embeddings  # [3, batch, seq, head_dim]
+        mrope_sections = [24, 20, 20]  # from TalkerConfig
+        cos_parts = []
+        sin_parts = []
+        for i, sec in enumerate(mrope_sections):
+            dim = sec * 2
+            cos_parts.append(cos_raw[i, :, :, :dim])
+            sin_parts.append(sin_raw[i, :, :, :dim])
+        cos = torch.cat(cos_parts, dim=-1).unsqueeze(1)  # [batch, 1, seq, 128]
+        sin = torch.cat(sin_parts, dim=-1).unsqueeze(1)
+        # Use concatenated format for attention layers (matching Candle)
+        position_embeddings_concat = (cos, sin)
         if phase == "prefill":
-            writer.record("talker-prefill-rope-cos", cos.unsqueeze(1), "BBTH")
-            writer.record("talker-prefill-rope-sin", sin.unsqueeze(1), "BBTH")
+            writer.record("talker-prefill-rope-cos", cos, "BBTH")
+            writer.record("talker-prefill-rope-sin", sin, "BBTH")
         else:
-            writer.record(f"talker-{phase}-rope-cos", cos.unsqueeze(1), "BBTH")
-            writer.record(f"talker-{phase}-rope-sin", sin.unsqueeze(1), "BBTH")
+            writer.record(f"talker-{phase}-rope-cos", cos, "BBTH")
+            writer.record(f"talker-{phase}-rope-sin", sin, "BBTH")
 
         # Capture input
         if phase == "prefill":
@@ -467,8 +524,11 @@ def main() -> int:
         return hidden_states, past_key_values
 
     # ── Helper: run Code Predictor and capture all stages ──────────────────
-    def run_code_predictor(talker_hidden, codebook_0_embed, frame_index):
-        """Run Code Predictor with custom loop capturing all stages."""
+    def run_code_predictor(talker_hidden, codebook_0_embed, frame_index,
+                           predetermined_codes=None):
+        """Run Code Predictor with custom loop capturing all stages.
+        If predetermined_codes is provided (list of 15 ints), use those
+        tokens instead of sampling (Plan A: Candle-token-driven parity)."""
         from transformers.cache_utils import DynamicCache
 
         cp_kv = DynamicCache()
@@ -494,11 +554,11 @@ def main() -> int:
         cp_cos, cp_sin = cp_pos_emb
         writer.record(
             f"code-predictor-prefill-frame{frame_index}-rope-cos",
-            cp_cos.unsqueeze(1), "BBTH",
+            cp_cos, "BBTH",
         )
         writer.record(
             f"code-predictor-prefill-frame{frame_index}-rope-sin",
-            cp_sin.unsqueeze(1), "BBTH",
+            cp_sin, "BBTH",
         )
 
         # Run CP prefill through layers
@@ -567,9 +627,12 @@ def main() -> int:
             logits, "C",
         )
 
-        # Philox-seeded sampling (matching Candle's subtalker sampling)
-        logits_list = logits[0].tolist()
-        first_token_id = cp_sampler.sample(logits_list, cp_temp, cp_top_k, cp_top_p)
+        # Token selection: predetermined (Plan A) or Philox sampling
+        if predetermined_codes is not None:
+            first_token_id = predetermined_codes[0]
+        else:
+            logits_list = logits[0].tolist()
+            first_token_id = cp_sampler.sample(logits_list, cp_temp, cp_top_k, cp_top_p)
         first_token = torch.tensor([[first_token_id]], dtype=torch.long, device=device)
         code_tokens = [first_token]
 
@@ -638,8 +701,11 @@ def main() -> int:
                 f"code_predictor_step_logits_{frame_index:04}_{step:04}",
                 logits, "C",
             )
-            logits_list = logits[0].tolist()
-            token_id = cp_sampler.sample(logits_list, cp_temp, cp_top_k, cp_top_p)
+            if predetermined_codes is not None:
+                token_id = predetermined_codes[step]
+            else:
+                logits_list = logits[0].tolist()
+                token_id = cp_sampler.sample(logits_list, cp_temp, cp_top_k, cp_top_p)
             code_tokens.append(torch.tensor([[token_id]], dtype=torch.long, device=device))
 
         all_codes = torch.cat(code_tokens, dim=1)
@@ -677,8 +743,12 @@ def main() -> int:
             writer.record("talker-logits-prefill", logits, "BV")
             writer.record("talker_codebook0_logits_0000", logits, "C")
 
-            # Greedy sample codebook 0
-            c0_token = logits.argmax(dim=-1).reshape(1, 1)
+            # Codebook 0 token: from Candle manifest (Plan A) or greedy
+            if candle_c0_tokens:
+                c0_token_id = candle_c0_tokens[0]
+                c0_token = torch.tensor([[c0_token_id]], dtype=torch.long)
+            else:
+                c0_token = logits.argmax(dim=-1).reshape(1, 1)
 
             # Terminal cap: with max_new_tokens=2, step 0 runs fully,
             # step 1 only produces logits then breaks (matching Candle
@@ -687,8 +757,9 @@ def main() -> int:
             c0_emb = talker.get_input_embeddings()(c0_token)
             writer.record("talker-codec-embed-frame0", c0_emb, "BTH")
 
-            # Code Predictor for frame 0
-            codes_1_15 = run_code_predictor(last_hidden, c0_emb, 0)
+            # Code Predictor for frame 0 (use Candle CP codes if available)
+            cp_codes_0 = candle_cp_codes[0] if candle_cp_codes else None
+            codes_1_15 = run_code_predictor(last_hidden, c0_emb, 0, cp_codes_0)
 
             # Frame 0 codes
             frame0 = torch.cat([c0_token, codes_1_15], dim=1)
