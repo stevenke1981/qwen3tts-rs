@@ -191,7 +191,6 @@ impl Decoder12Hz {
                         frame_embeddings[left].clone()
                     } else {
                         // 使用張量算術進行向量化內插：left + weight × (right - left)
-                        // 避免逐元素手動迴圈，GPU 可平行，CPU 亦可 SIMD
                         let left_t = Tensor::from_slice(
                             &frame_embeddings[left],
                             (1, 1, emb_dim),
@@ -202,8 +201,13 @@ impl Decoder12Hz {
                             (1, 1, emb_dim),
                             &self.device,
                         )?;
-                        let w = Tensor::from_slice(&[weight as f32], (1, 1, 1), &self.device)?;
-                        right_t.sub(&left_t)?.mul(&w)?.add(&left_t)?.to_vec1()?
+                        let w = weight as f32;
+                        right_t
+                            .sub(&left_t)?
+                            .affine(w as f64, 0.0)?
+                            .add(&left_t)?
+                            .flatten_all()?
+                            .to_vec1()?
                     };
                     interpolated.push(mixed);
                 }

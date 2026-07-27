@@ -597,9 +597,14 @@ impl ModelMetadata {
                 mrope_sum, talker.head_dim
             )));
         }
-        if !talker_rope.rope_theta.is_finite() || talker_rope.rope_theta <= 0.0 {
+        // rope_theta: prefer rope_scaling.rope_theta, fall back to talker_config.rope_theta
+        let rope_theta = talker_rope
+            .rope_theta
+            .or(talker.rope_theta)
+            .unwrap_or(1_000_000.0);
+        if !rope_theta.is_finite() || rope_theta <= 0.0 {
             return Err(crate::Error::Config(
-                "talker_config.rope_scaling.rope_theta must be finite and > 0".into(),
+                "talker_config rope_theta must be finite and > 0".into(),
             ));
         }
 
@@ -773,7 +778,7 @@ impl ModelMetadata {
             talker_code_predictor_hidden_size: talker.code_predictor_config.hidden_size,
             rope_scaling_interleaved: talker_rope.interleaved,
             rope_scaling_mrope_section: talker_rope.mrope_section.clone(),
-            rope_scaling_rope_theta: talker_rope.rope_theta,
+            rope_scaling_rope_theta: rope_theta,
         })
     }
 }
@@ -986,6 +991,10 @@ struct ParsedTalkerConfig {
     #[serde(rename = "spk_is_dialect", default)]
     spk_is_dialect: BTreeMap<String, Value>,
     rope_scaling: ParsedRopeScaling,
+    /// `rope_theta` at talker_config level (official config puts it here,
+    /// not inside rope_scaling). Falls back to rope_scaling.rope_theta.
+    #[serde(default)]
+    rope_theta: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -1003,7 +1012,9 @@ struct ParsedCodePredictorConfig {
 struct ParsedRopeScaling {
     interleaved: bool,
     mrope_section: Vec<usize>,
-    rope_theta: f64,
+    /// May be absent in official config (rope_theta is at talker_config level).
+    #[serde(default)]
+    rope_theta: Option<f64>,
 }
 
 /// Static model table for discovery and CLI display only.
@@ -1122,12 +1133,8 @@ pub fn validate_generation_request(
                     "voice-clone mode does not accept --instruct".into(),
                 ));
             }
-            if !has_reference_audio {
-                return Err(crate::Error::Config(
-                    "voice-clone mode requires --reference-audio with at least 3 seconds of audio"
-                        .into(),
-                ));
-            }
+            // Base models support both voice clone (with reference audio) and
+            // basic TTS (without reference audio, using default voice).
             Ok(())
         }
     }
@@ -1568,9 +1575,10 @@ mod tests {
         );
         assert!(err.is_err());
 
-        let err =
+        // Base models now allow VoiceClone without reference audio (basic TTS)
+        let ok =
             validate_generation_request(&metadata_06, GenerationMode::VoiceClone, None, None, None);
-        assert!(err.is_err());
+        assert!(ok.is_ok());
 
         let err = validate_generation_request(
             &metadata_06,
@@ -1672,8 +1680,9 @@ mod tests {
         );
         assert!(err.is_ok());
 
-        let err = validate_generation_request(&base, GenerationMode::Auto, None, None, None);
-        assert!(err.is_err());
+        // Base models now allow VoiceClone (Auto) without reference audio
+        let ok = validate_generation_request(&base, GenerationMode::Auto, None, None, None);
+        assert!(ok.is_ok());
 
         let err = validate_generation_request(
             &base,
