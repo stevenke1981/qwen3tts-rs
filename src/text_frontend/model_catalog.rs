@@ -1125,16 +1125,21 @@ pub fn validate_generation_request(
             }
             if has_speaker {
                 return Err(crate::Error::Config(
-                    "voice-clone mode does not accept --speaker".into(),
+                    "voice-clone mode does not accept --speaker; use a CustomVoice model for preset voices".into(),
                 ));
             }
             if has_instruct {
                 return Err(crate::Error::Config(
-                    "voice-clone mode does not accept --instruct".into(),
+                    "voice-clone mode does not accept --instruct; use VoiceDesign or 1.7B-CustomVoice".into(),
                 ));
             }
-            // Base models support both voice clone (with reference audio) and
-            // basic TTS (without reference audio, using default voice).
+            if !has_reference_audio {
+                return Err(crate::Error::Config(
+                    "voice-clone mode requires --reference-audio (3+ seconds of audio to clone). \
+                     For basic TTS without cloning, use a CustomVoice model with --speaker."
+                        .into(),
+                ));
+            }
             Ok(())
         }
     }
@@ -1575,10 +1580,9 @@ mod tests {
         );
         assert!(err.is_err());
 
-        // Base models now allow VoiceClone without reference audio (basic TTS)
-        let ok =
+        let err =
             validate_generation_request(&metadata_06, GenerationMode::VoiceClone, None, None, None);
-        assert!(ok.is_ok());
+        assert!(err.is_err());
 
         let err = validate_generation_request(
             &metadata_06,
@@ -1680,9 +1684,8 @@ mod tests {
         );
         assert!(err.is_ok());
 
-        // Base models now allow VoiceClone (Auto) without reference audio
-        let ok = validate_generation_request(&base, GenerationMode::Auto, None, None, None);
-        assert!(ok.is_ok());
+        let err = validate_generation_request(&base, GenerationMode::Auto, None, None, None);
+        assert!(err.is_err());
 
         let err = validate_generation_request(
             &base,
