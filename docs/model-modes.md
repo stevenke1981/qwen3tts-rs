@@ -191,6 +191,36 @@ huggingface-cli download Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz
 ```
 
+## GGUF 權重轉換
+
+使用內建 `convert-gguf` 工具將 safetensors 轉為 GGUF F32 格式：
+
+```bash
+# 建置轉換工具
+cargo build --release --bin convert-gguf
+
+# 轉換 Talker 模型
+convert-gguf talker <model-snapshot-dir> <output.gguf>
+
+# 範例
+convert-gguf talker ~/.cache/huggingface/hub/models--Qwen--Qwen3-TTS-12Hz-0.6B-Base/snapshots/<sha> qwen-talker-0.6b-base-F32.gguf
+```
+
+轉換後的 GGUF 可用 `--talker-backend gguf --talker-gguf <path>` 載入：
+
+```bash
+cargo run --release --example synthesize --features candle-llm -- \
+    --text "你好。" --backend candle \
+    --model-dir <model-snapshot-dir> \
+    --talker-backend gguf \
+    --talker-gguf qwen-talker-0.6b-base-F32.gguf \
+    --reference-audio ref.wav --reference-text "參考文字" \
+    --output output.wav
+```
+
+> **注意**：GGUF 轉換僅包含 Talker + Code Predictor 權重（不含 Speaker Encoder）。
+> BF16 權重會自動轉為 F32，檔案大小約為 safetensors 的兩倍。
+
 ## Rust 實作狀態
 
 | 功能 | 狀態 | 備註 |
@@ -204,6 +234,7 @@ huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz
 | VoiceDesign 輸入構建 | ✅ | `InputBuilder.build()` + instruct 參數 |
 | 模式驗證（硬性要求） | ✅ | `validate_generation_request()` |
 | 0.6B 權重載入 | ✅ | safetensors + GGUF |
-| 1.7B 權重載入 | ⚠️ 未驗證 | 架構相同但 hidden_size=2048，需實際測試 |
+| 1.7B 權重載入 | ✅ | safetensors + GGUF |
+| safetensors→GGUF 轉換工具 | ✅ | `convert-gguf talker` |
 | Speaker Encoder（voice clone） | ✅ | `NativeSpeakerEncoder` |
-| 端到端 TTS | ✅ | 0.6B-Base 已驗證 |
+| 端到端 TTS | ✅ | 0.6B-Base / CustomVoice / 1.7B-VoiceDesign 皆驗證 |
