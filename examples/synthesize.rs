@@ -633,7 +633,7 @@ fn main() {
                         println!("      talker 權重: {gguf_path:?} (GGUF)");
                         println!("      （GGUF QTensor → F32 dequantize）");
 
-                        let backend = CandleLLM::from_gguf(&gguf_path, &tok_path, &device)
+                        let backend = CandleLLM::from_gguf(&gguf_path, &tok_path, &dir, &device)
                             .expect("載入 CandleLLM (GGUF) 失敗");
                         let options = SynthesisOptions {
                             language,

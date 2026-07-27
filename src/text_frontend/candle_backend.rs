@@ -244,22 +244,21 @@ impl CandleLLM {
     /// - `device`: 計算裝置
     ///
     /// # 注意
-    /// GGUF 檔案所在的目錄需要包含 `config.json`，用於解析 metadata
-    /// （特殊 token ID、語言對照表等）。
+    /// `config_dir` 指向包含 `config.json` 的模型目錄（通常與 `--model-dir` 相同），
+    /// GGUF 檔案本身可以在不同位置。
     pub fn from_gguf(
         gguf_path: impl AsRef<Path>,
         tokenizer_path: impl AsRef<Path>,
+        config_dir: impl AsRef<Path>,
         device: &Device,
     ) -> Result<Self> {
         let gguf_path = gguf_path.as_ref();
+        let config_dir = config_dir.as_ref();
         let tokenizer = Tokenizer::from_file(tokenizer_path.as_ref())
             .map_err(|e| Error::Config(format!("Failed to load tokenizer: {e}")))?;
         let loader = TalkerWeightLoader::from_gguf(gguf_path, device)?;
-        let metadata = load_metadata_from_safetensors(gguf_path)?;
-        let generation_sampling =
-            GenerationSamplingConfig::from_model_dir(gguf_path.parent().ok_or_else(|| {
-                Error::Config("invalid gguf_path: missing parent directory".into())
-            })?)?;
+        let metadata = ModelMetadata::from_model_dir(config_dir)?;
+        let generation_sampling = GenerationSamplingConfig::from_model_dir(config_dir)?;
         let mut config = loader.infer_config()?;
         apply_metadata_to_talker_config(&mut config, &metadata)?;
         let talker = loader.build_talker(&config)?;
