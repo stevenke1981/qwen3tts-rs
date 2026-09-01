@@ -306,8 +306,14 @@ mod worker {
         #[cfg(feature = "cuda")]
         {
             match candle_core::Device::new_cuda(0) {
-                Ok(device) => device,
-                Err(_) => candle_core::Device::Cpu,
+                Ok(device) => {
+                    eprintln!("✅ 成功初始化 CUDA Device 0 (NVIDIA GPU 加速已啟用)");
+                    device
+                }
+                Err(err) => {
+                    eprintln!("⚠️ 無法初始化 CUDA Device 0: {err}，回退至 CPU");
+                    candle_core::Device::Cpu
+                }
             }
         }
         #[cfg(not(feature = "cuda"))]
@@ -343,12 +349,12 @@ fn run_synthesis_inner(
     }
     let device = worker::runtime_device();
     let device_name = match device {
-        candle_core::Device::Cpu => "CPU".to_string(),
+        candle_core::Device::Cpu => "🖥 CPU".to_string(),
         #[cfg(feature = "cuda")]
-        candle_core::Device::Cuda(_) => "CUDA".to_string(),
+        candle_core::Device::Cuda(_) => "⚡ CUDA (NVIDIA GPU 硬體加速)".to_string(),
         _ => "Unknown".to_string(),
     };
-    tx.send(WorkerEvent::Status(format!("裝置：{device_name}")))
+    tx.send(WorkerEvent::Status(format!("運算裝置：{device_name}")))
         .ok();
 
     // Step 2: 取得 Token（LLM 或從參數提供的 tokens_path）
@@ -1176,6 +1182,27 @@ impl eframe::App for TtsGuiApp {
                                     ui.horizontal(|ui| {
                                         for b in BackendKind::ALL {
                                             ui.selectable_value(&mut self.backend, *b, b.name());
+                                        }
+                                    });
+                                    ui.end_row();
+
+                                    // Device
+                                    ui.label("運算裝置：");
+                                    ui.horizontal(|ui| {
+                                        #[cfg(feature = "cuda")]
+                                        {
+                                            ui.label(
+                                                RichText::new("⚡ CUDA (NVIDIA GPU 硬體加速已啟用)")
+                                                    .strong()
+                                                    .color(Color32::from_rgb(80, 220, 80)),
+                                            );
+                                        }
+                                        #[cfg(not(feature = "cuda"))]
+                                        {
+                                            ui.label(
+                                                RichText::new("🖥 CPU 運算")
+                                                    .color(Color32::from_rgb(220, 180, 80)),
+                                            );
                                         }
                                     });
                                     ui.end_row();
