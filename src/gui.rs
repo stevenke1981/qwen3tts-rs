@@ -161,10 +161,10 @@ pub struct SynthesisResult {
 // ---------------------------------------------------------------------------
 
 const MODEL_ID_CANDIDATES: &[&str] = &[
-    "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
     "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
-    "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
     "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
     "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
 ];
 
@@ -678,7 +678,7 @@ impl Default for TtsGuiApp {
             backend: BackendKind::default(),
             language: "auto".to_string(),
             language_auto: true,
-            speaker: String::new(),
+            speaker: "Vivian".to_string(),
             speed: 1.0,
             instruct: String::new(),
             output_path: "output.wav".to_string(),
@@ -790,6 +790,42 @@ impl TtsGuiApp {
             return;
         }
 
+        let is_base = self.model_id.contains("-Base");
+        let is_voice_design = self.model_id.contains("VoiceDesign");
+
+        if is_base {
+            if self.reference_audio.trim().is_empty() {
+                self.status_log.push((
+                    "⚠️ Base 模型為「聲音複製專用（Voice Clone）」，必須提供參考音檔！\n\
+                     💡 提示：若您想直接使用預設說話者發音，請將上方「模型 ID」切換為「Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice」！".into(),
+                    Color32::YELLOW,
+                ));
+                return;
+            }
+        } else if is_voice_design && self.instruct.trim().is_empty() {
+            self.status_log.push((
+                "⚠️ VoiceDesign 模型需要提供「語氣指令」（請在進階設定中輸入語氣描述）。".into(),
+                Color32::YELLOW,
+            ));
+            return;
+        }
+
+        let effective_speaker = if is_base || is_voice_design {
+            None
+        } else if self.speaker.trim().is_empty() {
+            Some("Vivian".to_string())
+        } else {
+            Some(self.speaker.trim().to_string())
+        };
+
+        let effective_instruct = if is_base {
+            None
+        } else if self.instruct.trim().is_empty() {
+            None
+        } else {
+            Some(self.instruct.trim().to_string())
+        };
+
         let (tx, rx) = mpsc::channel::<WorkerEvent>();
 
         let params = SynthesisParams {
@@ -811,16 +847,8 @@ impl TtsGuiApp {
             } else {
                 self.language.clone()
             },
-            speaker: if self.speaker.trim().is_empty() {
-                None
-            } else {
-                Some(self.speaker.trim().to_string())
-            },
-            instruct: if self.instruct.trim().is_empty() {
-                None
-            } else {
-                Some(self.instruct.trim().to_string())
-            },
+            speaker: effective_speaker,
+            instruct: effective_instruct,
             speed: self.speed,
             output_path: PathBuf::from(&self.output_path),
             reference_audio: if self.reference_audio.trim().is_empty() {
@@ -1176,27 +1204,39 @@ impl eframe::App for TtsGuiApp {
                                     // Speaker
                                     ui.label("說話者：");
                                     ui.horizontal(|ui| {
-                                        egui::ComboBox::from_id_salt("speaker_combo")
-                                            .width(200.0)
-                                            .selected_text(if self.speaker.is_empty() {
-                                                "（無）".into()
-                                            } else {
-                                                self.speaker.clone()
-                                            })
-                                            .show_ui(ui, |ui| {
-                                                ui.selectable_value(
-                                                    &mut self.speaker,
-                                                    String::new(),
-                                                    "（無）",
-                                                );
-                                                for name in speaker_presets::speaker_names() {
-                                                    ui.selectable_value(
-                                                        &mut self.speaker,
-                                                        name.to_string(),
-                                                        name,
-                                                    );
-                                                }
-                                            });
+                                        let is_base = self.model_id.contains("-Base");
+                                        let is_voice_design = self.model_id.contains("VoiceDesign");
+
+                                        if is_base {
+                                            ui.label(
+                                                RichText::new("（Base 模型專用於聲音複製，不支援預設說話者，請在進階設定提供「參考音訊」）")
+                                                    .size(11.5)
+                                                    .color(Color32::from_rgb(220, 160, 60)),
+                                            );
+                                        } else if is_voice_design {
+                                            ui.label(
+                                                RichText::new("（VoiceDesign 模型使用「語氣指令」設計聲音）")
+                                                    .size(11.5)
+                                                    .color(Color32::from_rgb(180, 180, 180)),
+                                            );
+                                        } else {
+                                            egui::ComboBox::from_id_salt("speaker_combo")
+                                                .width(200.0)
+                                                .selected_text(if self.speaker.is_empty() {
+                                                    "Vivian".into()
+                                                } else {
+                                                    self.speaker.clone()
+                                                })
+                                                .show_ui(ui, |ui| {
+                                                    for name in speaker_presets::speaker_names() {
+                                                        ui.selectable_value(
+                                                            &mut self.speaker,
+                                                            name.to_string(),
+                                                            name,
+                                                        );
+                                                    }
+                                                });
+                                        }
                                     });
                                     ui.end_row();
 
