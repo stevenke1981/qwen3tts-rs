@@ -62,13 +62,18 @@ struct GgufWriter {
     alignment: usize,
 }
 
+#[allow(dead_code)]
 enum MetaValue {
     Uint32(u32),
     Float32(f32),
+    #[allow(dead_code)]
     Bool(bool),
     Str(String),
+    #[allow(dead_code)]
     Uint64(u64),
+    #[allow(dead_code)]
     ArrayStr(Vec<String>),
+    #[allow(dead_code)]
     ArrayUint32(Vec<u32>),
 }
 

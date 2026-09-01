@@ -12,22 +12,37 @@ use crate::text_frontend::{SynthesisOptions, TokenStream};
 /// 12Hz 模式碼本層數
 const NUM_CODEBOOKS: usize = 16;
 
-/// EOS token ID（Qwen3-TTS 特殊 token）
-const CODEC_EOS_TOKEN_ID: u16 = 0x7FFF; // 32767, 實際值由 config 決定
+/// 預設 EOS token ID（Qwen3-TTS 官方標準）
+pub const DEFAULT_CODEC_EOS_TOKEN_ID: u16 = 2150;
 
 // ---------------------------------------------------------------------------
 // TokenParser
 // ---------------------------------------------------------------------------
 
 /// 將 LLM 回傳的原始碼本張量解析為 `TokenStream`
+#[derive(Debug, Clone)]
 pub struct TokenParser {
     sample_rate: u32,
+    codec_eos_token_id: u16,
 }
 
 impl TokenParser {
-    /// 建立新的 TokenParser
+    /// 建立新的 TokenParser（使用預設 EOS token ID 2150）
     pub fn new(sample_rate: u32) -> Self {
-        Self { sample_rate }
+        Self::with_eos(sample_rate, DEFAULT_CODEC_EOS_TOKEN_ID)
+    }
+
+    /// 建立指定 EOS token ID 的 TokenParser
+    pub fn with_eos(sample_rate: u32, codec_eos_token_id: u16) -> Self {
+        Self {
+            sample_rate,
+            codec_eos_token_id,
+        }
+    }
+
+    /// 取得目前的 codec EOS token ID
+    pub fn codec_eos_token_id(&self) -> u16 {
+        self.codec_eos_token_id
     }
 
     /// 從 2D 碼本陣列解析 TokenStream
@@ -41,7 +56,7 @@ impl TokenParser {
 
         for frame_tokens in codes {
             // 檢查是否為 EOS 幀（任一 token 為 EOS）
-            let is_eos = frame_tokens.iter().any(|&t| t == CODEC_EOS_TOKEN_ID);
+            let is_eos = frame_tokens.iter().any(|&t| t == self.codec_eos_token_id);
             if is_eos {
                 break;
             }
@@ -70,7 +85,7 @@ impl TokenParser {
     /// [frame_1_token_0: u16] ...
     /// ```
     ///
-    /// 使用預設 24000 Hz 取樣率。
+    /// 使用預設 24000 Hz 取樣率與預設 EOS ID (2150)。
     pub fn parse_binary(data: &[u8]) -> Result<TokenStream> {
         TokenParser::new(24000).parse_bytes(data, &SynthesisOptions::default())
     }
@@ -130,7 +145,7 @@ impl TokenParser {
             }
 
             // 檢查 EOS
-            let is_eos = frame.iter().any(|&t| t == CODEC_EOS_TOKEN_ID);
+            let is_eos = frame.iter().any(|&t| t == self.codec_eos_token_id);
             if is_eos {
                 break;
             }
@@ -162,12 +177,66 @@ mod tests {
     #[test]
     fn test_token_parser_eos_stop() {
         let parser = TokenParser::new(24000);
+        assert_eq!(parser.codec_eos_token_id(), DEFAULT_CODEC_EOS_TOKEN_ID);
+        assert_eq!(parser.codec_eos_token_id(), 2150);
+
         let mut codes: Vec<Vec<u16>> = (0..5).map(|i| vec![i as u16 * 10; 16]).collect();
-        codes.push(vec![CODEC_EOS_TOKEN_ID; 16]); // EOS frame
+        codes.push(vec![DEFAULT_CODEC_EOS_TOKEN_ID; 16]); // EOS frame (2150)
         codes.push(vec![999; 16]); // should be ignored
 
         let stream = parser.parse(&codes, &SynthesisOptions::default()).unwrap();
         assert_eq!(stream.num_frames(), 5);
+    }
+
+    #[test]
+    fn test_token_parser_custom_eos() {
+        let custom_eos = 9999u16;
+        let parser = TokenParser::with_eos(24000, custom_eos);
+        assert_eq!(parser.codec_eos_token_id(), custom_eos);
+
+        let codes = vec![
+            vec![10; 16],
+            vec![DEFAULT_CODEC_EOS_TOKEN_ID; 16], // 2150 should NOT stop custom parser
+            vec![20; 16],
+            vec![custom_eos; 16],                 // custom EOS should stop here
+            vec![30; 16],                         // should be ignored
+        ];
+
+        let stream = parser.parse(&codes, &SynthesisOptions::default()).unwrap();
+        assert_eq!(stream.num_frames(), 3);
+        assert_eq!(stream.frames[0][0], 10);
+        assert_eq!(stream.frames[1][0], DEFAULT_CODEC_EOS_TOKEN_ID);
+        assert_eq!(stream.frames[2][0], 20);
+    }
+
+    #[test]
+    fn test_parse_bytes_eos_stop() {
+        let parser = TokenParser::new(24000);
+        let mut data = Vec::new();
+        data.extend_from_slice(&4u32.to_le_bytes()); // 4 frames declared
+        // Frame 0: normal
+        for _ in 0..16 {
+            data.extend_from_slice(&10u16.to_le_bytes());
+        }
+        // Frame 1: normal
+        for _ in 0..16 {
+            data.extend_from_slice(&20u16.to_le_bytes());
+        }
+        // Frame 2: EOS (2150)
+        for _ in 0..16 {
+            data.extend_from_slice(&DEFAULT_CODEC_EOS_TOKEN_ID.to_le_bytes());
+        }
+        // Frame 3: trailing
+        for _ in 0..16 {
+            data.extend_from_slice(&30u16.to_le_bytes());
+        }
+
+        let stream = parser
+            .parse_bytes(&data, &SynthesisOptions::default())
+            .unwrap();
+        assert_eq!(stream.num_frames(), 2);
+        assert_eq!(stream.frames[0][0], 10);
+        assert_eq!(stream.frames[1][0], 20);
     }
 
     #[test]

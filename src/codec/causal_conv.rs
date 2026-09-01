@@ -195,7 +195,7 @@ impl CausalConvConfig {
     pub fn from_weight(weight: &Tensor, dilation: usize, groups: usize) -> Self {
         let d = weight.dims();
         Self {
-            in_channels: d[1],
+            in_channels: d[1] * groups,
             out_channels: d[0],
             kernel_size: d[2],
             dilation,
@@ -310,14 +310,16 @@ pub struct CausalConv1d {
     weight: Tensor,
     /// 偏置: (out_channels,)
     bias: Option<Tensor>,
+    /// 預先建立的 3D 偏置: (1, out_channels, 1)
+    bias_3d: Option<Tensor>,
     /// 配置
     config: CausalConvConfig,
     /// 裝置
     device: Device,
-    /// 狀態（環形緩衝區）
-    state: CausalConvState,
-    /// 預分配步進緩衝區 (in_channels × kernel_size)，熱路徑零分配
-    step_scratch: Vec<f32>,
+    /// 純設備端歷史狀態張量: (1, in_channels, left_pad)
+    state_tensor: Tensor,
+    /// 左側填充大小 = (kernel_size - 1) * dilation
+    left_pad: usize,
 }
 
 impl CausalConv1d {
@@ -327,24 +329,34 @@ impl CausalConv1d {
     /// - `weight`: 卷積權重，形狀 (out_channels, in_channels, kernel_size)
     /// - `bias`: 可選偏置，形狀 (out_channels,)
     /// - `config`: 配置
-    /// - `state_capacity`: 環形緩衝區容量
+    /// - `_state_capacity`: 歷史容量（保留相容性）
     pub fn new(
         weight: Tensor,
         bias: Option<Tensor>,
         config: CausalConvConfig,
-        state_capacity: usize,
+        _state_capacity: usize,
     ) -> crate::Result<Self> {
         let device = weight.device().clone();
-        // 預分配步進緩衝區：最多 kernel_size 幀 × in_channels 通道
-        let step_scratch = vec![0.0_f32; config.in_channels * config.kernel_size];
+        let left_pad = (config.kernel_size - 1) * config.dilation;
+        let state_tensor = Tensor::zeros(
+            (1, config.in_channels, left_pad),
+            weight.dtype(),
+            &device,
+        )?;
+        let bias_3d = if let Some(ref b) = bias {
+            Some(b.reshape((1, b.elem_count(), 1))?)
+        } else {
+            None
+        };
 
         Ok(Self {
-            state: CausalConvState::new(config.out_channels, config.kernel_size, state_capacity),
             weight,
             bias,
+            bias_3d,
             config,
             device,
-            step_scratch,
+            state_tensor,
+            left_pad,
         })
     }
 
@@ -386,7 +398,9 @@ impl CausalConv1d {
         let left_pad = (k - 1) * d;
         let padded = input.pad_with_zeros(2, left_pad, 0)?;
         let output = padded.conv1d(&self.weight, 0, 1, d, groups)?;
-        if let Some(ref bias) = self.bias {
+        if let Some(ref bias_3d) = self.bias_3d {
+            Ok(output.broadcast_add(bias_3d)?)
+        } else if let Some(ref bias) = self.bias {
             let b = bias.unsqueeze(0)?.unsqueeze(2)?;
             Ok(output.broadcast_add(&b)?)
         } else {
@@ -395,9 +409,6 @@ impl CausalConv1d {
     }
 
     /// 處理單幀（流式推理用）— O(1) per step
-    ///
-    /// 與 `forward()` 不同，此方法使用內部環形緩衝區管理歷史狀態。
-    /// 只傳入最近 `kernel_size` 幀到 conv1d，避免歷史累積造成的 O(n) 增長。
     ///
     /// # 參數
     /// - `frame`: 當前幀，形狀 (in_channels,)
@@ -410,81 +421,65 @@ impl CausalConv1d {
             )));
         }
 
-        // 推入環形緩衝區
-        self.state.push_frame(frame);
-        let k = self.config.kernel_size;
-        let n_frames = self.state.len.min(k); // 最多 kernel_size 幀
-
-        // 使用預分配步進緩衝區，避免熱路徑分配
-        let total_len = in_channels * n_frames;
-        let conv_input = &mut self.step_scratch[..total_len];
-
-        for (ch, window) in conv_input.chunks_mut(n_frames).enumerate() {
-            self.state.fill_history(ch, window);
-        }
-
-        // 構建輸入張量: (1, in_channels, n_frames) — Tensor::from_slice 會複製資料
-        let input_tensor =
-            Tensor::from_slice(conv_input, (1, in_channels, n_frames), &self.device)?;
-
-        let output = self.forward(&input_tensor)?;
-        // Output: (1, out_channels, L_out)，L_out = n_frames + kernel_size - 1
-        // 因果卷積：最新的輸入幀 (index n_frames-1) 對應輸出中相同位置
-        let frame_pos = n_frames.saturating_sub(1);
-        let frame_out = output.narrow(2, frame_pos, 1)?;
-        frame_out
+        let input_tensor = Tensor::from_slice(frame, (1, in_channels, 1), &self.device)?;
+        let output = self.step_tensor(&input_tensor)?;
+        output
             .squeeze(0)?
             .squeeze(1)?
             .to_vec1()
             .map_err(Into::into)
     }
 
-    /// **Tensor 版本 step** — 直接接受/回傳張量，避免 CPU-GPU 往返
-    ///
-    /// 與 `step()` 相同，但省去 caller 端的 `to_vec1()` + `Tensor::from_slice()`。
+    /// **純設備端串流步進** — 零跨設備複製、零堆配置
     ///
     /// # 參數
-    /// - `frame`: 當前幀，形狀 `(in_channels,)` 或 `(1, in_channels, 1)`
+    /// - `input`: 當前幀張量，形狀 `(1, in_channels, t_in)`, `(in_channels, t_in)` 或 `(in_channels,)`
     ///
     /// # 回傳值
-    /// 形狀 `(1, out_channels, 1)` 的輸出張量
-    pub fn step_tensor(&mut self, frame: &Tensor) -> crate::Result<Tensor> {
+    /// 形狀 `(1, out_channels, t_in)` 的輸出張量
+    pub fn step_tensor(&mut self, input: &Tensor) -> crate::Result<Tensor> {
         let in_channels = self.config.in_channels;
 
-        // 接受多種 shape 約定
-        let frame_slice = match frame.shape().dims() {
-            &[c] if c == in_channels => frame.to_vec1()?,
-            &[1, c, 1] if c == in_channels => frame.squeeze(0)?.squeeze(1)?.to_vec1()?,
+        let x_3d = match input.dims() {
+            &[1, c, _] if c == in_channels => input.clone(),
+            &[b, c, _] if b == 1 && c == in_channels => input.clone(),
+            &[c, _] if c == in_channels => input.unsqueeze(0)?,
+            &[c] if c == in_channels => input.unsqueeze(0)?.unsqueeze(2)?,
             shape => {
                 return Err(Error::Config(format!(
-                    "Expected frame shape ({in_channels},) or (1, {in_channels}, 1), got {shape:?}"
+                    "Expected input with in_channels={in_channels}, got shape {shape:?}"
                 )));
             }
         };
 
-        // 推入環形緩衝區
-        self.state.push_frame(&frame_slice);
-        let k = self.config.kernel_size;
-        let n_frames = self.state.len.min(k);
+        let t_in = x_3d.dim(2)?;
 
-        // 使用預分配步進緩衝區
-        let total_len = in_channels * n_frames;
-        let conv_input = &mut self.step_scratch[..total_len];
+        let output = if self.left_pad == 0 {
+            x_3d.conv1d(&self.weight, 0, 1, self.config.dilation, self.config.groups)?
+        } else {
+            let full_x = Tensor::cat(&[&self.state_tensor, &x_3d], 2)?;
+            self.state_tensor = full_x.narrow(2, t_in, self.left_pad)?.contiguous()?;
+            full_x.conv1d(&self.weight, 0, 1, self.config.dilation, self.config.groups)?
+        };
 
-        for (ch, window) in conv_input.chunks_mut(n_frames).enumerate() {
-            self.state.fill_history(ch, window);
+        if let Some(ref b3d) = self.bias_3d {
+            Ok(output.broadcast_add(b3d)?)
+        } else {
+            Ok(output)
         }
-
-        let input_tensor =
-            Tensor::from_slice(conv_input, (1, in_channels, n_frames), &self.device)?;
-        let output = self.forward(&input_tensor)?;
-        let frame_pos = n_frames.saturating_sub(1);
-        Ok(output.narrow(2, frame_pos, 1)?) // (1, out_channels, 1)
     }
 
-    /// 重置內部狀態
+    /// 重置內部狀態（零分配）
     pub fn reset_state(&mut self) {
-        self.state.reset();
+        if self.left_pad > 0 {
+            if let Ok(zeros) = Tensor::zeros(
+                (1, self.config.in_channels, self.left_pad),
+                self.weight.dtype(),
+                &self.device,
+            ) {
+                self.state_tensor = zeros;
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -746,5 +741,65 @@ mod tests {
         } else {
             eprintln!("Skipping alignment check: reference files not found");
         }
+    }
+
+    #[test]
+    fn test_causal_conv_step_tensor_matches_forward() {
+        let device = test_device();
+        let config = CausalConvConfig {
+            in_channels: 8,
+            out_channels: 16,
+            kernel_size: 5,
+            dilation: 2,
+            groups: 1,
+        };
+        let weight = Tensor::randn(0.0f32, 1.0f32, (16, 8, 5), &device).unwrap();
+        let bias = Some(Tensor::randn(0.0f32, 1.0f32, (16,), &device).unwrap());
+        let mut conv = CausalConv1d::new(weight, bias, config, 16).unwrap();
+
+        let num_frames = 10;
+        let input_data: Vec<f32> = (0..8 * num_frames)
+            .map(|i| ((i * 17) % 31) as f32 * 0.1)
+            .collect();
+        let full_input = Tensor::from_slice(&input_data, (1, 8, num_frames), &device).unwrap();
+
+        // Batch forward
+        let batch_out = conv.forward(&full_input).unwrap();
+        let batch_flat: Vec<f32> = batch_out.flatten_all().unwrap().to_vec1().unwrap();
+
+        // Streaming step_tensor frame by frame
+        let mut stream_outputs = Vec::new();
+        for t in 0..num_frames {
+            let frame = full_input.narrow(2, t, 1).unwrap();
+            let out_t = conv.step_tensor(&frame).unwrap();
+            assert_eq!(out_t.shape().dims(), &[1, 16, 1]);
+            let frame_flat: Vec<f32> = out_t.flatten_all().unwrap().to_vec1().unwrap();
+            stream_outputs.push(frame_flat);
+        }
+
+        // Reconstruct channel-major [1, 16, 10]
+        let mut stream_flat = Vec::with_capacity(16 * num_frames);
+        for ch in 0..16 {
+            for t in 0..num_frames {
+                stream_flat.push(stream_outputs[t][ch]);
+            }
+        }
+
+        let max_diff: f32 = batch_flat
+            .iter()
+            .zip(stream_flat.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        assert!(
+            max_diff < 1e-5,
+            "CausalConv1d step_tensor must match forward: max_diff = {max_diff}"
+        );
+
+        // Test reset_state
+        conv.reset_state();
+        let first_frame = full_input.narrow(2, 0, 1).unwrap();
+        let first_step_out = conv.step_tensor(&first_frame).unwrap();
+        let first_flat: Vec<f32> = first_step_out.flatten_all().unwrap().to_vec1().unwrap();
+        assert_eq!(first_flat, stream_outputs[0], "State reset must reproduce first frame output");
     }
 }

@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use candle_core::{Device, Tensor};
+use rayon::prelude::*;
 use safetensors::tensor::TensorView;
 use safetensors::{Dtype, SafeTensors};
 
@@ -37,8 +38,9 @@ pub struct WeightLoader {
 impl WeightLoader {
     /// 從單個 safetensors 檔案載入
     pub fn from_file(path: impl AsRef<Path>, device: &Device) -> Result<Self> {
-        let data = std::fs::read(path.as_ref())?;
-        Self::from_bytes(&data, device)
+        let file = std::fs::File::open(path.as_ref())?;
+        let mmap = unsafe { memmap2::MmapOptions::new().map(&file)? };
+        Self::from_bytes(&mmap, device)
     }
 
     /// 從記憶體中的 safetensors 位元組載入
@@ -75,9 +77,10 @@ impl WeightLoader {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "safetensors") {
-                let data = std::fs::read(&path)?;
-                let sf = SafeTensors::deserialize(&data).map_err(|e| {
+            if path.extension().is_some_and(|e| e == "safetensors") {
+                let file = std::fs::File::open(&path)?;
+                let mmap = unsafe { memmap2::MmapOptions::new().map(&file)? };
+                let sf = SafeTensors::deserialize(&mmap).map_err(|e| {
                     Error::Weight(format!("Failed to deserialize {}: {e}", path.display()))
                 })?;
                 insert_safetensors_tensors(&sf, device, &mut tensors)?;
@@ -177,7 +180,7 @@ impl WeightLoader {
     pub fn conv1d_bias(&self, name: &str) -> Option<Result<Tensor>> {
         let key = format!("{name}.bias");
         if self.has(&key) {
-            Some(self.get(&key).map(|t| t.clone()))
+            Some(self.get(&key).cloned())
         } else {
             None
         }
@@ -196,7 +199,7 @@ impl WeightLoader {
     pub fn linear_bias(&self, name: &str) -> Option<Result<Tensor>> {
         let key = format!("{name}.bias");
         if self.has(&key) {
-            Some(self.get(&key).map(|t| t.clone()))
+            Some(self.get(&key).cloned())
         } else {
             None
         }
@@ -279,22 +282,22 @@ fn insert_safetensors_tensors(
 
 /// 將 safetensors TensorView 轉換為 Candle Tensor
 fn tensor_from_view(view: &TensorView, device: &Device) -> Result<Tensor> {
-    let shape: Vec<usize> = view.shape().iter().map(|&d| d as usize).collect();
+    let shape = view.shape().to_vec();
     let dtype = safetensors_dtype_to_candle(view.dtype())?;
-    let data = view.data().to_vec();
+    let data = view.data();
 
     // Keep native inference tensors in F32 for the existing decoder/talker code.
     match dtype {
         candle_core::DType::F32 => {
-            let floats = f32_values_from_le_bytes(&data)?;
+            let floats = f32_values_from_le_bytes(data)?;
             Tensor::from_slice(&floats, &*shape, device).map_err(Into::into)
         }
         candle_core::DType::BF16 => {
-            let floats = bf16_values_to_f32(&data)?;
+            let floats = bf16_values_to_f32(data)?;
             Tensor::from_slice(&floats, &*shape, device).map_err(Into::into)
         }
         candle_core::DType::F16 => {
-            let floats = f16_values_to_f32(&data)?;
+            let floats = f16_values_to_f32(data)?;
             Tensor::from_slice(&floats, &*shape, device).map_err(Into::into)
         }
         other => Err(Error::Weight(format!(
@@ -304,36 +307,71 @@ fn tensor_from_view(view: &TensorView, device: &Device) -> Result<Tensor> {
 }
 
 fn f32_values_from_le_bytes(data: &[u8]) -> Result<Vec<f32>> {
-    if data.len() % 4 != 0 {
+    if !data.len().is_multiple_of(4) {
         return Err(Error::Weight(format!(
             "Invalid F32 tensor byte length {}",
             data.len()
         )));
     }
-    Ok(data
-        .chunks_exact(4)
-        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-        .collect())
+    let n = data.len() / 4;
+    let mut floats = vec![0.0f32; n];
+    if n >= 16384 {
+        floats.par_chunks_mut(4096).enumerate().for_each(|(chunk_idx, chunk)| {
+            let base = chunk_idx * 4096 * 4;
+            for (i, out) in chunk.iter_mut().enumerate() {
+                let offset = base + i * 4;
+                *out = f32::from_le_bytes([
+                    data[offset],
+                    data[offset + 1],
+                    data[offset + 2],
+                    data[offset + 3],
+                ]);
+            }
+        });
+    } else {
+        for (i, out) in floats.iter_mut().enumerate() {
+            let offset = i * 4;
+            *out = f32::from_le_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]);
+        }
+    }
+    Ok(floats)
 }
 
 fn bf16_values_to_f32(data: &[u8]) -> Result<Vec<f32>> {
-    if data.len() % 2 != 0 {
+    if !data.len().is_multiple_of(2) {
         return Err(Error::Weight(format!(
             "Invalid BF16 tensor byte length {}",
             data.len()
         )));
     }
-    Ok(data
-        .chunks_exact(2)
-        .map(|chunk| {
-            let bits = u16::from_le_bytes([chunk[0], chunk[1]]) as u32;
-            f32::from_bits(bits << 16)
-        })
-        .collect())
+    let n = data.len() / 2;
+    let mut floats = vec![0.0f32; n];
+    if n >= 16384 {
+        floats.par_chunks_mut(4096).enumerate().for_each(|(chunk_idx, chunk)| {
+            let base = chunk_idx * 4096 * 2;
+            for (i, out) in chunk.iter_mut().enumerate() {
+                let offset = base + i * 2;
+                let bits = u16::from_le_bytes([data[offset], data[offset + 1]]) as u32;
+                *out = f32::from_bits(bits << 16);
+            }
+        });
+    } else {
+        for (i, out) in floats.iter_mut().enumerate() {
+            let offset = i * 2;
+            let bits = u16::from_le_bytes([data[offset], data[offset + 1]]) as u32;
+            *out = f32::from_bits(bits << 16);
+        }
+    }
+    Ok(floats)
 }
 
 fn f16_values_to_f32(data: &[u8]) -> Result<Vec<f32>> {
-    if data.len() % 2 != 0 {
+    if !data.len().is_multiple_of(2) {
         return Err(Error::Weight(format!(
             "Invalid F16 tensor byte length {}",
             data.len()

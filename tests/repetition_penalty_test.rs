@@ -296,7 +296,7 @@ fn repetition_penalty_matches_official_oracle() {
                     &case.history,
                 )
                 .expect("sample should succeed");
-            got.push(out as u32);
+            got.push(out);
         }
 
         let expected: Vec<u32> = case.samples.iter().map(|s| s.expected).collect();
@@ -457,11 +457,18 @@ fn invalid_repetition_penalty_is_rejected() {
 #[test]
 fn talker_repetition_history_contract_is_locked_in_code_shape() {
     let cp_src = load_fixture_for_text("src/talker/code_predictor.rs");
-    let cp_call = "sampler.sample(&logits, sampling, None, None, &[])";
-    let cp_calls = cp_src.matches(cp_call).count();
+    let cp_argmax = "logits.argmax(1)?";
+    let cp_argmax_calls = cp_src.matches(cp_argmax).count();
     assert_eq!(
-        cp_calls, 2,
-        "code predictor must sample 15 steps with empty history"
+        cp_argmax_calls, 2,
+        "code predictor greedy path must use on-device argmax"
+    );
+
+    let cp_sample_call = "sampler.sample_with_transfer_observer(";
+    let cp_sample_calls = cp_src.matches(cp_sample_call).count();
+    assert_eq!(
+        cp_sample_calls, 2,
+        "code predictor must sample 15 steps with empty history via transfer observer"
     );
 }
 

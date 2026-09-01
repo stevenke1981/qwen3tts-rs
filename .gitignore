@@ -23,3 +23,7 @@ agent_temp*.py
 
 # GGUF 測試檔案（大檔案，需手動下載）
 /gguf-test/
+
+# Multi-agent & temporary runtimes
+/.agents/
+/.sites-runtime/

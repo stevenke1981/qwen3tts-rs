@@ -195,13 +195,13 @@ impl Attention {
     /// 單幀流式注意力（O(window) per step）
     ///
     /// 與 `forward()` 不同，此方法只處理一幀輸入，
-    /// 使用 `KvRing` 環形快取管理歷史 K,V 狀態。
+    /// 使用 `DeviceKvCache` 設備端快取管理歷史 K,V 狀態。
     ///
     /// # 參數
     /// - `x`: 當前幀，形狀 `(1, 1, hidden_dim)`
     /// - `position`: 當前位置索引（用於 RoPE 查表）
-    /// - `kv_ring`: 此層的環形 KV 快取
-    pub fn step(&self, x: &Tensor, position: usize, kv_ring: &mut KvRing) -> crate::Result<Tensor> {
+    /// - `kv_cache`: 此層的設備端 KV 快取
+    pub fn step(&self, x: &Tensor, position: usize, kv_cache: &mut DeviceKvCache) -> crate::Result<Tensor> {
         // QKV projections
         let q = self.q_proj.forward(x)?; // (1, 1, num_heads * head_dim)
         let k = self.k_proj.forward(x)?; // (1, 1, num_kv_heads * head_dim)
@@ -230,12 +230,8 @@ impl Attention {
         let q_rot = apply_rope_half(&q_r, &cos, &sin)?;
         let k_rot = apply_rope_half(&k_r, &cos, &sin)?;
 
-        // Write post-RoPE K and raw V into ring buffer
-        kv_ring.write(&k_rot, &v_r)?;
-
-        // Gather all cached K,V (oldest to newest)
-        let (k_cache, v_cache) = kv_ring.gather(x.device())?;
-        // k_cache: (1, num_kv_heads, window, head_dim)
+        // Update on-device KV cache (returns full window: (1, num_kv_heads, window_len, head_dim))
+        let (k_cache, v_cache) = kv_cache.step(&k_rot, &v_r)?;
 
         // GQA repeat
         let n_repeat = self.num_heads / self.num_kv_heads;
@@ -252,7 +248,7 @@ impl Attention {
         // Scaled dot-product attention
         let scale = (self.head_dim as f64).sqrt().recip();
         let attn = (q_rot.matmul(&k_e.transpose(2, 3)?)? * scale)?;
-        // No mask needed: ring buffer enforces window, causal is automatic
+        // No mask needed: sliding window is enforced by cache truncation, causal is automatic
         let attn = candle_nn::ops::softmax(&attn, 3)?;
         let attn = attn.matmul(&v_e)?; // (1, num_heads, 1, head_dim)
 
@@ -313,144 +309,78 @@ fn precompute_rope(
 }
 
 // ---------------------------------------------------------------------------
-// 環形 KV 快取（流式推理用）
+// 設備端 KV 快取（純 Device 張量流式快取）
 // ---------------------------------------------------------------------------
 
-/// 扁平環形 KV 快取（比照 CausalConvState 風格）
+/// 純設備端 KV 快取（Device-Resident KV Cache）
 ///
-/// 每層 Attention 需要一組 K/V 環形緩衝區。所有記憶體在 `new()` 時預分配，
-/// 熱路徑中不觸發 realloc。儲存已旋轉的 K（post-RoPE）與原始 V。
-pub struct KvRing {
-    /// 扁平 K 儲存: [capacity × num_kv_heads × head_dim]
-    k_data: Vec<f32>,
-    /// 扁平 V 儲存: [capacity × num_kv_heads × head_dim]
-    v_data: Vec<f32>,
-    /// KV 頭數
-    num_kv_heads: usize,
-    /// 每頭維度
-    head_dim: usize,
-    /// 每位置步長 = num_kv_heads × head_dim
-    stride: usize,
-    /// 最大容量
-    capacity: usize,
-    /// 下一個寫入位置 (0..capacity)
-    head: usize,
-    /// 有效位置數 (0..capacity)
-    len: usize,
+/// 維護每層滑動窗口（72）之 K, V 張量，全程在 Device 上執行，
+/// 零 Host-Device 跨設備複製與記憶體分配。
+#[derive(Debug, Clone)]
+pub struct DeviceKvCache {
+    k_cache: Option<Tensor>, // (1, num_kv_heads, seq_len, head_dim)
+    v_cache: Option<Tensor>, // (1, num_kv_heads, seq_len, head_dim)
+    sliding_window: usize,
 }
 
-impl KvRing {
-    /// 建立新 KV 環形快取
-    ///
-    /// # 參數
-    /// - `capacity`: 最大位置數（通常為 sliding_window + 1）
-    /// - `num_kv_heads`: KV 頭數
-    /// - `head_dim`: 每頭維度
-    pub fn new(capacity: usize, num_kv_heads: usize, head_dim: usize) -> Self {
-        let stride = num_kv_heads * head_dim;
-        let total = capacity * stride;
+impl DeviceKvCache {
+    /// 建立新設備端 KV 快取
+    pub fn new(sliding_window: usize) -> Self {
         Self {
-            k_data: vec![0.0_f32; total],
-            v_data: vec![0.0_f32; total],
-            num_kv_heads,
-            head_dim,
-            stride,
-            capacity,
-            head: 0,
-            len: 0,
+            k_cache: None,
+            v_cache: None,
+            sliding_window,
         }
     }
 
-    /// 寫入一組 K,V 張量
-    ///
-    /// K 與 V 張量形狀均為 `(1, num_kv_heads, 1, head_dim)`。
-    /// 寫入後 head 前進，最舊資料被覆蓋。
-    pub fn write(&mut self, k: &Tensor, v: &Tensor) -> crate::Result<()> {
-        let k_flat = k.flatten_all()?.to_vec1()?;
-        let v_flat = v.flatten_all()?.to_vec1()?;
-        let offset = self.head * self.stride;
-        let end = offset + self.stride;
-        self.k_data[offset..end].copy_from_slice(&k_flat);
-        self.v_data[offset..end].copy_from_slice(&v_flat);
-        self.head = (self.head + 1) % self.capacity;
-        if self.len < self.capacity {
-            self.len += 1;
-        }
-        Ok(())
-    }
-
-    /// 收集所有有效位置的 K,V 張量（按時間順序：最舊到最新）
-    ///
-    /// 回傳 `(K, V)`，各為 `(1, num_kv_heads, window, head_dim)`。
-    pub fn gather(&self, device: &Device) -> crate::Result<(Tensor, Tensor)> {
-        let n_pos = self.len;
-        if n_pos == 0 {
-            let empty =
-                Tensor::zeros((1, self.num_kv_heads, 0, self.head_dim), DType::F32, device)?;
-            return Ok((empty.clone(), empty));
-        }
-        // 內部儲存佈局為位置主序：[p0_h0_d0..p0_h0_dD-1, p0_h1_d0.., p1_h0_d0..]
-        // 輸出需要頭主序 (1, H, P, D)：[h0_p0_d0..., h0_p1_d0..., h1_p0_d0...]
-        // stride in output per head: n_pos * head_dim
-        let h = self.num_kv_heads;
-        let d = self.head_dim;
-        let pd_stride = n_pos * d; // per-head stride in output
-        let mut k_out = vec![0.0_f32; n_pos * self.stride];
-        let mut v_out = vec![0.0_f32; n_pos * self.stride];
-        for pi in 0..n_pos {
-            let src_pos = if self.len < self.capacity {
-                pi
+    /// 步進寫入當前幀 K,V 並取得滑動窗口內的所有歷史張量
+    pub fn step(&mut self, k: &Tensor, v: &Tensor) -> crate::Result<(Tensor, Tensor)> {
+        let (new_k, new_v) = if let (Some(past_k), Some(past_v)) = (&self.k_cache, &self.v_cache) {
+            let k_cat = Tensor::cat(&[past_k, k], 2)?;
+            let v_cat = Tensor::cat(&[past_v, v], 2)?;
+            let cur_len = k_cat.dim(2)?;
+            if cur_len > self.sliding_window {
+                let offset = cur_len - self.sliding_window;
+                (
+                    k_cat.narrow(2, offset, self.sliding_window)?.contiguous()?,
+                    v_cat.narrow(2, offset, self.sliding_window)?.contiguous()?,
+                )
             } else {
-                (self.head + pi) % self.capacity
-            };
-            let src_base = src_pos * self.stride;
-            for hi in 0..h {
-                let dst_off = hi * pd_stride + pi * d;
-                let src_off = src_base + hi * d;
-                k_out[dst_off..dst_off + d].copy_from_slice(&self.k_data[src_off..src_off + d]);
-                v_out[dst_off..dst_off + d].copy_from_slice(&self.v_data[src_off..src_off + d]);
+                (k_cat, v_cat)
             }
-        }
-        let k_t = Tensor::from_slice(&k_out, (1, self.num_kv_heads, n_pos, self.head_dim), device)?;
-        let v_t = Tensor::from_slice(&v_out, (1, self.num_kv_heads, n_pos, self.head_dim), device)?;
-        Ok((k_t, v_t))
+        } else {
+            (k.clone(), v.clone())
+        };
+
+        self.k_cache = Some(new_k.clone());
+        self.v_cache = Some(new_v.clone());
+        Ok((new_k, new_v))
     }
 
     /// 重置快取（零分配）
     pub fn reset(&mut self) {
-        self.k_data.fill(0.0_f32);
-        self.v_data.fill(0.0_f32);
-        self.head = 0;
-        self.len = 0;
+        self.k_cache = None;
+        self.v_cache = None;
     }
 
-    /// 有效位置數
+    /// 當前快取的長度
     pub fn len(&self) -> usize {
-        self.len
+        self.k_cache.as_ref().and_then(|k| k.dim(2).ok()).unwrap_or(0)
     }
 
-    /// 是否為空
+    /// 快取是否為空
     pub fn is_empty(&self) -> bool {
-        self.len == 0
+        self.len() == 0
     }
 
-    /// 容量
+    /// 容量（滑動窗口大小）
     pub fn capacity(&self) -> usize {
-        self.capacity
+        self.sliding_window
     }
 }
 
-impl std::fmt::Debug for KvRing {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KvRing")
-            .field("capacity", &self.capacity)
-            .field("len", &self.len)
-            .field("head", &self.head)
-            .field("num_kv_heads", &self.num_kv_heads)
-            .field("head_dim", &self.head_dim)
-            .finish()
-    }
-}
+/// 相容個別模組引用別名
+pub type KvRing = DeviceKvCache;
 
 struct Ffn {
     gate: Linear,
@@ -540,11 +470,11 @@ impl TransformerBlock {
     /// 單幀流式 Transformer 層
     ///
     /// 輸入形狀 `(1, 1, hidden_dim)`，回傳相同形狀。
-    /// 使用 `kv_ring` 管理注意力 K/V 快取。
-    pub fn step(&self, x: &Tensor, position: usize, kv_ring: &mut KvRing) -> crate::Result<Tensor> {
+    /// 使用 `kv_cache` 管理注意力 K/V 快取。
+    pub fn step(&self, x: &Tensor, position: usize, kv_cache: &mut DeviceKvCache) -> crate::Result<Tensor> {
         let r = x;
         let xn = self.input_norm.forward(x)?;
-        let attn_out = self.attn.step(&xn, position, kv_ring)?;
+        let attn_out = self.attn.step(&xn, position, kv_cache)?;
         let ascale = self.attn_scale.unsqueeze(0)?.unsqueeze(0)?;
         let x = r.broadcast_add(&ascale.broadcast_mul(&attn_out)?)?;
         let r = &x;
@@ -604,51 +534,53 @@ impl PreTransformer {
         h.transpose(1, 2)?.contiguous()
     }
 
-    /// 建立每層的 KV 環形快取
-    ///
-    /// 回傳 `Vec<KvRing>`，長度為 `num_layers`。
-    /// 每個 `KvRing` 容量為 `sliding_window + 1` 位置。
-    ///
-    /// # 參數
-    /// - `cfg`: 配置（使用 `sliding_window` 決定容量）
-    pub fn new_kv_rings(cfg: &PreTransformerConfig) -> Vec<KvRing> {
-        let capacity = cfg.sliding_window + 1;
-        let head_dim = cfg.hidden_dim / cfg.num_heads;
+    /// 建立每層的設備端 KV 快取
+    pub fn new_kv_caches(cfg: &PreTransformerConfig) -> Vec<DeviceKvCache> {
         (0..cfg.num_layers)
-            .map(|_| KvRing::new(capacity, cfg.num_kv_heads, head_dim))
+            .map(|_| DeviceKvCache::new(cfg.sliding_window))
             .collect()
+    }
+
+    /// 建立每層的 KV 快取（相容舊名）
+    pub fn new_kv_rings(cfg: &PreTransformerConfig) -> Vec<DeviceKvCache> {
+        Self::new_kv_caches(cfg)
     }
 
     /// 單幀流式推理解碼
     ///
-    /// 處理一幀輸入，使用 `kv_rings` 管理跨層 K/V 快取。
+    /// 處理一幀輸入，使用 `kv_caches` 管理跨層 K/V 快取。
     /// 輸入形狀 `(1, input_dim, 1)`，回傳 `(1, hidden_dim, 1)`。
     ///
     /// # 參數
     /// - `x`: 輸入幀，形狀 `(1, input_dim, 1)`
-    /// - `kv_rings`: 由 `new_kv_rings()` 建立，長度為 `num_layers`
+    /// - `kv_caches`: 由 `new_kv_caches()` 建立，長度為 `num_layers`
     /// - `position`: 當前位置索引（用於 RoPE）
     pub fn step(
         &self,
         x: &Tensor,
-        kv_rings: &mut [KvRing],
+        kv_caches: &mut [DeviceKvCache],
         position: usize,
     ) -> crate::Result<Tensor> {
         let mut h = x.transpose(1, 2)?.contiguous()?; // (1, 1, input_dim)
         h = self.input_proj.forward(&h)?; // (1, 1, hidden_dim)
-        for (layer, kv_ring) in self.layers.iter().zip(kv_rings.iter_mut()) {
-            h = layer.step(&h, position, kv_ring)?;
+        for (layer, kv_cache) in self.layers.iter().zip(kv_caches.iter_mut()) {
+            h = layer.step(&h, position, kv_cache)?;
         }
         h = self.norm.forward(&h)?;
         h = self.output_proj.forward(&h)?; // (1, 1, output_dim)
         Ok(h.transpose(1, 2)?.contiguous()?) // (1, output_dim, 1)
     }
 
-    /// 重置所有 KV 環形快取（零分配）
-    pub fn reset_kv_rings(kv_rings: &mut [KvRing]) {
-        for ring in kv_rings.iter_mut() {
-            ring.reset();
+    /// 重置所有設備端 KV 快取（零分配）
+    pub fn reset_kv_caches(kv_caches: &mut [DeviceKvCache]) {
+        for cache in kv_caches.iter_mut() {
+            cache.reset();
         }
+    }
+
+    /// 重置所有 KV 快取（相容舊名）
+    pub fn reset_kv_rings(kv_rings: &mut [DeviceKvCache]) {
+        Self::reset_kv_caches(kv_rings);
     }
 }
 
@@ -667,54 +599,56 @@ mod tests {
     }
 
     // ----------------------------------------------------------------
-    // KvRing 單元測試
+    // DeviceKvCache 單元測試
     // ----------------------------------------------------------------
 
     #[test]
-    fn test_kv_ring_basic_write_and_gather() {
+    fn test_device_kv_cache_basic_step() {
         let device = test_device();
-        let mut ring = KvRing::new(8, 2, 4); // capacity=8, kv_heads=2, head_dim=4
-        assert!(ring.is_empty());
-        assert_eq!(ring.len(), 0);
-        assert_eq!(ring.capacity(), 8);
+        let mut cache = DeviceKvCache::new(8); // sliding_window=8
+        assert!(cache.is_empty());
+        assert_eq!(cache.len(), 0);
+        assert_eq!(cache.capacity(), 8);
 
-        // Write one position: K and V both shape (1, 2, 1, 4)
+        // Step one position: K and V both shape (1, 2, 1, 4)
         let k = Tensor::ones((1, 2, 1, 4), DType::F32, &device).unwrap();
         let v = Tensor::zeros((1, 2, 1, 4), DType::F32, &device).unwrap();
-        ring.write(&k, &v).unwrap();
+        let (k_cached, v_cached) = cache.step(&k, &v).unwrap();
 
-        assert_eq!(ring.len(), 1);
-        assert!(!ring.is_empty());
+        assert_eq!(cache.len(), 1);
+        assert!(!cache.is_empty());
+        assert_eq!(k_cached.shape().dims(), &[1, 2, 1, 4]);
+        assert_eq!(v_cached.shape().dims(), &[1, 2, 1, 4]);
 
-        let (k_gathered, v_gathered) = ring.gather(&device).unwrap();
-        assert_eq!(k_gathered.shape().dims(), &[1, 2, 1, 4]);
-        // Verify K values are all 1.0
-        let k_flat: Vec<f32> = k_gathered.flatten_all().unwrap().to_vec1().unwrap();
+        let k_flat: Vec<f32> = k_cached.flatten_all().unwrap().to_vec1().unwrap();
         assert!(k_flat.iter().all(|&x| (x - 1.0).abs() < 1e-6));
-        // Verify V values are all 0.0
-        let v_flat: Vec<f32> = v_gathered.flatten_all().unwrap().to_vec1().unwrap();
+        let v_flat: Vec<f32> = v_cached.flatten_all().unwrap().to_vec1().unwrap();
         assert!(v_flat.iter().all(|&x| x.abs() < 1e-6));
     }
 
     #[test]
-    fn test_kv_ring_wraparound() {
+    fn test_device_kv_cache_wraparound() {
         let device = test_device();
-        let mut ring = KvRing::new(4, 1, 2); // capacity=4, kv_heads=1, head_dim=2
-        assert_eq!(ring.capacity(), 4);
+        let mut cache = DeviceKvCache::new(4); // sliding_window=4
+        assert_eq!(cache.capacity(), 4);
 
-        // Write 6 positions (capacity=4, so last 4 survive)
+        // Write 6 positions (window=4, so last 4 survive)
+        let mut last_k = None;
+        let mut last_v = None;
         for i in 0..6 {
             let k = Tensor::from_slice(&[i as f32 * 10.0; 2], (1, 1, 1, 2), &device).unwrap();
             let v = Tensor::from_slice(&[i as f32; 2], (1, 1, 1, 2), &device).unwrap();
-            ring.write(&k, &v).unwrap();
+            let (k_out, v_out) = cache.step(&k, &v).unwrap();
+            last_k = Some(k_out);
+            last_v = Some(v_out);
         }
-        assert_eq!(ring.len(), 4);
+        assert_eq!(cache.len(), 4);
 
-        // Gather should return positions 2,3,4,5 (oldest to newest)
-        let (k_gar, v_gar) = ring.gather(&device).unwrap();
+        let k_gar = last_k.unwrap();
+        let v_gar = last_v.unwrap();
         assert_eq!(k_gar.shape().dims(), &[1, 1, 4, 2]);
         let k_flat: Vec<f32> = k_gar.flatten_all().unwrap().to_vec1().unwrap();
-        // Expected: [20, 20, 30, 30, 40, 40, 50, 50]
+        // Expected positions 2, 3, 4, 5: [20, 20, 30, 30, 40, 40, 50, 50]
         assert_eq!(k_flat[0..2], [20.0, 20.0], "oldest should be pos 2");
         assert_eq!(k_flat[2..4], [30.0, 30.0], "pos 3");
         assert_eq!(k_flat[4..6], [40.0, 40.0], "pos 4");
@@ -726,44 +660,16 @@ mod tests {
     }
 
     #[test]
-    fn test_kv_ring_reset() {
+    fn test_device_kv_cache_reset() {
         let device = test_device();
-        let mut ring = KvRing::new(4, 2, 3);
+        let mut cache = DeviceKvCache::new(4);
         let k = Tensor::ones((1, 2, 1, 3), DType::F32, &device).unwrap();
         let v = Tensor::ones((1, 2, 1, 3), DType::F32, &device).unwrap();
-        ring.write(&k, &v).unwrap();
-        assert_eq!(ring.len(), 1);
-        ring.reset();
-        assert!(ring.is_empty());
-        assert_eq!(ring.len(), 0);
-        // After reset, gather should succeed with empty window
-        let (k_g, _v_g) = ring.gather(&device).unwrap();
-        assert_eq!(k_g.shape().dims(), &[1, 2, 0, 3]);
-    }
-
-    #[test]
-    fn test_kv_ring_gather_sequential() {
-        let device = test_device();
-        let mut ring = KvRing::new(6, 2, 2);
-        // Write 3 positions (buffer not full)
-        for i in 0..3 {
-            let val = i as f32;
-            let k = Tensor::from_slice(&[val * 10.0; 4], (1, 2, 1, 2), &device).unwrap();
-            let v = Tensor::from_slice(&[val; 4], (1, 2, 1, 2), &device).unwrap();
-            ring.write(&k, &v).unwrap();
-        }
-        assert_eq!(ring.len(), 3);
-
-        let (k_g, _v_g) = ring.gather(&device).unwrap();
-        assert_eq!(k_g.shape().dims(), &[1, 2, 3, 2]);
-        let k_flat: Vec<f32> = k_g.flatten_all().unwrap().to_vec1().unwrap();
-        // Head-major (1, H=2, P=3, D=2): h0_p0_d0..d1, h0_p1_d0..d1, h0_p2_d0..d1, h1_p0..
-        assert_eq!(k_flat[0..2], [0.0, 0.0], "head0 pos0");
-        assert_eq!(k_flat[2..4], [10.0, 10.0], "head0 pos1");
-        assert_eq!(k_flat[4..6], [20.0, 20.0], "head0 pos2");
-        assert_eq!(k_flat[6..8], [0.0, 0.0], "head1 pos0");
-        assert_eq!(k_flat[8..10], [10.0, 10.0], "head1 pos1");
-        assert_eq!(k_flat[10..12], [20.0, 20.0], "head1 pos2");
+        let _ = cache.step(&k, &v).unwrap();
+        assert_eq!(cache.len(), 1);
+        cache.reset();
+        assert!(cache.is_empty());
+        assert_eq!(cache.len(), 0);
     }
 
     // ----------------------------------------------------------------
@@ -1000,10 +906,10 @@ mod tests {
     }
 
     #[test]
-    fn test_kv_ring_debug() {
-        let ring = KvRing::new(4, 2, 4);
-        let debug_str = format!("{ring:?}");
-        assert!(debug_str.contains("KvRing"));
-        assert!(debug_str.contains("capacity: 4"));
+    fn test_kv_cache_debug() {
+        let cache = DeviceKvCache::new(4);
+        let debug_str = format!("{cache:?}");
+        assert!(debug_str.contains("DeviceKvCache"));
+        assert!(debug_str.contains("sliding_window: 4"));
     }
 }

@@ -8,6 +8,7 @@ use std::path::Path;
 
 use candle_core::quantized::gguf_file;
 use candle_core::{Device, Tensor};
+use rayon::prelude::*;
 
 use crate::Error;
 use crate::Result;
@@ -26,33 +27,29 @@ pub struct TalkerWeightLoader {
 impl TalkerWeightLoader {
     /// 從 model.safetensors 載入 talker 權重
     pub fn from_safetensors(path: impl AsRef<Path>, device: &Device) -> Result<Self> {
-        let data = std::fs::read(path.as_ref())?;
-        let sf = safetensors::SafeTensors::deserialize(&data)
+        let file = std::fs::File::open(path.as_ref())?;
+        let mmap = unsafe { memmap2::MmapOptions::new().map(&file)? };
+        Self::from_bytes(&mmap, device)
+    }
+
+    /// 從記憶體中的 safetensors 位元組載入
+    pub fn from_bytes(data: &[u8], device: &Device) -> Result<Self> {
+        let sf = safetensors::SafeTensors::deserialize(data)
             .map_err(|e| Error::Weight(format!("Failed to deserialize: {e}")))?;
 
         let mut tensors = HashMap::new();
         for (name, view) in sf.tensors() {
-            let shape: Vec<usize> = view.shape().iter().map(|&d| d as usize).collect();
+            let shape = view.shape().to_vec();
             let dtype = view.dtype();
-            let raw_data = view.data().to_vec();
+            let data = view.data();
 
             let tensor = match dtype {
                 safetensors::Dtype::BF16 => {
-                    // Convert BF16 bytes to f32
-                    let n = raw_data.len() / 2;
-                    let mut floats = Vec::with_capacity(n);
-                    for chunk in raw_data.chunks_exact(2) {
-                        let bits = u16::from_le_bytes([chunk[0], chunk[1]]);
-                        floats.push(bf16_to_f32(bits));
-                    }
+                    let floats = bf16_bytes_to_f32_vec(data)?;
                     Tensor::from_slice(&floats, shape.as_slice(), device)?
                 }
                 safetensors::Dtype::F32 => {
-                    let n = raw_data.len() / 4;
-                    let mut floats = Vec::with_capacity(n);
-                    for chunk in raw_data.chunks_exact(4) {
-                        floats.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
-                    }
+                    let floats = f32_bytes_to_f32_vec(data)?;
                     Tensor::from_slice(&floats, shape.as_slice(), device)?
                 }
                 _ => {
@@ -459,8 +456,75 @@ fn gguf_key_to_safetensors(gguf_key: &str) -> String {
     }
 }
 
-// BF16 → F32 conversion
-fn bf16_to_f32(bits: u16) -> f32 {
+/// 將 BF16 位元組轉為 f32 向量（若 N >= 16384 則使用 Rayon 並行轉換）
+pub fn bf16_bytes_to_f32_vec(data: &[u8]) -> Result<Vec<f32>> {
+    if !data.len().is_multiple_of(2) {
+        return Err(Error::Weight(format!(
+            "Invalid BF16 tensor byte length {}",
+            data.len()
+        )));
+    }
+    let n = data.len() / 2;
+    let mut floats = vec![0.0f32; n];
+    if n >= 16384 {
+        floats.par_chunks_mut(4096).enumerate().for_each(|(chunk_idx, chunk)| {
+            let base = chunk_idx * 4096 * 2;
+            for (i, out) in chunk.iter_mut().enumerate() {
+                let offset = base + i * 2;
+                let bits = u16::from_le_bytes([data[offset], data[offset + 1]]) as u32;
+                *out = f32::from_bits(bits << 16);
+            }
+        });
+    } else {
+        for (i, out) in floats.iter_mut().enumerate() {
+            let offset = i * 2;
+            let bits = u16::from_le_bytes([data[offset], data[offset + 1]]) as u32;
+            *out = f32::from_bits(bits << 16);
+        }
+    }
+    Ok(floats)
+}
+
+/// 將 F32 位元組轉為 f32 向量（若 N >= 16384 則使用 Rayon 並行轉換）
+pub fn f32_bytes_to_f32_vec(data: &[u8]) -> Result<Vec<f32>> {
+    if !data.len().is_multiple_of(4) {
+        return Err(Error::Weight(format!(
+            "Invalid F32 tensor byte length {}",
+            data.len()
+        )));
+    }
+    let n = data.len() / 4;
+    let mut floats = vec![0.0f32; n];
+    if n >= 16384 {
+        floats.par_chunks_mut(4096).enumerate().for_each(|(chunk_idx, chunk)| {
+            let base = chunk_idx * 4096 * 4;
+            for (i, out) in chunk.iter_mut().enumerate() {
+                let offset = base + i * 4;
+                *out = f32::from_le_bytes([
+                    data[offset],
+                    data[offset + 1],
+                    data[offset + 2],
+                    data[offset + 3],
+                ]);
+            }
+        });
+    } else {
+        for (i, out) in floats.iter_mut().enumerate() {
+            let offset = i * 4;
+            *out = f32::from_le_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]);
+        }
+    }
+    Ok(floats)
+}
+
+/// 單個 BF16 bits → F32 轉換
+#[inline]
+pub fn bf16_to_f32(bits: u16) -> f32 {
     let extended = (bits as u32) << 16;
     f32::from_bits(extended)
 }
@@ -604,5 +668,147 @@ mod tests {
             gguf_key_to_safetensors("code_pred.lm_head.0.weight"),
             "talker.code_predictor.lm_head.0.weight"
         );
+    }
+
+    #[test]
+    fn test_bf16_bytes_to_f32_vec_small() {
+        // 1.0f32 in BF16 is 0x3F80 -> LE [0x80, 0x3F]
+        // 2.0f32 in BF16 is 0x4000 -> LE [0x00, 0x40]
+        // -0.5f32 in BF16 is 0xBF00 -> LE [0x00, 0xBF]
+        // 0.0f32 in BF16 is 0x0000 -> LE [0x00, 0x00]
+        let bytes = vec![0x80, 0x3F, 0x00, 0x40, 0x00, 0xBF, 0x00, 0x00];
+        let floats = super::bf16_bytes_to_f32_vec(&bytes).unwrap();
+        assert_eq!(floats, vec![1.0, 2.0, -0.5, 0.0]);
+    }
+
+    #[test]
+    fn test_bf16_bytes_to_f32_vec_large_rayon() {
+        let count = 20000;
+        let mut bytes = Vec::with_capacity(count * 2);
+        let mut expected = Vec::with_capacity(count);
+        for i in 0..count {
+            let bits = (i as u16) ^ 0x3F80;
+            bytes.push((bits & 0xFF) as u8);
+            bytes.push(((bits >> 8) & 0xFF) as u8);
+            let expected_val = f32::from_bits((bits as u32) << 16);
+            expected.push(expected_val);
+        }
+
+        let floats = super::bf16_bytes_to_f32_vec(&bytes).unwrap();
+        assert_eq!(floats.len(), count);
+        for (a, b) in floats.iter().zip(expected.iter()) {
+            assert_eq!(a.to_bits(), b.to_bits());
+        }
+    }
+
+    #[test]
+    fn test_bf16_bytes_invalid_length() {
+        let bytes = vec![0x80, 0x3F, 0x00];
+        assert!(super::bf16_bytes_to_f32_vec(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_f32_bytes_to_f32_vec_small() {
+        let values = vec![1.0f32, -2.5, 123.456, 0.0];
+        let mut bytes = Vec::new();
+        for &v in &values {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        let floats = super::f32_bytes_to_f32_vec(&bytes).unwrap();
+        assert_eq!(floats, values);
+    }
+
+    #[test]
+    fn test_f32_bytes_to_f32_vec_large_rayon() {
+        let count = 20000;
+        let mut bytes = Vec::with_capacity(count * 4);
+        let mut expected = Vec::with_capacity(count);
+        for i in 0..count {
+            let val = (i as f32) * 1.5 - 500.0;
+            bytes.extend_from_slice(&val.to_le_bytes());
+            expected.push(val);
+        }
+
+        let floats = super::f32_bytes_to_f32_vec(&bytes).unwrap();
+        assert_eq!(floats.len(), count);
+        assert_eq!(floats, expected);
+    }
+
+    #[test]
+    fn test_f32_bytes_invalid_length() {
+        let bytes = vec![0x00, 0x00, 0x80];
+        assert!(super::f32_bytes_to_f32_vec(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_talker_weight_loader_from_safetensors_mmap() {
+        use safetensors::tensor::Dtype;
+        use safetensors::tensor::View;
+
+        #[derive(Debug)]
+        struct TestTensor {
+            dtype: Dtype,
+            shape: Vec<usize>,
+            data: Vec<u8>,
+        }
+        impl View for TestTensor {
+            fn dtype(&self) -> Dtype {
+                self.dtype
+            }
+            fn shape(&self) -> &[usize] {
+                &self.shape
+            }
+            fn data(&self) -> std::borrow::Cow<'_, [u8]> {
+                std::borrow::Cow::Borrowed(&self.data)
+            }
+            fn data_len(&self) -> usize {
+                self.data.len()
+            }
+        }
+
+        let tmp = std::env::temp_dir().join(format!(
+            "qwen3tts-talker-loader-test-{}.safetensors",
+            std::process::id()
+        ));
+
+        let t1 = TestTensor {
+            dtype: Dtype::BF16,
+            shape: vec![2, 2],
+            data: vec![0x80, 0x3F, 0x00, 0x40, 0x00, 0xBF, 0x00, 0x00],
+        };
+        let t2 = TestTensor {
+            dtype: Dtype::F32,
+            shape: vec![2],
+            data: vec![
+                0x00, 0x00, 0x80, 0x3F, // 1.0f32
+                0x00, 0x00, 0x00, 0x40, // 2.0f32
+            ],
+        };
+
+        safetensors::serialize_to_file(
+            vec![
+                ("talker.model.text_embedding.weight".to_string(), t1),
+                ("talker.model.norm.weight".to_string(), t2),
+            ],
+            None,
+            &tmp,
+        )
+        .unwrap();
+
+        let device = candle_core::Device::Cpu;
+        let loader = super::TalkerWeightLoader::from_safetensors(&tmp, &device).unwrap();
+
+        let t1_loaded = loader.get("talker.model.text_embedding.weight").unwrap();
+        assert_eq!(t1_loaded.dims(), &[2, 2]);
+        assert_eq!(
+            t1_loaded.to_vec2::<f32>().unwrap(),
+            vec![vec![1.0, 2.0], vec![-0.5, 0.0]]
+        );
+
+        let t2_loaded = loader.get("talker.model.norm.weight").unwrap();
+        assert_eq!(t2_loaded.dims(), &[2]);
+        assert_eq!(t2_loaded.to_vec1::<f32>().unwrap(), vec![1.0, 2.0]);
+
+        let _ = std::fs::remove_file(tmp);
     }
 }

@@ -15,10 +15,10 @@ fn expected_interleaved_axis(dim: usize, mrope_section: &[usize], head_dim: usiz
     let half = head_dim / 2;
     let mut axis = 0;
     let axis_dim = dim % half;
-    for axis_idx in 1..mrope_section.len() {
+    for (axis_idx, &section) in mrope_section.iter().enumerate().skip(1) {
         let start = axis_idx;
-        let end = mrope_section[axis_idx] * 3;
-        if axis_dim >= start && axis_dim < end && (axis_dim - start) % 3 == 0 {
+        let end = section * 3;
+        if axis_dim >= start && axis_dim < end && (axis_dim - start).is_multiple_of(3) {
             axis = axis_idx;
             break;
         }
@@ -146,10 +146,12 @@ fn cached_positions_follow_cache_position_plus_delta_formula() {
 #[test]
 fn interleaved_axis_boundary_selection_matches_formula() {
     let device = Device::Cpu;
-    let mut config = TalkerConfig::default();
-    config.head_dim = 128;
-    config.mrope_section = vec![24, 20, 20];
-    config.rope_interleaved = true;
+    let config = TalkerConfig {
+        head_dim: 128,
+        mrope_section: vec![24, 20, 20],
+        rope_interleaved: true,
+        ..TalkerConfig::default()
+    };
     let rope = MultimodalRotaryEmbedding::new(&config, &device).unwrap();
 
     let position_ids = Tensor::from_slice(&[0u32, 1, 2], (3, 1, 1), &device).unwrap();
@@ -177,10 +179,12 @@ fn interleaved_axis_boundary_selection_matches_formula() {
 #[test]
 fn non_interleaved_axis_repetition_matches_formula() {
     let device = Device::Cpu;
-    let mut config = TalkerConfig::default();
-    config.head_dim = 128;
-    config.mrope_section = vec![24, 20, 20];
-    config.rope_interleaved = false;
+    let config = TalkerConfig {
+        head_dim: 128,
+        mrope_section: vec![24, 20, 20],
+        rope_interleaved: false,
+        ..TalkerConfig::default()
+    };
     let rope = MultimodalRotaryEmbedding::new(&config, &device).unwrap();
 
     let position_ids = Tensor::from_slice(&[0u32, 1, 2], (3, 1, 1), &device).unwrap();
@@ -208,9 +212,11 @@ fn non_interleaved_axis_repetition_matches_formula() {
 #[test]
 fn forward_single_position_matches_general_forward_with_equal_axes() {
     let device = Device::Cpu;
-    let mut config = TalkerConfig::default();
-    config.head_dim = 12;
-    config.mrope_section = vec![2, 2, 2];
+    let config = TalkerConfig {
+        head_dim: 12,
+        mrope_section: vec![2, 2, 2],
+        ..TalkerConfig::default()
+    };
     let rope = MultimodalRotaryEmbedding::new(&config, &device).unwrap();
 
     let position_ids = Tensor::from_slice(
@@ -234,6 +240,7 @@ fn forward_single_position_matches_general_forward_with_equal_axes() {
 }
 
 #[test]
+#[allow(clippy::approx_constant)]
 fn apply_multimodal_rotary_pos_emb_matches_manual_reference_values() {
     let device = Device::Cpu;
     let _config = TalkerConfig::default();
@@ -279,24 +286,32 @@ fn apply_multimodal_rotary_pos_emb_matches_manual_reference_values() {
 fn invalid_mrope_inputs_fail_fast() {
     let device = Device::Cpu;
 
-    let mut cfg = TalkerConfig::default();
-    cfg.rope_theta = 0.0;
+    let cfg = TalkerConfig {
+        rope_theta: 0.0,
+        ..TalkerConfig::default()
+    };
     assert!(MultimodalRotaryEmbedding::new(&cfg, &device).is_err());
 
-    cfg = TalkerConfig::default();
-    cfg.rope_theta = f64::NAN;
+    let cfg = TalkerConfig {
+        rope_theta: f64::NAN,
+        ..TalkerConfig::default()
+    };
     assert!(MultimodalRotaryEmbedding::new(&cfg, &device).is_err());
 
-    cfg = TalkerConfig::default();
-    cfg.mrope_section = vec![24, 20];
+    let cfg = TalkerConfig {
+        mrope_section: vec![24, 20],
+        ..TalkerConfig::default()
+    };
     assert!(MultimodalRotaryEmbedding::new(&cfg, &device).is_err());
 
-    cfg = TalkerConfig::default();
-    cfg.mrope_section = vec![3, 3, 2];
-    cfg.head_dim = 12;
+    let cfg = TalkerConfig {
+        head_dim: 12,
+        mrope_section: vec![3, 3, 2],
+        ..TalkerConfig::default()
+    };
     assert!(MultimodalRotaryEmbedding::new(&cfg, &device).is_err());
 
-    cfg = TalkerConfig::default();
+    let cfg = TalkerConfig::default();
     let rope = MultimodalRotaryEmbedding::new(&cfg, &device).unwrap();
     let wrong_shape = Tensor::from_slice(&[1u32, 1, 2], (3, 1), &device).unwrap();
     assert!(

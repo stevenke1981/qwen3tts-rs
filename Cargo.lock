@@ -3879,7 +3879,7 @@ dependencies = [
 
 [[package]]
 name = "qwen3tts-rs"
-version = "0.1.17"
+version = "0.2.0"
 dependencies = [
  "candle-core",
  "candle-nn",
@@ -3889,6 +3889,7 @@ dependencies = [
  "env_logger",
  "hound",
  "log",
+ "memmap2",
  "rayon",
  "rfd",
  "rodio",

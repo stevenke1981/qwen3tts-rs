@@ -630,6 +630,297 @@ impl TalkerForConditionalGeneration {
         }
         Ok(result)
     }
+
+    /// 執行串流自迴歸生成
+    ///
+    /// 逐幀產生 [u16; 16] 的 Codebook Token 陣列並立即調用 `frame_callback(&frame_tokens)`，
+    /// 達成首幀零等待即時回傳。
+    ///
+    /// # 回傳值
+    /// 成功時回傳總共生成的幀數。
+    pub fn generate_streaming<F>(
+        &self,
+        inputs_embeds: &Tensor,
+        attention_mask: Option<&Tensor>,
+        trailing_text_hidden: Option<&Tensor>,
+        tts_pad_embed: Option<&Tensor>,
+        max_new_tokens: usize,
+        device: &Device,
+        mut frame_callback: F,
+    ) -> Result<usize>
+    where
+        F: FnMut(&[u16; 16]) -> crate::Result<()>,
+    {
+        let (batch, seq_len, _hidden) = inputs_embeds.dims3()?;
+        assert_eq!(batch, 1, "Only batch=1 supported");
+
+        let vocab_size = self.codec_head.dim(0)?;
+        let suppress_from = vocab_size.checked_sub(1024).ok_or_else(|| {
+            Error::Msg("Talker vocabulary must contain at least 1024 reserved tokens".into())
+        })?;
+        let eos = self.config.codec_eos_token_id as usize;
+        if eos >= vocab_size || eos < suppress_from {
+            return Err(Error::Msg(
+                "Talker codec EOS must be inside reserved vocabulary suffix".into(),
+            ));
+        }
+
+        // ── Prefill: 處理所有輸入 ──
+        let mask = attention_mask
+            .cloned()
+            .unwrap_or_else(|| Tensor::ones(&[batch, seq_len], DType::I64, device).unwrap());
+        let (position_ids, rope_delta) = self.compute_position_ids(&mask)?;
+        let causal_mask = create_causal_mask(seq_len, device)?;
+        let (cos, sin) = self.rope.forward(inputs_embeds, &position_ids)?;
+
+        let mut kv_caches = vec![None; self.config.num_hidden_layers];
+        let hidden = self
+            .model
+            .forward(inputs_embeds, &cos, &sin, Some(&causal_mask), &mut kv_caches)?;
+        let mut last_hidden = hidden.narrow(1, seq_len - 1, 1)?; // [batch, 1, hidden]
+
+        let mut num_frames = 0usize;
+        let tts_pad = tts_pad_embed.cloned().unwrap_or_else(|| {
+            Tensor::zeros(&[1, 1, self.config.hidden_size], DType::F32, device).unwrap()
+        });
+        let trailing = trailing_text_hidden.cloned().unwrap_or_else(|| {
+            Tensor::zeros(&[batch, 1, self.config.hidden_size], DType::F32, device).unwrap()
+        });
+        let trailing_len = trailing.dim(1)?;
+        let mut gen_step: usize = 0;
+
+        for step in 0..max_new_tokens {
+            // Step A: 從 last_hidden 預測 codebook 0
+            let logits = self.codec_head_logits(&last_hidden)?.squeeze(1)?;
+            let allow_eos = (step >= 2).then_some(eos);
+            let c0_token = greedy_select_on_device(&logits, Some(suppress_from), allow_eos)?;
+            let c0_val = c0_token.reshape(())?.to_scalar::<u32>()?;
+
+            if c0_val as usize >= vocab_size {
+                return Err(Error::Msg(
+                    "suppression left no finite candidate".to_string(),
+                ));
+            }
+            if terminal_cap_step(step, max_new_tokens) {
+                break;
+            }
+            if c0_val as usize == eos {
+                break;
+            }
+            let c0_emb = self.embed_codec(&c0_token)?;
+
+            // Step B: Code predictor 生成 codebooks 1-15
+            let mut cp_kv_caches = vec![None; self.config.code_predictor.num_hidden_layers];
+            let mut cp_observer = NoopStageDumpObserver;
+            let codes_1_15 = self.code_predictor.generate_tensor_with_observer(
+                &last_hidden,
+                &c0_emb,
+                &mut cp_kv_caches,
+                device,
+                num_frames,
+                &mut cp_observer,
+            )?;
+
+            // Step C: 組裝 frame_tokens [u16; 16] 並即時回呼
+            let c1_15_vec: Vec<u32> = codes_1_15.squeeze(0)?.to_vec1::<u32>()?;
+            let mut frame_tokens = [0u16; 16];
+            frame_tokens[0] = c0_val as u16;
+            for i in 0..15 {
+                frame_tokens[i + 1] = c1_15_vec[i] as u16;
+            }
+            frame_callback(&frame_tokens).map_err(|e| Error::Msg(e.to_string()))?;
+            num_frames += 1;
+
+            // Step D: 構建下一步的輸入
+            let mut sum_emb = c0_emb;
+            for i in 0..(self.config.num_code_groups - 1) {
+                let ci_token = codes_1_15.narrow(1, i, 1)?;
+                let ci_emb = embedding_lookup(&self.code_predictor.codec_embeddings[i], &ci_token)?;
+                sum_emb = (sum_emb + ci_emb)?;
+            }
+
+            let text_add = if gen_step < trailing_len {
+                trailing.narrow(1, gen_step, 1)?
+            } else {
+                tts_pad.clone()
+            };
+            let next_input = (sum_emb + text_add)?;
+
+            let cache_position_start = u32::try_from(seq_len + gen_step).map_err(|_| {
+                Error::Msg(format!(
+                    "cache_position_start overflow for seq_len {seq_len} gen_step {gen_step}"
+                ))
+            })?;
+            let positions = MultimodalRotaryEmbedding::cached_positions_from_delta(
+                cache_position_start,
+                &rope_delta,
+                1,
+                device,
+            )?;
+            let (cos, sin) = self.rope.forward_single_position(&positions)?;
+            let hidden = self
+                .model
+                .forward(&next_input, &cos, &sin, None, &mut kv_caches)?;
+            last_hidden = hidden;
+            gen_step += 1;
+        }
+
+        Ok(num_frames)
+    }
+
+    /// 執行抽樣模式的串流自迴歸生成
+    ///
+    /// 逐幀產生 [u16; 16] 的 Codebook Token 陣列並立即調用 `frame_callback(&frame_tokens)`。
+    ///
+    /// # 回傳值
+    /// 成功時回傳總共生成的幀數。
+    #[allow(clippy::too_many_arguments)]
+    pub fn generate_sampled_streaming<F>(
+        &self,
+        inputs_embeds: &Tensor,
+        attention_mask: Option<&Tensor>,
+        trailing_text_hidden: Option<&Tensor>,
+        tts_pad_embed: Option<&Tensor>,
+        max_new_tokens: usize,
+        device: &Device,
+        sampler: &mut Sampler,
+        sampling: SamplingOptions,
+        subtalker_sampling: SamplingOptions,
+        talker_do_sample: bool,
+        subtalker_do_sample: bool,
+        mut frame_callback: F,
+    ) -> Result<usize>
+    where
+        F: FnMut(&[u16; 16]) -> crate::Result<()>,
+    {
+        let (batch, seq_len, _hidden) = inputs_embeds.dims3()?;
+        assert_eq!(batch, 1, "Only batch=1 supported");
+
+        let vocab_size = self.codec_head.dim(0)?;
+        let suppress_from = vocab_size.checked_sub(1024).ok_or_else(|| {
+            Error::Msg("Talker vocabulary must contain at least 1024 reserved tokens".into())
+        })?;
+        let eos = self.config.codec_eos_token_id as usize;
+        if eos >= vocab_size || eos < suppress_from {
+            return Err(Error::Msg(
+                "Talker codec EOS must be inside reserved vocabulary suffix".into(),
+            ));
+        }
+
+        let mask = attention_mask
+            .cloned()
+            .unwrap_or_else(|| Tensor::ones(&[batch, seq_len], DType::I64, device).unwrap());
+        let (position_ids, rope_delta) = self.compute_position_ids(&mask)?;
+        let causal_mask = create_causal_mask(seq_len, device)?;
+        let (cos, sin) = self.rope.forward(inputs_embeds, &position_ids)?;
+
+        let mut kv_caches = vec![None; self.config.num_hidden_layers];
+        let hidden = self
+            .model
+            .forward(inputs_embeds, &cos, &sin, Some(&causal_mask), &mut kv_caches)?;
+        let mut last_hidden = hidden.narrow(1, seq_len - 1, 1)?;
+
+        let mut num_frames = 0usize;
+        let mut c0_history: Vec<u16> = Vec::with_capacity(max_new_tokens);
+        let tts_pad = tts_pad_embed.cloned().unwrap_or_else(|| {
+            Tensor::zeros(&[1, 1, self.config.hidden_size], DType::F32, device).unwrap()
+        });
+        let trailing = trailing_text_hidden.cloned().unwrap_or_else(|| {
+            Tensor::zeros(&[batch, 1, self.config.hidden_size], DType::F32, device).unwrap()
+        });
+        let trailing_len = trailing.dim(1)?;
+        let mut gen_step: usize = 0;
+
+        let mut transfer_observer = NoopStageDumpObserver;
+        let mut stage_observer = NoopStageDumpObserver;
+
+        for step in 0..max_new_tokens {
+            let logits = self.codec_head_logits(&last_hidden)?.squeeze(1)?;
+            let c0_val = sampler.sample_with_mode_and_transfer_observer(
+                &logits,
+                sampling,
+                talker_do_sample,
+                Some(suppress_from),
+                (step >= 2).then_some(eos),
+                &c0_history,
+                &mut transfer_observer,
+            )? as u16;
+
+            if c0_val as usize == eos {
+                break;
+            }
+            if terminal_cap_step(step, max_new_tokens) {
+                break;
+            }
+
+            let c0_token = Tensor::new(&[c0_val as u32], device)?.reshape((1, 1))?;
+            let c0_emb = self.embed_codec(&c0_token)?;
+
+            let mut cp_kv_caches = vec![None; self.config.code_predictor.num_hidden_layers];
+            let codes_1_15 = self.code_predictor.generate_sampled_tensor_with_observers(
+                &last_hidden,
+                &c0_emb,
+                &mut cp_kv_caches,
+                device,
+                sampler,
+                subtalker_sampling,
+                subtalker_do_sample,
+                num_frames,
+                &mut stage_observer,
+                &mut transfer_observer,
+            )?;
+
+            // Step C: 組裝 frame_tokens [u16; 16] 並即時回呼
+            let c1_15_vec: Vec<u32> = codes_1_15.squeeze(0)?.to_vec1::<u32>()?;
+            let mut frame_tokens = [0u16; 16];
+            frame_tokens[0] = c0_val;
+            for i in 0..15 {
+                frame_tokens[i + 1] = c1_15_vec[i] as u16;
+            }
+            frame_callback(&frame_tokens).map_err(|e| Error::Msg(e.to_string()))?;
+            num_frames += 1;
+
+            record_c0_history_non_eos(
+                &mut c0_history,
+                self.config.codec_eos_token_id as u16,
+                c0_val,
+            );
+
+            let mut sum_emb = c0_emb;
+            for i in 0..(self.config.num_code_groups - 1) {
+                let ci_token = codes_1_15.narrow(1, i, 1)?;
+                let ci_emb = embedding_lookup(&self.code_predictor.codec_embeddings[i], &ci_token)?;
+                sum_emb = (sum_emb + ci_emb)?;
+            }
+
+            let text_add = if gen_step < trailing_len {
+                trailing.narrow(1, gen_step, 1)?
+            } else {
+                tts_pad.clone()
+            };
+            let next_input = (sum_emb + text_add)?;
+
+            let cache_position_start = u32::try_from(seq_len + gen_step).map_err(|_| {
+                Error::Msg(format!(
+                    "cache_position_start overflow for seq_len {seq_len} gen_step {gen_step}"
+                ))
+            })?;
+            let positions = MultimodalRotaryEmbedding::cached_positions_from_delta(
+                cache_position_start,
+                &rope_delta,
+                1,
+                device,
+            )?;
+            let (cos, sin) = self.rope.forward_single_position(&positions)?;
+            let hidden = self
+                .model
+                .forward(&next_input, &cos, &sin, None, &mut kv_caches)?;
+            last_hidden = hidden;
+            gen_step += 1;
+        }
+
+        Ok(num_frames)
+    }
 }
 
 #[inline]
@@ -854,5 +1145,62 @@ mod tests {
         assert_eq!(greedy_output.dims(), &[2, 16]);
         assert_eq!(greedy_output.to_vec2::<u32>().unwrap()[0][0], 0);
         assert_eq!(greedy_output.to_vec2::<u32>().unwrap()[1][0], 0);
+
+        // Streaming tests: verify callback receives identical frames to batch generation
+        let mut streaming_frames: Vec<[u16; 16]> = Vec::new();
+        let total_frames = eos_talker
+            .generate_streaming(
+                &inputs,
+                None,
+                None,
+                Some(&eos_pad),
+                4,
+                &device,
+                |frame| {
+                    streaming_frames.push(*frame);
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(total_frames, 2);
+        assert_eq!(streaming_frames.len(), 2);
+        let batch_vec = greedy_output.to_vec2::<u32>().unwrap();
+        for (i, stream_frame) in streaming_frames.iter().enumerate() {
+            for j in 0..16 {
+                assert_eq!(stream_frame[j] as u32, batch_vec[i][j]);
+            }
+        }
+
+        // Sampled streaming test
+        let mut sampled_streaming_frames: Vec<[u16; 16]> = Vec::new();
+        let mut test_sampler = Sampler::new(3);
+        let total_sampled_frames = eos_talker
+            .generate_sampled_streaming(
+                &inputs,
+                None,
+                None,
+                Some(&eos_pad),
+                4,
+                &device,
+                &mut test_sampler,
+                options,
+                options,
+                true,
+                true,
+                |frame| {
+                    sampled_streaming_frames.push(*frame);
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(total_sampled_frames, 2);
+        assert_eq!(sampled_streaming_frames.len(), 2);
+        let eos_batch_vec = eos_output.to_vec2::<u32>().unwrap();
+        for (i, stream_frame) in sampled_streaming_frames.iter().enumerate() {
+            for j in 0..16 {
+                assert_eq!(stream_frame[j] as u32, eos_batch_vec[i][j]);
+            }
+        }
     }
 }
+

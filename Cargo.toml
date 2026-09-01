@@ -26,8 +26,9 @@ rayon = "1"
 # Async runtime (I/O boundary only)
 tokio = { version = "1", features = ["rt", "sync"] }
 
-# Weight serialization
+# Weight serialization & memory mapping
 safetensors = "0.7"
+memmap2 = "0.9"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

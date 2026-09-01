@@ -2,8 +2,8 @@ use candle_core::{Device, Tensor};
 
 use crate::alignment_stage_dump::{NoopStageDumpObserver, StageDumpObserver};
 use crate::codec::{
-    CausalConv1d, CausalConvConfig, CodebookLookup, DecoderBlock, KvRing, ParallelCodebook,
-    PreTransformer, PreTransformerConfig, UpsampleBlock, snake_beta,
+    CausalConv1d, CausalConvConfig, CodebookLookup, DecoderBlock, KvRing as DeviceKvCache,
+    ParallelCodebook, PreTransformer, PreTransformerConfig, UpsampleBlock, snake_beta,
 };
 use crate::weights::WeightLoader;
 use crate::{DecoderConfig, Error, Result, TtsDecoder};
@@ -27,12 +27,10 @@ pub struct Decoder12Hz {
 
     temperature: f64,
 
-    // Streaming state: accumulated PreTransformer step outputs (latent_dim per frame)
-    step_buffer: Vec<f32>,
-    /// KV ring buffers for each transformer layer (streaming attention cache)
-    kv_rings: Vec<KvRing>,
-    /// Number of audio samples produced so far (for extracting only new samples)
-    output_offset: usize,
+    /// KV device caches for each transformer layer (streaming attention cache)
+    kv_caches: Vec<DeviceKvCache>,
+    /// Current frame position index for RoPE
+    position: usize,
 }
 
 impl Decoder12Hz {
@@ -42,7 +40,15 @@ impl Decoder12Hz {
         device: &Device,
     ) -> Result<Self> {
         let loader = WeightLoader::from_dir(weight_path, device)?;
+        Self::from_loader(config, &loader, device)
+    }
 
+    /// 從已載入的 WeightLoader 建立 Decoder12Hz
+    pub fn from_loader(
+        config: DecoderConfig,
+        loader: &WeightLoader,
+        device: &Device,
+    ) -> Result<Self> {
         let codebook_w = loader.codebook_weights()?;
         let codebook = CodebookLookup::new(codebook_w)?;
         let codebook = ParallelCodebook::new(codebook);
@@ -69,12 +75,12 @@ impl Decoder12Hz {
             rope_theta: 10000.0,
             eps: 1e-6,
         };
-        let pre_transformer = PreTransformer::from_loader(&loader, &pt_cfg, device)?;
+        let pre_transformer = PreTransformer::from_loader(loader, &pt_cfg, device)?;
 
         let mut upsample_blocks = Vec::new();
         for i in 0..2 {
             upsample_blocks.push(UpsampleBlock::from_loader(
-                &loader,
+                loader,
                 &format!("upsample.{i}"),
             )?);
         }
@@ -85,7 +91,7 @@ impl Decoder12Hz {
 
         let mut decoder_blocks = Vec::new();
         for i in 1..=4 {
-            decoder_blocks.push(DecoderBlock::from_loader(&loader, &format!("{i}"))?);
+            decoder_blocks.push(DecoderBlock::from_loader(loader, &format!("{i}"))?);
         }
 
         let (fw, fb) = loader.conv1d_pair("6.conv")?;
@@ -96,21 +102,19 @@ impl Decoder12Hz {
         let fs_b = loader.get("5.beta")?.clone();
 
         log::info!(
-            "Decoder12Hz loaded from safetensors: {} tensors",
+            "Decoder12Hz loaded: {} tensors",
             loader.len(),
         );
 
-        let cap = config.ring_buffer_capacity * config.latent_dim;
-        let kv_rings = PreTransformer::new_kv_rings(&pt_cfg);
+        let kv_caches = PreTransformer::new_kv_caches(&pt_cfg);
 
         log::info!(
-            "Decoder12Hz loaded from safetensors: {} tensors, {} kv_rings",
+            "Decoder12Hz loaded: {} tensors, {} kv_caches",
             loader.len(),
-            kv_rings.len(),
+            kv_caches.len(),
         );
         log::info!(
-            "Decoder12Hz streaming step_buffer capacity = {} frames (O(SlidingWindow) per step via KvRing)",
-            config.ring_buffer_capacity,
+            "Decoder12Hz pure O(1) device-resident streaming step pipeline initialized"
         );
 
         Ok(Self {
@@ -126,9 +130,8 @@ impl Decoder12Hz {
             final_snake_a: fs_a,
             final_snake_b: fs_b,
             temperature: 1.0,
-            step_buffer: Vec::with_capacity(cap),
-            kv_rings,
-            output_offset: 0,
+            kv_caches,
+            position: 0,
         })
     }
 
@@ -139,7 +142,7 @@ impl Decoder12Hz {
     /// Decode a complete 12Hz token sequence with the same causal batch path
     /// used by the reference tokenizer decoder.
     pub fn decode_frames(&mut self, frames: &[[u16; 16]]) -> Result<Vec<f32>> {
-        let mut observer = NoopStageDumpObserver::default();
+        let mut observer = NoopStageDumpObserver;
         self.decode_frames_with_observer(frames, &mut observer)
     }
 
@@ -289,76 +292,37 @@ impl Decoder12Hz {
     }
 
     fn decode_chunk_inner(&mut self, tokens: &[u16]) -> Result<Vec<f32>> {
+        // 1. Codebook lookup (1 幀 16 tokens -> 512 embedding)
         let embeddings = self.codebook.decode(tokens)?;
-        let frame_embed = embeddings.sum(0)?;
+        let frame_embed = embeddings.sum(0)?.reshape((1, self.config.embedding_dim, 1))?;
 
-        // Step 1: pre_conv step — maintains ring buffer state across frames
-        let x = self.pre_conv.step_tensor(&frame_embed)?; // (1, latent_dim, 1)
+        // 2. Pre-Conv (512 -> 1024, 1 幀 -> 1 幀)
+        let mut h = self.pre_conv.step_tensor(&frame_embed)?;
 
-        // Step 2: PreTransformer step (streaming with KvRing — O(SlidingWindow) per step)
-        // The ring buffer caches post-RoPE K and raw V across frames, avoiding
-        // O(total_frames²) attention recomputation.
-        let position = self.step_buffer.len() / self.config.latent_dim;
-        let h = self
-            .pre_transformer
-            .step(&x, &mut self.kv_rings, position)?; // (1, latent_dim, 1)
+        // 3. Pre-Transformer (1024 -> 1024, 1 幀 -> 1 幀)
+        h = self.pre_transformer.step(&h, &mut self.kv_caches, self.position)?;
+        self.position += 1;
 
-        // Step 3: Append step output to streaming buffer.
-        // NOTE: We accumulate ALL frames because the pipeline is not frame-independent.
-        // ConvTranspose1d + dilated convs in downstream layers create inter-frame overlap
-        // that prevents simple buffer trimming. Trimming would change the output length,
-        // breaking the output_offset tail extraction.
-        // The KvRing eliminates O(total_frames²) in the PreTransformer; downstream layers
-        // remain O(total_frames) due to conv overlap constraints.
-        // Buffer stores frame-major: [f0_ch0..f0_chC-1, f1_ch0..f1_chC-1, ...]
-        let h_vec = h.squeeze(0)?.squeeze(2)?.to_vec1()?; // (latent_dim,)
-        self.step_buffer.extend(&h_vec);
-        let total_frames = self.step_buffer.len() / self.config.latent_dim;
-
-        // Step 4: Build accumulated tensor in channel-major order.
-        // Candle's C-order for shape (1, C, T) expects:
-        //   [ch0_t0, ch0_t1, ..., ch0_tT-1, ch1_t0, ..., ch1_tT-1, ...]
-        // Our buffer is frame-major:
-        //   [t0_ch0, t0_ch1, ..., t0_chC-1, t1_ch0, ..., t1_chC-1, ...]
-        // So we build with shape (1, T, C) and transpose to (1, C, T).
-        let latent_dim = self.config.latent_dim;
-        let h_tensor = Tensor::from_slice(
-            &self.step_buffer,
-            (1, total_frames, latent_dim),
-            &self.device,
-        )?
-        .transpose(1, 2)?
-        .contiguous()?;
-
-        // Step 5: Full pipeline on accumulated history
-        let mut h = h_tensor;
-        for ub in &self.upsample_blocks {
-            h = ub.forward(&h)?;
+        // 4. Upsample Blocks (1 幀 -> 2 幀 -> 4 幀)
+        for ub in &mut self.upsample_blocks {
+            h = ub.step(&h)?;
         }
 
-        let h = self.decoder_start.forward(&h)?;
+        // 5. Decoder Start (4 幀 -> 4 幀, 1024 -> 1536)
+        h = self.decoder_start.step_tensor(&h)?;
 
-        let mut h = h;
-        for db in &self.decoder_blocks {
-            h = db.forward(&h)?;
+        // 6. Decoder Blocks (4 幀 -> 32 幀 -> 160 幀 -> 640 幀 -> 1920 幀)
+        for db in &mut self.decoder_blocks {
+            h = db.step(&h)?;
         }
 
-        let h = snake_beta(&h, &self.final_snake_a, &self.final_snake_b)?;
+        // 7. Final SnakeBeta + Conv (1920 幀 -> 1920 PCM 取樣點)
+        h = snake_beta(&h, &self.final_snake_a, &self.final_snake_b)?;
+        h = self.final_conv.step_tensor(&h)?;
 
-        let h = self.final_conv.forward(&h)?; // (1, 1, total_output_samples)
-
-        // Step 5: Extract only the NEW audio samples for this frame
-        let all_output: Vec<f32> = h.squeeze(0)?.squeeze(0)?.to_vec1()?;
-        let prev_offset = self.output_offset;
-        self.output_offset = all_output.len();
-
-        if prev_offset == 0 {
-            // First frame: return everything (no baseline to subtract)
-            Ok(all_output)
-        } else {
-            // Subsequent frames: return only the newly produced tail
-            Ok(all_output[prev_offset..].to_vec())
-        }
+        // 8. 抽出當前 Chunk 的 1920 個 PCM 取樣點
+        let pcm: Vec<f32> = h.squeeze(0)?.squeeze(0)?.to_vec1()?;
+        Ok(pcm)
     }
 }
 
@@ -377,14 +341,21 @@ impl TtsDecoder for Decoder12Hz {
                 tokens.len()
             )));
         }
-        let mut observer = NoopStageDumpObserver::default();
+        let mut observer = NoopStageDumpObserver;
         self.decode_chunk_with_observer(tokens, &mut observer)
     }
 
     fn reset_state(&mut self) {
         self.pre_conv.reset_state();
-        PreTransformer::reset_kv_rings(&mut self.kv_rings);
-        self.step_buffer.clear();
-        self.output_offset = 0;
+        PreTransformer::reset_kv_caches(&mut self.kv_caches);
+        self.position = 0;
+        for ub in &mut self.upsample_blocks {
+            ub.reset_state();
+        }
+        self.decoder_start.reset_state();
+        for db in &mut self.decoder_blocks {
+            db.reset_state();
+        }
+        self.final_conv.reset_state();
     }
 }

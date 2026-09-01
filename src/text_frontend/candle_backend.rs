@@ -51,7 +51,7 @@ use crate::text_frontend::voice_clone::{
     NativeReferenceCodes, NativeVoiceClonePlan, VoiceCloneMode,
 };
 use crate::text_frontend::{SynthesisOptions, TextFrontend, TokenStream};
-use crate::{Error, Result};
+use crate::{Decoder12Hz, Error, Result, TtsDecoder};
 
 // ---------------------------------------------------------------------------
 // CandleLLM
@@ -111,7 +111,7 @@ impl CandleLLM {
         })?;
         let speech_tokenizer =
             NativeSpeechTokenizerEncoder::from_dir(&tokenizer_encoder_dir, &self.device)?;
-        let reference_codes = speech_tokenizer.encode_waveform(&waveform)?;
+        let reference_codes = speech_tokenizer.encode_waveform(waveform)?;
         let validated = NativeReferenceCodes::from_frames(reference_codes.frames().to_vec())?;
         Ok(validated.frames().to_vec())
     }
@@ -190,10 +190,10 @@ impl CandleLLM {
             tokenizer: Arc::new(tokenizer),
             metadata,
             talker: Arc::new(talker),
-            config,
+            config: config.clone(),
             generation_sampling,
             device: device.clone(),
-            parser: TokenParser::new(24000),
+            parser: TokenParser::with_eos(24000, config.codec_eos_token_id as u16),
         })
     }
 
@@ -226,10 +226,10 @@ impl CandleLLM {
             tokenizer: Arc::new(tokenizer),
             metadata,
             talker: Arc::new(talker),
-            config,
+            config: config.clone(),
             generation_sampling,
             device: device.clone(),
-            parser: TokenParser::new(24000),
+            parser: TokenParser::with_eos(24000, config.codec_eos_token_id as u16),
         })
     }
 
@@ -273,10 +273,10 @@ impl CandleLLM {
             tokenizer: Arc::new(tokenizer),
             metadata,
             talker: Arc::new(talker),
-            config,
+            config: config.clone(),
             generation_sampling,
             device: device.clone(),
-            parser: TokenParser::new(24000),
+            parser: TokenParser::with_eos(24000, config.codec_eos_token_id as u16),
         })
     }
 
@@ -288,6 +288,27 @@ impl CandleLLM {
     /// 取得底層 talker 的參考
     pub fn talker(&self) -> &TalkerForConditionalGeneration {
         &self.talker
+    }
+
+    /// 從已初始化的各元件直接建立 CandleLLM（供測試或外部組合使用）
+    pub fn from_components(
+        tokenizer: Arc<Tokenizer>,
+        metadata: ModelMetadata,
+        talker: Arc<TalkerForConditionalGeneration>,
+        config: TalkerConfig,
+        generation_sampling: GenerationSamplingConfig,
+        device: Device,
+    ) -> Self {
+        let parser = TokenParser::with_eos(24000, config.codec_eos_token_id as u16);
+        Self {
+            tokenizer,
+            metadata,
+            talker,
+            config,
+            generation_sampling,
+            device,
+            parser,
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -324,6 +345,182 @@ impl CandleLLM {
             .map_err(|e| Error::Config(format!("Tokenizer encode error: {e}")))?;
         let ids = encoding.get_ids();
         Ok(reference_text_tokens_from_prompt_ids(ids)?.to_vec())
+    }
+
+    /// 執行串流端到端語音合成
+    ///
+    /// 逐幀產生 16 個 Codebook Token 並立即調用 `decoder.decode_chunk` 進行神經聲學解碼，
+    /// 解碼產生的 PCM 片段即時透過 `on_pcm_chunk` 回呼傳遞給呼叫端。
+    ///
+    /// # 回傳值
+    /// 成功時回傳總共生成的音訊幀數。
+    pub fn synthesize_streaming<F>(
+        &self,
+        text: &str,
+        options: &SynthesisOptions,
+        decoder: &mut Decoder12Hz,
+        mut on_pcm_chunk: F,
+    ) -> Result<usize>
+    where
+        F: FnMut(Vec<f32>) -> Result<()>,
+    {
+        if text.is_empty() {
+            return Err(Error::Config("text cannot be empty".into()));
+        }
+
+        let requested_speaker = options
+            .speaker
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let requested_instruct = options
+            .instruct
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let requested_reference_audio = options
+            .reference_audio
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let requested_mode = self.metadata.runtime_generation_mode();
+        validate_generation_request(
+            &self.metadata,
+            requested_mode,
+            requested_speaker,
+            requested_instruct,
+            requested_reference_audio,
+        )?;
+
+        let native_voice_clone = NativeVoiceClonePlan::from_options(options)?;
+        let native_voice_clone_prompt = native_voice_clone
+            .as_ref()
+            .map(|plan| self.build_native_voice_clone_prompt(plan))
+            .transpose()?;
+
+        // ── 1. 文字 → token 序列 ──
+        let prompt_ids = self.build_prompt_ids(text)?;
+        let effective_speaker = requested_speaker;
+        let instruct_ids = requested_instruct
+            .filter(|s| !s.is_empty())
+            .map(|s| self.build_instruct_ids(s))
+            .transpose()?;
+        log::debug!(
+            "CandleLLM::synthesize_streaming text={:?} prompt_len={} instruct_len={} tokens={:?}",
+            text,
+            prompt_ids.len(),
+            instruct_ids.as_ref().map_or(0, Vec::len),
+            prompt_ids
+        );
+
+        // ── 2. 構建 talker 輸入 ──
+        let builder = InputBuilder::new(&self.talker, &self.device);
+        let (inputs_embeds, attention_mask, trailing_text_hidden, tts_pad_embed) =
+            if let Some(prompt) = &native_voice_clone_prompt {
+                builder
+                    .build_voice_clone(
+                        &prompt_ids,
+                        instruct_ids.as_deref(),
+                        &options.language,
+                        effective_speaker,
+                        &prompt.as_talker_prompt(),
+                    )
+                    .map_err(map_candle_err)?
+            } else {
+                builder
+                    .build(
+                        &prompt_ids,
+                        instruct_ids.as_deref(),
+                        &options.language,
+                        effective_speaker,
+                    )
+                    .map_err(map_candle_err)?
+            };
+
+        // ── 3. 自迴歸串流生成 ──
+        let max_new_tokens = options.max_new_tokens as usize;
+        let generation_sampling = self.generation_sampling;
+
+        let sampling_plan = resolve_effective_sampling_plan(
+            generation_sampling,
+            options.temperature,
+            options.top_k,
+            options.top_p,
+        )?;
+        let talker_sampling = sampling_plan.talker.options;
+        let subtalker_sampling = sampling_plan.subtalker.options;
+        let seed = options.seed.unwrap_or_else(|| {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            text.hash(&mut hasher);
+            options.language.hash(&mut hasher);
+            effective_speaker.hash(&mut hasher);
+            requested_instruct.hash(&mut hasher);
+            hasher.finish()
+        });
+
+        let mut frame_callback = |frame_tokens: &[u16; 16]| -> Result<()> {
+            let pcm_chunk = decoder.decode_chunk(frame_tokens)?;
+            on_pcm_chunk(pcm_chunk)?;
+            Ok(())
+        };
+
+        let generated_frames = if sampling_plan.uses_explicit_sampler() {
+            let mut sampler = Sampler::new(seed);
+            self.talker
+                .generate_sampled_streaming(
+                    &inputs_embeds,
+                    Some(&attention_mask),
+                    Some(&trailing_text_hidden),
+                    Some(&tts_pad_embed),
+                    max_new_tokens,
+                    &self.device,
+                    &mut sampler,
+                    talker_sampling,
+                    subtalker_sampling,
+                    sampling_plan.talker.do_sample,
+                    sampling_plan.subtalker.do_sample,
+                    &mut frame_callback,
+                )
+                .map_err(map_candle_err)?
+        } else {
+            self.talker
+                .generate_streaming(
+                    &inputs_embeds,
+                    Some(&attention_mask),
+                    Some(&trailing_text_hidden),
+                    Some(&tts_pad_embed),
+                    max_new_tokens,
+                    &self.device,
+                    &mut frame_callback,
+                )
+                .map_err(map_candle_err)?
+        };
+
+        log::info!(
+            "CandleLLM::synthesize_streaming generated {} frames",
+            generated_frames
+        );
+
+        if generated_frames >= max_new_tokens {
+            let zh_chars = text
+                .chars()
+                .filter(|&ch| ('\u{4e00}'..='\u{9fff}').contains(&ch))
+                .count();
+            let recommended = zh_chars.saturating_mul(4).max(16);
+            log::warn!(
+                "CandleLLM::synthesize_streaming reached max_new_tokens limit of {}. The output may be truncated!",
+                max_new_tokens
+            );
+            if zh_chars > 0 {
+                log::warn!(
+                    "For this Chinese text ({} chars), at least {} max_new_tokens are recommended to prevent truncation.",
+                    zh_chars,
+                    recommended
+                );
+            }
+        }
+
+        Ok(generated_frames)
     }
 }
 
@@ -387,7 +584,6 @@ impl TextFrontend for CandleLLM {
         let prompt_ids = self.build_prompt_ids(text)?;
         let effective_speaker = requested_speaker;
         let instruct_ids = requested_instruct
-            .as_deref()
             .filter(|s| !s.is_empty())
             .map(|s| self.build_instruct_ids(s))
             .transpose()?;
