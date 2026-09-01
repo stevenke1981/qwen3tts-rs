@@ -473,6 +473,13 @@ fn run_synthesis_inner(
                     max_new_tokens: params.max_new_tokens,
                 };
 
+                tx.send(WorkerEvent::Status(format!(
+                    "⚡ GPU (CUDA) 正在推理生成語音 Token（依字數上限 {} 幀，約 {:.1} 秒語音）…",
+                    params.max_new_tokens,
+                    params.max_new_tokens as f64 / 12.0
+                )))
+                .ok();
+
                 llm.synthesize(&params.text, &options)
                     .map_err(|e| format!("Candle LLM Token 生成失敗：{e}"))?
             }
@@ -540,8 +547,10 @@ fn run_synthesis_inner(
     }
 
     // Step 4: 解碼
-    tx.send(WorkerEvent::Status("解碼 Token → 音訊…".into()))
-        .ok();
+    tx.send(WorkerEvent::Status(format!(
+        "⚡ GPU (CUDA) 正在將 {num_frames} 幀 Codec 解碼為音訊波形…",
+    )))
+    .ok();
     let sample_rate = 24000u32;
     let all_samples = decoder
         .decode_frames(&stream.frames)
@@ -674,6 +683,21 @@ pub fn default_models_dir() -> PathBuf {
     PathBuf::from("models")
 }
 
+/// 依據輸入文字長度自動估算適當的音訊 Token 上限（避免跑滿 4096 幀佔用 100% GPU 與爆顯存）
+pub fn estimate_max_tokens_for_text(text: &str) -> u32 {
+    let zh_count = text
+        .chars()
+        .filter(|&c| ('\u{4e00}'..='\u{9fff}').contains(&c))
+        .count();
+    let total_count = text.chars().filter(|c| !c.is_whitespace()).count();
+    let other_count = total_count.saturating_sub(zh_count);
+
+    // 中文 1 字約 3.5~4 幀，英文/標點約 1.5 幀，再加上 80 幀安全餘量（約 6 秒的標點停頓與尾音）
+    let est = (zh_count * 4 + other_count * 2 + 80) as u32;
+    // 下限 150 幀（約 12 秒），上限 2048 幀（約 170 秒）
+    est.clamp(150, 2048)
+}
+
 impl Default for TtsGuiApp {
     fn default() -> Self {
         Self {
@@ -688,7 +712,7 @@ impl Default for TtsGuiApp {
             speed: 1.0,
             instruct: String::new(),
             output_path: "output.wav".to_string(),
-            max_new_tokens: "4096".to_string(),
+            max_new_tokens: "auto".to_string(),
             seed: String::new(),
             reference_audio: String::new(),
             reference_text: String::new(),
@@ -879,7 +903,16 @@ impl TtsGuiApp {
                     }
                 }
             },
-            max_new_tokens: self.max_new_tokens.parse().unwrap_or(4096),
+            max_new_tokens: if self.max_new_tokens.trim().is_empty()
+                || self.max_new_tokens.trim().eq_ignore_ascii_case("auto")
+            {
+                estimate_max_tokens_for_text(&self.text)
+            } else {
+                self.max_new_tokens
+                    .trim()
+                    .parse()
+                    .unwrap_or_else(|_| estimate_max_tokens_for_text(&self.text))
+            },
             auto_download: self.auto_download,
             hf_mirror: self.effective_hf_endpoint(),
         };
@@ -1330,13 +1363,23 @@ impl eframe::App for TtsGuiApp {
 
                                             // Max new tokens
                                             ui.label("最大 Token 數：");
-                                            ui.add(
-                                                egui::TextEdit::singleline(
-                                                    &mut self.max_new_tokens,
-                                                )
-                                                .desired_width(120.0)
-                                                .hint_text("4096"),
-                                            );
+                                            ui.horizontal(|ui| {
+                                                ui.add(
+                                                    egui::TextEdit::singleline(
+                                                        &mut self.max_new_tokens,
+                                                    )
+                                                    .desired_width(90.0)
+                                                    .hint_text("auto"),
+                                                );
+                                                let est = estimate_max_tokens_for_text(&self.text);
+                                                ui.label(
+                                                    RichText::new(format!(
+                                                        "（目前預估約 {est} 幀，填 auto 即依字數自適應）"
+                                                    ))
+                                                    .size(11.5)
+                                                    .color(Color32::from_rgb(180, 180, 180)),
+                                                );
+                                            });
                                             ui.end_row();
 
                                             // Seed
