@@ -42,8 +42,23 @@ fn test_is_tokenizer_ready_callable() {
 
 #[test]
 fn test_locate_model_snapshot_nonexistent() {
-    let snapshot = locate_model_snapshot("Qwen/NonExistent-Model-XYZ");
+    let snapshot = locate_model_snapshot("Qwen/NonExistent-Model-XYZ", None);
     assert!(snapshot.is_none());
+}
+
+#[test]
+fn test_locate_model_in_dir() {
+    let temp_dir = std::env::temp_dir().join("qwen3tts_test_models");
+    let model_subdir = temp_dir.join("Qwen3-TTS-12Hz-0.6B-Base");
+    std::fs::create_dir_all(&model_subdir).unwrap();
+    let fake_weight = model_subdir.join("model.safetensors");
+    std::fs::write(&fake_weight, b"fake weight").unwrap();
+
+    let found = qwen3tts::downloader::locate_model_in_dir("Qwen/Qwen3-TTS-12Hz-0.6B-Base", &temp_dir);
+    assert!(found.is_some(), "應能在 models 資料夾下找到模型子目錄");
+    assert_eq!(found.unwrap(), model_subdir);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[test]
@@ -53,9 +68,12 @@ fn test_endpoints_constants() {
 }
 
 #[test]
-fn test_gui_app_default_auto_download_enabled() {
+fn test_gui_app_default_models_dir() {
+    let dir = qwen3tts::gui::default_models_dir();
+    assert!(!dir.as_os_str().is_empty(), "預設 models 目錄不應為空");
+    println!("預設 models 目錄: {}", dir.display());
+
     let app = TtsGuiApp::default();
-    // 驗證預設狀態：開箱即用自動下載已開啟
     let _ = app;
 }
 
@@ -65,7 +83,8 @@ fn test_synthesis_params_auto_download_fields() {
         text: "測試自動下載設定".into(),
         model_id: "Qwen/Qwen3-TTS-12Hz-0.6B-Base".into(),
         model_dir: None,
-        backend: BackendKind::Python,
+        models_base_dir: std::path::PathBuf::from("models"),
+        backend: BackendKind::Candle,
         language: "auto".into(),
         speaker: None,
         instruct: None,
@@ -79,6 +98,8 @@ fn test_synthesis_params_auto_download_fields() {
         hf_mirror: Some(HF_MIRROR_ENDPOINT.to_string()),
     };
 
+    assert_eq!(params.models_base_dir, std::path::PathBuf::from("models"));
+    assert_eq!(params.backend, BackendKind::Candle);
     assert!(params.auto_download);
     assert_eq!(params.hf_mirror.as_deref(), Some("https://hf-mirror.com"));
 }

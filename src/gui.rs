@@ -78,7 +78,7 @@ impl BackendKind {
     pub const ALL: &'static [Self] = {
         #[cfg(feature = "candle-llm")]
         {
-            &[Self::Python, Self::Candle]
+            &[Self::Candle, Self::Python]
         }
         #[cfg(not(feature = "candle-llm"))]
         {
@@ -116,6 +116,7 @@ pub struct SynthesisParams {
     pub text: String,
     pub model_id: String,
     pub model_dir: Option<PathBuf>,
+    pub models_base_dir: PathBuf,
     pub backend: BackendKind,
     pub language: String,
     pub speaker: Option<String>,
@@ -176,53 +177,64 @@ mod worker {
     use super::*;
     use std::sync::mpsc::Sender;
 
-    /// 尋找 HuggingFace 快取中的模型 snapshot
+    /// 尋找模型 snapshot（優先在指定的 models_base_dir 或 HF 快取中找）
     #[cfg(feature = "candle-llm")]
-    pub fn locate_model_snapshot(model_id: &str) -> Option<PathBuf> {
-        if let Ok(env_dir) = std::env::var("QWEN3_TTS_MODEL_DIR") {
-            let p = PathBuf::from(env_dir);
-            if p.join("model.safetensors").exists() {
-                return Some(p);
-            }
-        }
-        locate_hf_snapshot(model_id)
+    pub fn locate_model_snapshot(
+        model_id: &str,
+        models_base_dir: Option<&Path>,
+    ) -> Option<PathBuf> {
+        crate::downloader::locate_model_snapshot(model_id, models_base_dir)
     }
 
-    fn locate_hf_snapshot(model_id: &str) -> Option<PathBuf> {
-        let home = std::env::var("USERPROFILE")
-            .or_else(|_| std::env::var("HOME"))
-            .ok()
-            .map(PathBuf::from)?;
-        let hub = home.join(".cache").join("huggingface").join("hub");
-        let repo_dir = hub.join(format!("models--{}", model_id.replace('/', "--")));
-        let snapshots = repo_dir.join("snapshots");
-        let Ok(entries) = std::fs::read_dir(&snapshots) else {
-            return None;
-        };
-        for entry in entries.flatten() {
-            let candidate = entry.path().join("model.safetensors");
-            if candidate.exists() {
-                return Some(entry.path());
-            }
-        }
-        None
-    }
-
-    pub fn find_tokenizer_json(model_id: &str, model_dir: &Path) -> Option<PathBuf> {
+    pub fn find_tokenizer_json(
+        model_id: &str,
+        model_dir: &Path,
+        models_base_dir: Option<&Path>,
+    ) -> Option<PathBuf> {
         let local = model_dir.join("tokenizer.json");
         if local.exists() {
             return Some(local);
         }
         let snapshots = model_dir.join("snapshots");
         if snapshots.is_dir() {
-            for entry in std::fs::read_dir(snapshots).ok()?.flatten() {
-                let path = entry.path().join("tokenizer.json");
-                if path.exists() {
-                    return Some(path);
+            if let Ok(entries) = std::fs::read_dir(snapshots) {
+                for entry in entries.flatten() {
+                    let path = entry.path().join("tokenizer.json");
+                    if path.exists() {
+                        return Some(path);
+                    }
                 }
             }
         }
-        for fallback in ["models/tokenizer_1.7b.json", "models/tokenizer.json"] {
+        // 嘗試在自訂 models_base_dir 下找
+        if let Some(base) = models_base_dir {
+            for candidate in [
+                base.join("tokenizer.json"),
+                base.join("tokenizer_1.7b.json"),
+                base.join("models").join("tokenizer.json"),
+            ] {
+                if candidate.exists() {
+                    return Some(candidate);
+                }
+            }
+        }
+        // 嘗試在執行檔同層與上層目錄尋找
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(exe_dir) = exe.parent() {
+                for candidate in [
+                    exe_dir.join("models").join("tokenizer.json"),
+                    exe_dir.join("models").join("tokenizer_1.7b.json"),
+                    exe_dir.join("tokenizer.json"),
+                    exe_dir.join("..").join("models").join("tokenizer.json"),
+                    exe_dir.join("..").join("..").join("models").join("tokenizer.json"),
+                ] {
+                    if candidate.exists() {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+        for fallback in ["models/tokenizer_1.7b.json", "models/tokenizer.json", "tokenizer.json"] {
             let path = PathBuf::from(fallback);
             if path.exists() {
                 return Some(path);
@@ -241,19 +253,47 @@ mod worker {
             ]
         };
         for base_id in base_ids {
-            if let Some(base_dir) = locate_hf_snapshot(base_id) {
+            if let Some(base_dir) = crate::downloader::locate_model_snapshot(base_id, models_base_dir) {
                 let path = base_dir.join("tokenizer.json");
                 if path.exists() {
                     return Some(path);
                 }
             }
         }
+        // 若找不到但存在 vocab.json，自動嘗試用 build_tokenizer.py 產生
+        let vocab_path = model_dir.join("vocab.json");
+        if vocab_path.exists() {
+            let out_tok = model_dir.join("tokenizer.json");
+            let _ = std::process::Command::new("python")
+                .arg("tools/build_tokenizer.py")
+                .arg("--model-dir")
+                .arg(model_dir)
+                .arg("--output")
+                .arg(&out_tok)
+                .output();
+            if out_tok.exists() {
+                return Some(out_tok);
+            }
+        }
         None
     }
 
-    pub fn ensure_decoder_weights(tx: &Sender<WorkerEvent>) -> Result<PathBuf, String> {
+    pub fn ensure_decoder_weights(
+        models_base_dir: Option<&Path>,
+        tx: &Sender<WorkerEvent>,
+    ) -> Result<PathBuf, String> {
         tx.send(WorkerEvent::Status("檢查 Tokenizer 解碼器權重…".into()))
             .ok();
+        if let Some(base) = models_base_dir {
+            for sub in ["tokenizer", "tokenizer-q8"] {
+                let candidate = base.join(sub);
+                if candidate.join("codebook.safetensors").exists()
+                    && candidate.join("pre_transformer.safetensors").exists()
+                {
+                    return Ok(candidate);
+                }
+            }
+        }
         crate::paths::find_existing_tokenizer_weight_dir().map_err(|e| {
             format!(
                 "找不到 Tokenizer 解碼器權重：{e}\n\
@@ -357,18 +397,20 @@ fn run_synthesis_inner(
                 let dir = if let Some(d) = &params.model_dir {
                     d.clone()
                 } else {
-                    match worker::locate_model_snapshot(&params.model_id) {
+                    match worker::locate_model_snapshot(&params.model_id, Some(&params.models_base_dir)) {
                         Some(d) => d,
                         None => {
                             if params.auto_download {
                                 tx.send(WorkerEvent::Status(format!(
-                                    "📥 本地找不到模型 {} 快照，自動開始下載…",
-                                    params.model_id
+                                    "📥 本地找不到模型 {}，自動開始下載至 {}…",
+                                    params.model_id,
+                                    params.models_base_dir.display()
                                 )))
                                 .ok();
                                 let tx_c = tx.clone();
                                 crate::downloader::download_model(
                                     &params.model_id,
+                                    Some(&params.models_base_dir),
                                     params.hf_mirror.as_deref(),
                                     Some(cancel),
                                     move |msg| {
@@ -378,7 +420,7 @@ fn run_synthesis_inner(
                                 .map_err(|e| format!("自動下載模型失敗：{e}"))?
                             } else {
                                 return Err(format!(
-                                    "找不到模型 {} 的本地快取。請勾選「當模型缺失時自動下載」，或點擊「📥 下載模型」按鈕進行下載。",
+                                    "找不到模型 {}。請勾選「當模型缺失時自動下載」，或點擊「📥 下載模型」按鈕進行下載。",
                                     params.model_id
                                 ));
                             }
@@ -391,10 +433,14 @@ fn run_synthesis_inner(
                     return Err(format!("模型 safetensors 不存在：{}", sf_path.display()));
                 }
 
-                let tok_path = worker::find_tokenizer_json(&params.model_id, &dir)
-                    .ok_or_else(|| {
-                        "找不到 tokenizer.json。請先使用 convert_tokenizer.exe 或 tools/build_tokenizer.py 產生。".to_string()
-                    })?;
+                let tok_path = worker::find_tokenizer_json(
+                    &params.model_id,
+                    &dir,
+                    Some(&params.models_base_dir),
+                )
+                .ok_or_else(|| {
+                    "找不到 tokenizer.json。請先使用 convert_tokenizer.exe 或 tools/build_tokenizer.py 產生。".to_string()
+                })?;
 
                 tx.send(WorkerEvent::Status(format!(
                     "載入 Candle LLM ({})…",
@@ -445,16 +491,20 @@ fn run_synthesis_inner(
     // Step 3: 載入解碼器權重
     tx.send(WorkerEvent::Status("載入 Tokenizer 解碼器權重…".into()))
         .ok();
-    let weight_dir = match worker::ensure_decoder_weights(tx) {
+    let weight_dir = match worker::ensure_decoder_weights(Some(&params.models_base_dir), tx) {
         Ok(dir) => dir,
         Err(err) => {
             if params.auto_download {
                 tx.send(WorkerEvent::Status(
-                    "📥 本地找不到 Tokenizer 解碼器權重，自動下載 Qwen/Qwen3-TTS-Tokenizer-12Hz 並轉換…".into()
+                    format!(
+                        "📥 本地找不到 Tokenizer 解碼器權重，自動下載至 {} 並轉換…",
+                        params.models_base_dir.display()
+                    ),
                 ))
                 .ok();
                 let tx_c = tx.clone();
                 crate::downloader::ensure_tokenizer_weights(
+                    Some(&params.models_base_dir),
                     params.hf_mirror.as_deref(),
                     Some(cancel),
                     move |msg| {
@@ -580,6 +630,7 @@ pub struct TtsGuiApp {
     reference_text: String,
 
     // === 模型下載設定 ===
+    models_base_dir: String,
     auto_download: bool,
     hf_mirror_index: usize,
     hf_custom_mirror: String,
@@ -597,12 +648,33 @@ pub struct TtsGuiApp {
     last_result: Option<SynthesisResult>,
 }
 
+/// 取得 models 預設存放路徑（預設在 qwen3tts-gui.exe 執行檔同層或專案目錄下的 models 資料夾）
+pub fn default_models_dir() -> PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            // 若在 target/release 或 target/debug，找專案根目錄的 models
+            if (parent.ends_with("release") || parent.ends_with("debug"))
+                && parent
+                    .parent()
+                    .and_then(|p| p.parent())
+                    .map(|p| p.join("models").exists())
+                    .unwrap_or(false)
+            {
+                return parent.parent().unwrap().parent().unwrap().join("models");
+            }
+            return parent.join("models");
+        }
+    }
+    PathBuf::from("models")
+}
+
 impl Default for TtsGuiApp {
     fn default() -> Self {
         Self {
             text: String::new(),
             model_id: MODEL_ID_CANDIDATES[0].to_string(),
             model_dir: String::new(),
+            models_base_dir: default_models_dir().to_string_lossy().to_string(),
             backend: BackendKind::default(),
             language: "auto".to_string(),
             language_auto: true,
@@ -665,6 +737,11 @@ impl TtsGuiApp {
         let (tx, rx) = mpsc::channel::<WorkerEvent>();
         let model_id = self.model_id.clone();
         let endpoint = self.effective_hf_endpoint();
+        let models_base_dir = if self.models_base_dir.trim().is_empty() {
+            default_models_dir()
+        } else {
+            PathBuf::from(self.models_base_dir.trim())
+        };
 
         self.is_processing = true;
         self.is_downloading = true;
@@ -672,11 +749,13 @@ impl TtsGuiApp {
         self.event_rx = Some(rx);
 
         let cancel = self.cancel_flag.clone();
+        let download_dir = models_base_dir.clone();
 
         thread::spawn(move || {
             let tx_c = tx.clone();
             let res = crate::downloader::ensure_synthesis_resources(
                 &model_id,
+                Some(&download_dir),
                 endpoint.as_deref(),
                 Some(&cancel),
                 move |msg| {
@@ -694,7 +773,11 @@ impl TtsGuiApp {
         });
 
         self.status_log.push((
-            format!("▶ 開始手動下載模型與資源 ({})…", self.model_id),
+            format!(
+                "▶ 開始下載模型與資源 ({}) 至 {}…",
+                self.model_id,
+                models_base_dir.display()
+            ),
             Color32::WHITE,
         ));
     }
@@ -716,6 +799,11 @@ impl TtsGuiApp {
                 None
             } else {
                 Some(PathBuf::from(self.model_dir.trim()))
+            },
+            models_base_dir: if self.models_base_dir.trim().is_empty() {
+                default_models_dir()
+            } else {
+                PathBuf::from(self.models_base_dir.trim())
             },
             backend: self.backend,
             language: if self.language_auto {
@@ -959,14 +1047,14 @@ impl eframe::App for TtsGuiApp {
                                                     }
                                                 });
 
-                                            let custom_dir = if self.model_dir.trim().is_empty() {
+                                            let base_dir = if self.models_base_dir.trim().is_empty() {
                                                 None
                                             } else {
-                                                Some(Path::new(self.model_dir.trim()))
+                                                Some(Path::new(self.models_base_dir.trim()))
                                             };
                                             let is_ready = crate::downloader::is_model_ready(
                                                 &self.model_id,
-                                                custom_dir,
+                                                base_dir,
                                             );
 
                                             if is_ready {
@@ -1004,7 +1092,17 @@ impl eframe::App for TtsGuiApp {
                                                 "當模型缺失時自動下載",
                                             );
                                             ui.add_space(8.0);
-                                            if crate::downloader::is_tokenizer_ready() {
+                                            let tok_ready = crate::downloader::is_tokenizer_ready()
+                                                || (!self.models_base_dir.trim().is_empty()
+                                                    && (Path::new(self.models_base_dir.trim())
+                                                        .join("tokenizer")
+                                                        .join("codebook.safetensors")
+                                                        .exists()
+                                                        || Path::new(self.models_base_dir.trim())
+                                                            .join("tokenizer-q8")
+                                                            .join("codebook.safetensors")
+                                                            .exists()));
+                                            if tok_ready {
                                                 ui.label(
                                                     RichText::new("解碼器: 🟢")
                                                         .size(11.0)
@@ -1018,6 +1116,30 @@ impl eframe::App for TtsGuiApp {
                                                 );
                                             }
                                         });
+                                    });
+                                    ui.end_row();
+
+                                    // Models storage directory
+                                    ui.label("模型存放目錄：");
+                                    ui.horizontal(|ui| {
+                                        ui.add(
+                                            egui::TextEdit::singleline(&mut self.models_base_dir)
+                                                .desired_width(260.0)
+                                                .hint_text("預設：專案或執行檔同層 models 資料夾"),
+                                        );
+                                        if ui.button("瀏覽…").clicked() {
+                                            if let Some(path) = rfd::FileDialog::new()
+                                                .set_title("選擇 models 存放目錄")
+                                                .pick_folder()
+                                            {
+                                                self.models_base_dir =
+                                                    path.to_string_lossy().to_string();
+                                            }
+                                        }
+                                        if ui.button("重設預設").clicked() {
+                                            self.models_base_dir =
+                                                default_models_dir().to_string_lossy().to_string();
+                                        }
                                     });
                                     ui.end_row();
 
@@ -1164,14 +1286,14 @@ impl eframe::App for TtsGuiApp {
                                             // Model dir (Candle only)
                                             #[cfg(feature = "candle-llm")]
                                             {
-                                                ui.label("模型目錄：");
+                                                ui.label("指定快照目錄 (覆寫)：");
                                                 ui.horizontal(|ui| {
                                                     ui.add(
                                                         egui::TextEdit::singleline(
                                                             &mut self.model_dir,
                                                         )
                                                         .desired_width(280.0)
-                                                        .hint_text("留空 = 自動從 HF 快取找"),
+                                                        .hint_text("留空 = 自動從模型存放目錄或快取尋找"),
                                                     );
                                                     if ui.button("選擇…").clicked() {
                                                         if let Some(path) = rfd::FileDialog::new()

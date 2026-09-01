@@ -151,12 +151,64 @@ pub fn hf_hub_cache_dir() -> Option<PathBuf> {
     Some(home.join(".cache").join("huggingface").join("hub"))
 }
 
-/// 尋找本地已存在的模型快照目錄（含環境變數檢查）
-pub fn locate_model_snapshot(model_id: &str) -> Option<PathBuf> {
+/// 在指定目錄中搜尋模型檔案（支援直接存放、repo_name 資料夾或 HF models-- 快取結構）
+pub fn locate_model_in_dir(model_id: &str, base_dir: &Path) -> Option<PathBuf> {
+    if !base_dir.exists() {
+        return None;
+    }
+    // 1. base_dir 本身直接包含 model.safetensors
+    if base_dir.join("model.safetensors").exists() {
+        return Some(base_dir.to_path_buf());
+    }
+    let repo_name = model_id.split('/').last().unwrap_or(model_id);
+    // 2. base_dir / <repo_name> (例如 models/Qwen3-TTS-12Hz-0.6B-Base)
+    let candidate1 = base_dir.join(repo_name);
+    if candidate1.join("model.safetensors").exists() {
+        return Some(candidate1);
+    }
+    // 3. base_dir / <model_id> (例如 models/Qwen/Qwen3-TTS-12Hz-0.6B-Base)
+    let candidate2 = base_dir.join(model_id);
+    if candidate2.join("model.safetensors").exists() {
+        return Some(candidate2);
+    }
+    // 4. base_dir / models--<owner>--<repo> (HF Hub cache 結構)
+    let candidate3 = base_dir.join(format!("models--{}", model_id.replace('/', "--")));
+    if candidate3.exists() {
+        let snapshots = candidate3.join("snapshots");
+        if let Ok(entries) = std::fs::read_dir(&snapshots) {
+            for entry in entries.flatten() {
+                if entry.path().join("model.safetensors").exists() {
+                    return Some(entry.path());
+                }
+            }
+        }
+    }
+    // 5. 掃描 base_dir 下所有第一層子目錄
+    if let Ok(entries) = std::fs::read_dir(base_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && path.join("model.safetensors").exists() {
+                let dir_name = path.file_name().unwrap_or_default().to_string_lossy();
+                if dir_name.contains(repo_name) || repo_name.contains(&*dir_name) {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// 尋找本地已存在的模型快照目錄（依序搜尋自訂 models 目錄、環境變數、HF 快取）
+pub fn locate_model_snapshot(model_id: &str, models_dir: Option<&Path>) -> Option<PathBuf> {
+    if let Some(dir) = models_dir {
+        if let Some(found) = locate_model_in_dir(model_id, dir) {
+            return Some(found);
+        }
+    }
     if let Ok(env_dir) = std::env::var("QWEN3_TTS_MODEL_DIR") {
         let p = PathBuf::from(env_dir);
-        if p.join("model.safetensors").exists() {
-            return Some(p);
+        if let Some(found) = locate_model_in_dir(model_id, &p) {
+            return Some(found);
         }
     }
     locate_hf_snapshot(model_id)
@@ -179,12 +231,7 @@ pub fn locate_hf_snapshot(model_id: &str) -> Option<PathBuf> {
 
 /// 判斷指定模型是否已經就緒（快取中或自訂路徑中存在 model.safetensors）
 pub fn is_model_ready(model_id: &str, custom_dir: Option<&Path>) -> bool {
-    if let Some(dir) = custom_dir {
-        if dir.join("model.safetensors").exists() {
-            return true;
-        }
-    }
-    locate_model_snapshot(model_id).is_some()
+    locate_model_snapshot(model_id, custom_dir).is_some()
 }
 
 /// 判斷 Tokenizer 解碼器權重是否已經就緒
@@ -192,9 +239,10 @@ pub fn is_tokenizer_ready() -> bool {
     crate::paths::find_existing_tokenizer_weight_dir().is_ok()
 }
 
-/// 下載 HuggingFace 儲存庫
+/// 下載 HuggingFace 儲存庫（支援指定目標本地目錄）
 pub fn download_repo(
     repo_id: &str,
+    target_dir: Option<&Path>,
     endpoint: Option<&str>,
     cancel: Option<&AtomicBool>,
     on_log: Arc<dyn Fn(&str) + Send + Sync>,
@@ -205,6 +253,9 @@ pub fn download_repo(
             on_log(&format!("使用下載工具: hf ({})", path.display()));
             let mut c = Command::new(path);
             c.arg("download").arg(repo_id);
+            if let Some(target) = target_dir {
+                c.arg("--local-dir").arg(target);
+            }
             c
         }
         DownloadTool::Python(path) => {
@@ -213,9 +264,16 @@ pub fn download_repo(
                 path.display()
             ));
             let mut c = Command::new(path);
-            let script = format!(
-                "from huggingface_hub import snapshot_download; print('正在下載', '{repo_id}'); snapshot_download('{repo_id}'); print('下載完成')"
-            );
+            let script = if let Some(target) = target_dir {
+                let target_str = target.to_string_lossy().replace('\\', "/");
+                format!(
+                    "from huggingface_hub import snapshot_download; print('正在下載', '{repo_id}', '至', r'{target_str}'); snapshot_download('{repo_id}', local_dir=r'{target_str}'); print('下載完成')"
+                )
+            } else {
+                format!(
+                    "from huggingface_hub import snapshot_download; print('正在下載', '{repo_id}'); snapshot_download('{repo_id}'); print('下載完成')"
+                )
+            };
             c.arg("-u").arg("-c").arg(script);
             c
         }
@@ -223,6 +281,9 @@ pub fn download_repo(
             on_log(&format!("使用下載工具: huggingface-cli ({})", path.display()));
             let mut c = Command::new(path);
             c.arg("download").arg(repo_id);
+            if let Some(target) = target_dir {
+                c.arg("--local-dir").arg(target);
+            }
             c
         }
     };
@@ -316,9 +377,10 @@ pub fn download_repo(
     }
 }
 
-/// 下載指定模型並回傳其快照目錄路徑
+/// 下載指定模型並回傳其快照目錄路徑（支援儲存至自訂 models 目錄）
 pub fn download_model<F>(
     model_id: &str,
+    models_base_dir: Option<&Path>,
     endpoint: Option<&str>,
     cancel: Option<&AtomicBool>,
     on_log: F,
@@ -327,17 +389,39 @@ where
     F: Fn(&str) + Send + Sync + 'static,
 {
     let on_log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(on_log);
-    if let Some(snapshot) = locate_model_snapshot(model_id) {
+    if let Some(snapshot) = locate_model_snapshot(model_id, models_base_dir) {
         on_log(&format!("模型 {model_id} 已存在於本地：{}", snapshot.display()));
         return Ok(snapshot);
     }
 
-    on_log(&format!("開始下載模型：{model_id}…"));
-    download_repo(model_id, endpoint, cancel, on_log.clone())?;
+    let target_dir = models_base_dir.map(|base| {
+        let repo_name = model_id.split('/').last().unwrap_or(model_id);
+        base.join(repo_name)
+    });
 
-    if let Some(snapshot) = locate_model_snapshot(model_id) {
+    if let Some(ref target) = target_dir {
+        on_log(&format!("開始下載模型：{model_id} 至目錄 {}…", target.display()));
+        std::fs::create_dir_all(target)
+            .map_err(|e| Error::Config(format!("無法建立模型儲存目錄 {}: {e}", target.display())))?;
+    } else {
+        on_log(&format!("開始下載模型：{model_id}…"));
+    }
+
+    download_repo(model_id, target_dir.as_deref(), endpoint, cancel, on_log.clone())?;
+
+    if let Some(snapshot) = locate_model_snapshot(model_id, models_base_dir) {
         on_log(&format!("✅ 模型下載並驗證完成：{}", snapshot.display()));
         Ok(snapshot)
+    } else if let Some(target) = target_dir {
+        if target.join("model.safetensors").exists() {
+            on_log(&format!("✅ 模型下載並驗證完成：{}", target.display()));
+            Ok(target)
+        } else {
+            Err(Error::Config(format!(
+                "模型 {model_id} 下載完成，但在 {} 中未能定位到 model.safetensors。",
+                target.display()
+            )))
+        }
     } else {
         Err(Error::Config(format!(
             "模型 {model_id} 下載完成，但未能於快取中定位到 model.safetensors。"
@@ -345,8 +429,9 @@ where
     }
 }
 
-/// 確保 Tokenizer 解碼器權重已下載並轉換為 Candle safetensors
+/// 確保 Tokenizer 解碼器權重已下載並轉換為 Candle safetensors（支援存放在自訂 models 目錄）
 pub fn ensure_tokenizer_weights<F>(
+    models_base_dir: Option<&Path>,
     endpoint: Option<&str>,
     cancel: Option<&AtomicBool>,
     on_log: F,
@@ -356,18 +441,35 @@ where
 {
     let on_log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(on_log);
 
-    // 1. 如果已存在有效的 Rust 解碼器權重，直接返回
+    // 1. 如果自訂 models_base_dir 下已有 tokenizer 或 tokenizer-q8 權重
+    if let Some(base) = models_base_dir {
+        for sub in ["tokenizer", "tokenizer-q8"] {
+            let candidate = base.join(sub);
+            if candidate.join("codebook.safetensors").exists()
+                && candidate.join("pre_transformer.safetensors").exists()
+            {
+                on_log(&format!("Tokenizer 解碼器權重已就緒：{}", candidate.display()));
+                return Ok(candidate);
+            }
+        }
+    }
+
+    // 2. 如果預設 weights 目錄已存在有效的 Rust 解碼器權重，直接返回
     if let Ok(dir) = crate::paths::find_existing_tokenizer_weight_dir() {
         on_log(&format!("Tokenizer 解碼器權重已就緒：{}", dir.display()));
         return Ok(dir);
     }
 
-    // 2. 檢查 HuggingFace snapshot 是否存在
-    let mut hf_snapshot = locate_hf_snapshot(TOKENIZER_MODEL_ID);
+    // 3. 檢查 snapshot 是否存在
+    let mut hf_snapshot = locate_model_snapshot(TOKENIZER_MODEL_ID, models_base_dir);
     if hf_snapshot.is_none() {
         on_log("本地未找到 Tokenizer 原始權重，開始下載 Qwen/Qwen3-TTS-Tokenizer-12Hz…");
-        download_repo(TOKENIZER_MODEL_ID, endpoint, cancel, on_log.clone())?;
-        hf_snapshot = locate_hf_snapshot(TOKENIZER_MODEL_ID);
+        let target_tok = models_base_dir.map(|b| b.join("Qwen3-TTS-Tokenizer-12Hz"));
+        if let Some(ref t) = target_tok {
+            let _ = std::fs::create_dir_all(t);
+        }
+        download_repo(TOKENIZER_MODEL_ID, target_tok.as_deref(), endpoint, cancel, on_log.clone())?;
+        hf_snapshot = locate_model_snapshot(TOKENIZER_MODEL_ID, models_base_dir);
     }
 
     let hf_snapshot = hf_snapshot.ok_or_else(|| {
@@ -379,9 +481,13 @@ where
         hf_snapshot.display()
     ));
 
-    // 3. 轉換權重至 weights/tokenizer 或 cache
-    let output_dir = crate::paths::default_tokenizer_cache_dir()
-        .unwrap_or_else(|| PathBuf::from("weights").join("tokenizer"));
+    // 4. 轉換權重至 models/tokenizer 或 weights/tokenizer
+    let output_dir = if let Some(base) = models_base_dir {
+        base.join("tokenizer")
+    } else {
+        crate::paths::default_tokenizer_cache_dir()
+            .unwrap_or_else(|| PathBuf::from("weights").join("tokenizer"))
+    };
 
     let options = ConverterOptions {
         input_dir: Some(hf_snapshot),
@@ -401,6 +507,7 @@ where
 /// 同時確保模型與 Tokenizer 權重皆已就緒
 pub fn ensure_synthesis_resources<F>(
     model_id: &str,
+    models_base_dir: Option<&Path>,
     endpoint: Option<&str>,
     cancel: Option<&AtomicBool>,
     on_log: F,
@@ -410,9 +517,9 @@ where
 {
     let on_log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(on_log);
     let log_1 = on_log.clone();
-    let model_dir = download_model(model_id, endpoint, cancel, move |msg| log_1(msg))?;
+    let model_dir = download_model(model_id, models_base_dir, endpoint, cancel, move |msg| log_1(msg))?;
     let log_2 = on_log.clone();
-    let tok_dir = ensure_tokenizer_weights(endpoint, cancel, move |msg| log_2(msg))?;
+    let tok_dir = ensure_tokenizer_weights(models_base_dir, endpoint, cancel, move |msg| log_2(msg))?;
     Ok((model_dir, tok_dir))
 }
 

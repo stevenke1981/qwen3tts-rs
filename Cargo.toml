@@ -7,7 +7,7 @@ license = "MIT"
 repository = "https://github.com/steven/qwen3tts-rs"
 
 [features]
-default = ["cpu"]
+default = ["cpu", "candle-llm"]
 stage-dump = ["sha2"]
 cuda = ["candle-core/cuda"]
 metal = ["candle-core/metal"]
