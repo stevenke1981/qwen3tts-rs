@@ -381,7 +381,7 @@ fn default_tokenizer_q8_cache_dir() -> Option<PathBuf> {
     None
 }
 
-fn default_tokenizer_cache_dir() -> Option<PathBuf> {
+pub fn default_tokenizer_cache_dir() -> Option<PathBuf> {
     default_tokenizer_cache_root().map(|root| root.join("tokenizer-12hz"))
 }
 

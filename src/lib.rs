@@ -13,6 +13,7 @@
 
 pub mod alignment_stage_dump;
 pub mod codec;
+pub mod downloader;
 pub mod gui;
 pub mod paths;
 pub mod quantization;

@@ -126,6 +126,8 @@ pub struct SynthesisParams {
     pub reference_text: Option<String>,
     pub seed: Option<u64>,
     pub max_new_tokens: u32,
+    pub auto_download: bool,
+    pub hf_mirror: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +143,8 @@ pub enum WorkerEvent {
     Progress { current: usize, total: usize },
     /// 合成完成
     Done(Result<SynthesisResult, String>),
+    /// 下載完成
+    DownloadDone(Result<PathBuf, String>),
 }
 
 /// 合成結果
@@ -353,13 +357,33 @@ fn run_synthesis_inner(
                 let dir = if let Some(d) = &params.model_dir {
                     d.clone()
                 } else {
-                    worker::locate_model_snapshot(&params.model_id)
-                        .ok_or_else(|| {
-                            format!(
-                                "找不到模型 {} 的本地 snapshot。請設定 --model-dir 或 QWEN3_TTS_MODEL_DIR",
-                                params.model_id
-                            )
-                        })?
+                    match worker::locate_model_snapshot(&params.model_id) {
+                        Some(d) => d,
+                        None => {
+                            if params.auto_download {
+                                tx.send(WorkerEvent::Status(format!(
+                                    "📥 本地找不到模型 {} 快照，自動開始下載…",
+                                    params.model_id
+                                )))
+                                .ok();
+                                let tx_c = tx.clone();
+                                crate::downloader::download_model(
+                                    &params.model_id,
+                                    params.hf_mirror.as_deref(),
+                                    Some(cancel),
+                                    move |msg| {
+                                        tx_c.send(WorkerEvent::Status(msg.to_string())).ok();
+                                    },
+                                )
+                                .map_err(|e| format!("自動下載模型失敗：{e}"))?
+                            } else {
+                                return Err(format!(
+                                    "找不到模型 {} 的本地快取。請勾選「當模型缺失時自動下載」，或點擊「📥 下載模型」按鈕進行下載。",
+                                    params.model_id
+                                ));
+                            }
+                        }
+                    }
                 };
 
                 let sf_path = dir.join("model.safetensors");
@@ -421,7 +445,28 @@ fn run_synthesis_inner(
     // Step 3: 載入解碼器權重
     tx.send(WorkerEvent::Status("載入 Tokenizer 解碼器權重…".into()))
         .ok();
-    let weight_dir = worker::ensure_decoder_weights(tx)?;
+    let weight_dir = match worker::ensure_decoder_weights(tx) {
+        Ok(dir) => dir,
+        Err(err) => {
+            if params.auto_download {
+                tx.send(WorkerEvent::Status(
+                    "📥 本地找不到 Tokenizer 解碼器權重，自動下載 Qwen/Qwen3-TTS-Tokenizer-12Hz 並轉換…".into()
+                ))
+                .ok();
+                let tx_c = tx.clone();
+                crate::downloader::ensure_tokenizer_weights(
+                    params.hf_mirror.as_deref(),
+                    Some(cancel),
+                    move |msg| {
+                        tx_c.send(WorkerEvent::Status(msg.to_string())).ok();
+                    },
+                )
+                .map_err(|e| format!("自動下載/轉換 Tokenizer 權重失敗：{e}"))?
+            } else {
+                return Err(err);
+            }
+        }
+    };
 
     let target_frames = if params.speed != 1.0 {
         (num_frames as f64 / params.speed).round() as usize
@@ -534,6 +579,12 @@ pub struct TtsGuiApp {
     reference_audio: String,
     reference_text: String,
 
+    // === 模型下載設定 ===
+    auto_download: bool,
+    hf_mirror_index: usize,
+    hf_custom_mirror: String,
+    is_downloading: bool,
+
     // === 內部狀態 ===
     status_log: Vec<(String, Color32)>,
     is_processing: bool,
@@ -563,6 +614,10 @@ impl Default for TtsGuiApp {
             seed: String::new(),
             reference_audio: String::new(),
             reference_text: String::new(),
+            auto_download: true,
+            hf_mirror_index: 0,
+            hf_custom_mirror: String::new(),
+            is_downloading: false,
             status_log: Vec::new(),
             is_processing: false,
             cancel_flag: Arc::new(AtomicBool::new(false)),
@@ -583,6 +638,65 @@ impl TtsGuiApp {
             Color32::GRAY,
         ));
         app
+    }
+
+    /// 取得目前設定的 HuggingFace 下載端點
+    fn effective_hf_endpoint(&self) -> Option<String> {
+        match self.hf_mirror_index {
+            0 => None,
+            1 => Some(crate::downloader::HF_MIRROR_ENDPOINT.to_string()),
+            _ => {
+                let trimmed = self.hf_custom_mirror.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            }
+        }
+    }
+
+    /// 啟動手動背景下載模型與 Tokenizer 權重
+    fn start_model_download(&mut self) {
+        if self.is_processing || self.is_downloading {
+            return;
+        }
+
+        let (tx, rx) = mpsc::channel::<WorkerEvent>();
+        let model_id = self.model_id.clone();
+        let endpoint = self.effective_hf_endpoint();
+
+        self.is_processing = true;
+        self.is_downloading = true;
+        self.cancel_flag.store(false, Ordering::SeqCst);
+        self.event_rx = Some(rx);
+
+        let cancel = self.cancel_flag.clone();
+
+        thread::spawn(move || {
+            let tx_c = tx.clone();
+            let res = crate::downloader::ensure_synthesis_resources(
+                &model_id,
+                endpoint.as_deref(),
+                Some(&cancel),
+                move |msg| {
+                    tx_c.send(WorkerEvent::Status(msg.to_string())).ok();
+                },
+            );
+            match res {
+                Ok((model_dir, _)) => {
+                    tx.send(WorkerEvent::DownloadDone(Ok(model_dir))).ok();
+                }
+                Err(e) => {
+                    tx.send(WorkerEvent::DownloadDone(Err(e.to_string()))).ok();
+                }
+            }
+        });
+
+        self.status_log.push((
+            format!("▶ 開始手動下載模型與資源 ({})…", self.model_id),
+            Color32::WHITE,
+        ));
     }
 
     /// 啟動背景合成
@@ -644,6 +758,8 @@ impl TtsGuiApp {
                 }
             },
             max_new_tokens: self.max_new_tokens.parse().unwrap_or(4096),
+            auto_download: self.auto_download,
+            hf_mirror: self.effective_hf_endpoint(),
         };
 
         self.is_processing = true;
@@ -665,6 +781,7 @@ impl TtsGuiApp {
         self.status_log
             .push(("⏹ 正在取消…".into(), Color32::YELLOW));
         self.is_processing = false;
+        self.is_downloading = false;
     }
 
     /// 處理背景執行緒事件
@@ -678,8 +795,27 @@ impl TtsGuiApp {
                 WorkerEvent::Progress { .. } => {
                     // 可以擴充進度條
                 }
+                WorkerEvent::DownloadDone(result) => {
+                    self.is_processing = false;
+                    self.is_downloading = false;
+                    match result {
+                        Ok(dir) => {
+                            self.status_log.push((
+                                format!("🎉 模型與解碼器已全部就緒！路徑：{}", dir.display()),
+                                Color32::GREEN,
+                            ));
+                        }
+                        Err(err) => {
+                            self.status_log.push((
+                                format!("❌ 下載失敗：{err}"),
+                                Color32::RED,
+                            ));
+                        }
+                    }
+                }
                 WorkerEvent::Done(result) => {
                     self.is_processing = false;
+                    self.is_downloading = false;
                     match result {
                         Ok(res) => {
                             self.last_result = Some(res.clone());
@@ -808,18 +944,81 @@ impl eframe::App for TtsGuiApp {
                                 .show(ui, |ui| {
                                     // Model ID
                                     ui.label("模型 ID：");
-                                    egui::ComboBox::from_id_salt("model_combo")
-                                        .width(360.0)
-                                        .selected_text(&self.model_id)
-                                        .show_ui(ui, |ui| {
-                                            for m in MODEL_ID_CANDIDATES {
-                                                ui.selectable_value(
-                                                    &mut self.model_id,
-                                                    m.to_string(),
-                                                    *m,
+                                    ui.vertical(|ui| {
+                                        ui.horizontal(|ui| {
+                                            egui::ComboBox::from_id_salt("model_combo")
+                                                .width(300.0)
+                                                .selected_text(&self.model_id)
+                                                .show_ui(ui, |ui| {
+                                                    for m in MODEL_ID_CANDIDATES {
+                                                        ui.selectable_value(
+                                                            &mut self.model_id,
+                                                            m.to_string(),
+                                                            *m,
+                                                        );
+                                                    }
+                                                });
+
+                                            let custom_dir = if self.model_dir.trim().is_empty() {
+                                                None
+                                            } else {
+                                                Some(Path::new(self.model_dir.trim()))
+                                            };
+                                            let is_ready = crate::downloader::is_model_ready(
+                                                &self.model_id,
+                                                custom_dir,
+                                            );
+
+                                            if is_ready {
+                                                ui.label(
+                                                    RichText::new("🟢 已就緒")
+                                                        .size(12.0)
+                                                        .color(Color32::from_rgb(80, 210, 80)),
+                                                );
+                                            } else {
+                                                ui.label(
+                                                    RichText::new("⚪ 未下載")
+                                                        .size(12.0)
+                                                        .color(Color32::from_rgb(220, 150, 80)),
+                                                );
+                                            }
+
+                                            let dl_btn_text = if is_ready {
+                                                "🔄 重新下載"
+                                            } else {
+                                                "📥 下載模型"
+                                            };
+                                            let dl_btn = egui::Button::new(
+                                                RichText::new(dl_btn_text).size(12.0),
+                                            );
+                                            if self.is_processing || self.is_downloading {
+                                                ui.add_enabled(false, dl_btn);
+                                            } else if ui.add(dl_btn).clicked() {
+                                                self.start_model_download();
+                                            }
+                                        });
+
+                                        ui.horizontal(|ui| {
+                                            ui.checkbox(
+                                                &mut self.auto_download,
+                                                "當模型缺失時自動下載",
+                                            );
+                                            ui.add_space(8.0);
+                                            if crate::downloader::is_tokenizer_ready() {
+                                                ui.label(
+                                                    RichText::new("解碼器: 🟢")
+                                                        .size(11.0)
+                                                        .color(Color32::from_rgb(80, 210, 80)),
+                                                );
+                                            } else {
+                                                ui.label(
+                                                    RichText::new("解碼器: ⚪ 未就緒")
+                                                        .size(11.0)
+                                                        .color(Color32::from_rgb(220, 150, 80)),
                                                 );
                                             }
                                         });
+                                    });
                                     ui.end_row();
 
                                     // Backend
@@ -987,6 +1186,46 @@ impl eframe::App for TtsGuiApp {
                                                 ui.end_row();
                                             }
 
+                                            // HF Mirror endpoint
+                                            ui.label("下載鏡像源：");
+                                            ui.horizontal(|ui| {
+                                                egui::ComboBox::from_id_salt("mirror_combo")
+                                                    .width(220.0)
+                                                    .selected_text(match self.hf_mirror_index {
+                                                        0 => "官方站 (huggingface.co)",
+                                                        1 => "國內鏡像 (hf-mirror.com)",
+                                                        _ => "自訂鏡像端點…",
+                                                    })
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(
+                                                            &mut self.hf_mirror_index,
+                                                            0,
+                                                            "官方站 (huggingface.co)",
+                                                        );
+                                                        ui.selectable_value(
+                                                            &mut self.hf_mirror_index,
+                                                            1,
+                                                            "國內鏡像 (hf-mirror.com)",
+                                                        );
+                                                        ui.selectable_value(
+                                                            &mut self.hf_mirror_index,
+                                                            2,
+                                                            "自訂鏡像端點…",
+                                                        );
+                                                    });
+
+                                                if self.hf_mirror_index == 2 {
+                                                    ui.add(
+                                                        egui::TextEdit::singleline(
+                                                            &mut self.hf_custom_mirror,
+                                                        )
+                                                        .desired_width(180.0)
+                                                        .hint_text("https://..."),
+                                                    );
+                                                }
+                                            });
+                                            ui.end_row();
+
                                             // Reference audio (Voice Clone)
                                             ui.label("參考音訊：");
                                             ui.horizontal(|ui| {
@@ -1104,6 +1343,13 @@ impl eframe::App for TtsGuiApp {
                         if self.is_processing {
                             ui.add_space(12.0);
                             ui.add(egui::Spinner::new().size(20.0));
+                            if self.is_downloading {
+                                ui.label(
+                                    RichText::new("正在下載模型與資源…")
+                                        .size(13.0)
+                                        .color(Color32::from_rgb(100, 180, 255)),
+                                );
+                            }
                         }
                     });
 
