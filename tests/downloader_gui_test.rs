@@ -85,6 +85,7 @@ fn test_synthesis_params_auto_download_fields() {
         model_dir: None,
         models_base_dir: std::path::PathBuf::from("models"),
         backend: BackendKind::Candle,
+        device_pref: qwen3tts::gui::DevicePreference::Auto,
         language: "auto".into(),
         speaker: None,
         instruct: None,
@@ -94,6 +95,8 @@ fn test_synthesis_params_auto_download_fields() {
         reference_text: None,
         seed: None,
         max_new_tokens: 4096,
+        max_tokens_auto: false,
+        chunk_max_chars: Some(120),
         auto_download: true,
         hf_mirror: Some(HF_MIRROR_ENDPOINT.to_string()),
     };
@@ -102,4 +105,21 @@ fn test_synthesis_params_auto_download_fields() {
     assert_eq!(params.backend, BackendKind::Candle);
     assert!(params.auto_download);
     assert_eq!(params.hf_mirror.as_deref(), Some("https://hf-mirror.com"));
+    assert_eq!(params.chunk_max_chars, Some(120));
+}
+
+#[test]
+fn test_gui_app_default_chunk_settings() {
+    use qwen3tts::gui::{split_text_into_chunks, DEFAULT_CHUNK_CHARS};
+
+    assert_eq!(DEFAULT_CHUNK_CHARS, 120);
+
+    // 長文（>120 字）必須被分段
+    let long_text = "這是一段測試文字。".repeat(30);
+    let chunks = split_text_into_chunks(&long_text, DEFAULT_CHUNK_CHARS);
+    assert!(chunks.len() > 1, "長文應被自動分段：{}", chunks.len());
+    for chunk in &chunks {
+        assert!(chunk.chars().count() <= DEFAULT_CHUNK_CHARS);
+    }
+    assert_eq!(chunks.join(""), long_text.trim());
 }

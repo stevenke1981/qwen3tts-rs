@@ -32,6 +32,7 @@
 //! - **PythonBridge** (✅ 即時可用): 子行程調用 qwen-tts Python 套件
 //! - **CandleLLM** (🔜 規劃中): 純 Rust/Candle + GGUF 權重
 
+pub mod language_detector;
 pub mod model_catalog;
 pub mod prompt_templates;
 mod python_bridge;
@@ -45,6 +46,7 @@ pub mod candle_backend;
 #[cfg(feature = "candle-llm")]
 pub use candle_backend::CandleLLM;
 
+pub use language_detector::{detect_language_from_text, language_display_name};
 pub use python_bridge::PythonBridge;
 pub use token_parser::TokenParser;
 

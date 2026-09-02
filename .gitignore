@@ -30,3 +30,4 @@ agent_temp*.py
 # Multi-agent & temporary runtimes
 /.agents/
 /.sites-runtime/
+/.qwen/

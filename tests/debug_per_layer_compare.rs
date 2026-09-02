@@ -213,7 +213,7 @@ fn debug_per_layer_compare() {
         dilation: 1,
         groups: 1,
     };
-    let mut pre_conv = CausalConv1d::new(pw, pb, pre_conv_cfg, 64).expect("pre_conv");
+    let pre_conv = CausalConv1d::new(pw, pb, pre_conv_cfg, 64).expect("pre_conv");
 
     let pt_pre_conv = read_npy("weights/pt_pre_conv_out.npy"); // [1024, 3]
 

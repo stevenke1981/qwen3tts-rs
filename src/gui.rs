@@ -17,7 +17,7 @@ use egui::{Color32, Frame, Margin, RichText, ScrollArea, Vec2};
 
 use crate::text_frontend::model_catalog::SUPPORTED_LANGUAGES;
 use crate::text_frontend::speaker_presets;
-use crate::text_frontend::{PythonBridge, SynthesisOptions, TextFrontend};
+use crate::text_frontend::{PythonBridge, SynthesisOptions};
 use crate::{Decoder12Hz, DecoderConfig};
 
 const CJK_FONT_NAME: &str = "qwen3tts_cjk";
@@ -93,8 +93,10 @@ impl BackendKind {
             Self::Candle => "Candle (native Rust)",
         }
     }
+}
 
-    pub fn default() -> Self {
+impl Default for BackendKind {
+    fn default() -> Self {
         #[cfg(feature = "candle-llm")]
         {
             Self::Candle
@@ -103,6 +105,35 @@ impl BackendKind {
         {
             Self::Python
         }
+    }
+}
+
+/// 運算裝置偏好設定
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DevicePreference {
+    /// 自動偵測：若有可用 CUDA GPU 則優先使用，失敗或無 GPU 時自動回退至 CPU
+    Auto,
+    /// 強制使用 NVIDIA CUDA GPU 加速（無可用 GPU 或未編譯 CUDA 時回傳錯誤）
+    Cuda,
+    /// 強制使用 CPU 運算
+    Cpu,
+}
+
+impl DevicePreference {
+    pub const ALL: &'static [Self] = &[Self::Auto, Self::Cuda, Self::Cpu];
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Auto => "自動偵測 (優先 CUDA GPU)",
+            Self::Cuda => "⚡ CUDA (NVIDIA GPU)",
+            Self::Cpu => "🖥️ CPU (中央處理器)",
+        }
+    }
+}
+
+impl Default for DevicePreference {
+    fn default() -> Self {
+        Self::Auto
     }
 }
 
@@ -118,6 +149,7 @@ pub struct SynthesisParams {
     pub model_dir: Option<PathBuf>,
     pub models_base_dir: PathBuf,
     pub backend: BackendKind,
+    pub device_pref: DevicePreference,
     pub language: String,
     pub speaker: Option<String>,
     pub instruct: Option<String>,
@@ -127,6 +159,10 @@ pub struct SynthesisParams {
     pub reference_text: Option<String>,
     pub seed: Option<u64>,
     pub max_new_tokens: u32,
+    /// `true` 表示 `max_new_tokens` 為自動估算（分段合成時逐段重新估算）
+    pub max_tokens_auto: bool,
+    /// 長文自動分段的每段字數上限；`None` 表示不分段（整段一次合成）
+    pub chunk_max_chars: Option<usize>,
     pub auto_download: bool,
     pub hf_mirror: Option<String>,
 }
@@ -302,23 +338,58 @@ mod worker {
         })
     }
 
-    pub fn runtime_device() -> candle_core::Device {
-        #[cfg(feature = "cuda")]
-        {
-            match candle_core::Device::new_cuda(0) {
-                Ok(device) => {
-                    eprintln!("✅ 成功初始化 CUDA Device 0 (NVIDIA GPU 加速已啟用)");
-                    device
+    pub fn resolve_device(pref: DevicePreference) -> Result<(candle_core::Device, String), String> {
+        match pref {
+            DevicePreference::Cpu => {
+                Ok((candle_core::Device::Cpu, "🖥️ CPU (中央處理器)".to_string()))
+            }
+            DevicePreference::Cuda => {
+                #[cfg(feature = "cuda")]
+                {
+                    match candle_core::Device::new_cuda(0) {
+                        Ok(device) => {
+                            eprintln!("✅ 成功初始化 CUDA Device 0 (NVIDIA GPU 加速已啟用)");
+                            Ok((device, "⚡ CUDA (NVIDIA GPU 硬體加速)".to_string()))
+                        }
+                        Err(err) => {
+                            Err(format!(
+                                "指定使用 CUDA 但初始化失敗：{err}。\n\
+                                 請確認已安裝 NVIDIA 顯卡驅動程式，或切換為「自動偵測」/「CPU」。"
+                            ))
+                        }
+                    }
                 }
-                Err(err) => {
-                    eprintln!("⚠️ 無法初始化 CUDA Device 0: {err}，回退至 CPU");
-                    candle_core::Device::Cpu
+                #[cfg(not(feature = "cuda"))]
+                {
+                    Err(
+                        "目前執行的二進制檔未編譯 CUDA 支援。\n\
+                         請執行 build_release_cuda.ps1 編譯 CUDA 版本，或切換為「CPU」。"
+                            .to_string(),
+                    )
                 }
             }
-        }
-        #[cfg(not(feature = "cuda"))]
-        {
-            candle_core::Device::Cpu
+            DevicePreference::Auto => {
+                #[cfg(feature = "cuda")]
+                {
+                    match candle_core::Device::new_cuda(0) {
+                        Ok(device) => {
+                            eprintln!("✅ 成功初始化 CUDA Device 0 (NVIDIA GPU 加速已啟用)");
+                            Ok((device, "⚡ CUDA (NVIDIA GPU 硬體加速)".to_string()))
+                        }
+                        Err(err) => {
+                            eprintln!("⚠️ 無法初始化 CUDA Device 0: {err}，自動回退至 CPU");
+                            Ok((
+                                candle_core::Device::Cpu,
+                                "🖥️ CPU (自動回退：無可用 GPU)".to_string(),
+                            ))
+                        }
+                    }
+                }
+                #[cfg(not(feature = "cuda"))]
+                {
+                    Ok((candle_core::Device::Cpu, "🖥️ CPU (中央處理器)".to_string()))
+                }
+            }
         }
     }
 }
@@ -326,6 +397,70 @@ mod worker {
 // ---------------------------------------------------------------------------
 // 合成管線（背景執行緒）
 // ---------------------------------------------------------------------------
+
+/// LLM 後端統一包裝：多段合成時重複使用同一模型實例，確保各段音色一致
+enum LlmBackend {
+    Python(PythonBridge),
+    #[cfg(feature = "candle-llm")]
+    Candle(Box<crate::text_frontend::CandleLLM>),
+}
+
+impl LlmBackend {
+    fn synthesize(
+        &self,
+        text: &str,
+        options: &SynthesisOptions,
+    ) -> crate::Result<crate::text_frontend::TokenStream> {
+        use crate::text_frontend::TextFrontend;
+        match self {
+            Self::Python(bridge) => bridge.synthesize(text, options),
+            #[cfg(feature = "candle-llm")]
+            Self::Candle(llm) => llm.synthesize(text, options),
+        }
+    }
+}
+
+/// 由 GUI 參數建立各分段共用的合成選項（說話者／語氣指令／參考音訊等聲音條件一致）
+fn base_synthesis_options(params: &SynthesisParams) -> SynthesisOptions {
+    SynthesisOptions {
+        language: params.language.clone(),
+        speaker: params.speaker.clone(),
+        instruct: params.instruct.clone(),
+        reference_audio: params
+            .reference_audio
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string()),
+        reference_text: params.reference_text.clone(),
+        seed: params.seed,
+        temperature: 0.9,
+        top_k: 50,
+        top_p: 1.0,
+        max_new_tokens: params.max_new_tokens,
+    }
+}
+
+/// 單一分段的 Token 上限：使用者明確指定最大 Token 數時沿用，否則依該段字數自動估算
+fn per_chunk_token_limit(params: &SynthesisParams, chunk_text: &str) -> u32 {
+    if params.max_tokens_auto {
+        estimate_max_tokens_for_text(chunk_text)
+    } else {
+        params.max_new_tokens
+    }
+}
+
+/// 對分段音頻頭尾施加短線性淡化，避免分段合併接縫出現爆音
+fn apply_edge_fades(samples: &mut [f32], fade_samples: usize) {
+    let n = samples.len();
+    if n < 2 {
+        return;
+    }
+    let fade = fade_samples.min(n / 2);
+    for i in 0..fade {
+        let gain = i as f32 / fade as f32;
+        samples[i] *= gain;
+        samples[n - 1 - i] *= gain;
+    }
+}
 
 fn run_synthesis(params: SynthesisParams, tx: Sender<WorkerEvent>, cancel: Arc<AtomicBool>) {
     let result = run_synthesis_inner(&params, &tx, &cancel);
@@ -341,167 +476,128 @@ fn run_synthesis_inner(
     tx: &Sender<WorkerEvent>,
     cancel: &AtomicBool,
 ) -> Result<SynthesisResult, String> {
-    // Step 1: 決定裝置
-    tx.send(WorkerEvent::Status("初始化裝置…".into()))
+    // Step 1: 決定運算裝置（依偏好設定自動偵測或手動指定）
+    tx.send(WorkerEvent::Status("初始化運算裝置…".into()))
         .map_err(|e| e.to_string())?;
     if cancel.load(Ordering::SeqCst) {
         return Err("已取消".into());
     }
-    let device = worker::runtime_device();
-    let device_name = match device {
-        candle_core::Device::Cpu => "🖥 CPU".to_string(),
-        #[cfg(feature = "cuda")]
-        candle_core::Device::Cuda(_) => "⚡ CUDA (NVIDIA GPU 硬體加速)".to_string(),
-        _ => "Unknown".to_string(),
-    };
+    let (device, device_name) = worker::resolve_device(params.device_pref)?;
     tx.send(WorkerEvent::Status(format!("運算裝置：{device_name}")))
         .ok();
 
-    // Step 2: 取得 Token（LLM 或從參數提供的 tokens_path）
+    // Step 2: 載入 LLM 後端（僅載入一次；多段合成共用同一模型與聲音條件，確保音色一致）
+    if params.text.trim().is_empty() {
+        return Err("請輸入要合成的文字".into());
+    }
     if cancel.load(Ordering::SeqCst) {
         return Err("已取消".into());
     }
 
-    let stream = if params.text.is_empty() {
-        return Err("請輸入要合成的文字".into());
-    } else {
-        tx.send(WorkerEvent::Status("載入 LLM 後端並生成 Token…".into()))
+    let backend = match params.backend {
+        BackendKind::Python => {
+            tx.send(WorkerEvent::Status(format!(
+                "使用 Python 橋接 ({})…（首次載入約 1-5 分鐘）",
+                params.model_id
+            )))
             .ok();
-        match params.backend {
-            BackendKind::Python => {
-                tx.send(WorkerEvent::Status(format!(
-                    "使用 Python 橋接 ({})…（首次載入約 1-5 分鐘）",
-                    params.model_id
-                )))
-                .ok();
-                let bridge = PythonBridge::new(&params.model_id)
-                    .map_err(|e| format!("建立 PythonBridge 失敗：{e}"))?
-                    .with_python("python");
-                let options = SynthesisOptions {
-                    language: params.language.clone(),
-                    speaker: params.speaker.clone(),
-                    instruct: params.instruct.clone(),
-                    reference_audio: params
-                        .reference_audio
-                        .as_ref()
-                        .map(|p| p.to_string_lossy().to_string()),
-                    reference_text: params.reference_text.clone(),
-                    seed: params.seed,
-                    temperature: 0.9,
-                    top_k: 50,
-                    top_p: 1.0,
-                    max_new_tokens: params.max_new_tokens,
-                };
-                bridge
-                    .synthesize(&params.text, &options)
-                    .map_err(|e| format!("Python LLM Token 生成失敗：{e}"))?
-            }
-            #[cfg(feature = "candle-llm")]
-            BackendKind::Candle => {
-                use crate::text_frontend::CandleLLM;
+            let bridge = PythonBridge::new(&params.model_id)
+                .map_err(|e| format!("建立 PythonBridge 失敗：{e}"))?
+                .with_python("python");
+            LlmBackend::Python(bridge)
+        }
+        #[cfg(feature = "candle-llm")]
+        BackendKind::Candle => {
+            use crate::text_frontend::CandleLLM;
 
-                let dir = if let Some(d) = &params.model_dir {
-                    d.clone()
-                } else {
-                    match worker::locate_model_snapshot(&params.model_id, Some(&params.models_base_dir)) {
-                        Some(d) => d,
-                        None => {
-                            if params.auto_download {
-                                tx.send(WorkerEvent::Status(format!(
-                                    "📥 本地找不到模型 {}，自動開始下載至 {}…",
-                                    params.model_id,
-                                    params.models_base_dir.display()
-                                )))
-                                .ok();
-                                let tx_c = tx.clone();
-                                crate::downloader::download_model(
-                                    &params.model_id,
-                                    Some(&params.models_base_dir),
-                                    params.hf_mirror.as_deref(),
-                                    Some(cancel),
-                                    move |msg| {
-                                        tx_c.send(WorkerEvent::Status(msg.to_string())).ok();
-                                    },
-                                )
-                                .map_err(|e| format!("自動下載模型失敗：{e}"))?
-                            } else {
-                                return Err(format!(
-                                    "找不到模型 {}。請勾選「當模型缺失時自動下載」，或點擊「📥 下載模型」按鈕進行下載。",
-                                    params.model_id
-                                ));
-                            }
+            let dir = if let Some(d) = &params.model_dir {
+                d.clone()
+            } else {
+                match worker::locate_model_snapshot(
+                    &params.model_id,
+                    Some(&params.models_base_dir),
+                ) {
+                    Some(d) => d,
+                    None => {
+                        if params.auto_download {
+                            tx.send(WorkerEvent::Status(format!(
+                                "📥 本地找不到模型 {}，自動開始下載至 {}…",
+                                params.model_id,
+                                params.models_base_dir.display()
+                            )))
+                            .ok();
+                            let tx_c = tx.clone();
+                            crate::downloader::download_model(
+                                &params.model_id,
+                                Some(&params.models_base_dir),
+                                params.hf_mirror.as_deref(),
+                                Some(cancel),
+                                move |msg| {
+                                    tx_c.send(WorkerEvent::Status(msg.to_string())).ok();
+                                },
+                            )
+                            .map_err(|e| format!("自動下載模型失敗：{e}"))?
+                        } else {
+                            return Err(format!(
+                                "找不到模型 {}。請勾選「當模型缺失時自動下載」，或點擊「📥 下載模型」按鈕進行下載。",
+                                params.model_id
+                            ));
                         }
                     }
-                };
-
-                let sf_path = dir.join("model.safetensors");
-                if !sf_path.exists() {
-                    return Err(format!("模型 safetensors 不存在：{}", sf_path.display()));
                 }
+            };
 
-                let tok_path = worker::find_tokenizer_json(
-                    &params.model_id,
-                    &dir,
-                    Some(&params.models_base_dir),
-                )
-                .ok_or_else(|| {
-                    "找不到 tokenizer.json。請先使用 convert_tokenizer.exe 或 tools/build_tokenizer.py 產生。".to_string()
-                })?;
-
-                tx.send(WorkerEvent::Status(format!(
-                    "載入 Candle LLM ({})…",
-                    params.model_id
-                )))
-                .ok();
-
-                let llm = CandleLLM::from_files(&sf_path, &tok_path, &device)
-                    .map_err(|e| format!("載入 CandleLLM 失敗：{e}"))?;
-
-                let options = SynthesisOptions {
-                    language: params.language.clone(),
-                    speaker: params.speaker.clone(),
-                    instruct: params.instruct.clone(),
-                    reference_audio: params
-                        .reference_audio
-                        .as_ref()
-                        .map(|p| p.to_string_lossy().to_string()),
-                    reference_text: params.reference_text.clone(),
-                    seed: params.seed,
-                    temperature: 0.9,
-                    top_k: 50,
-                    top_p: 1.0,
-                    max_new_tokens: params.max_new_tokens,
-                };
-
-                tx.send(WorkerEvent::Status(format!(
-                    "⚡ GPU (CUDA) 正在推理生成語音 Token（依字數上限 {} 幀，約 {:.1} 秒語音）…",
-                    params.max_new_tokens,
-                    params.max_new_tokens as f64 / 12.0
-                )))
-                .ok();
-
-                llm.synthesize(&params.text, &options)
-                    .map_err(|e| format!("Candle LLM Token 生成失敗：{e}"))?
+            let sf_path = dir.join("model.safetensors");
+            if !sf_path.exists() {
+                return Err(format!("模型 safetensors 不存在：{}", sf_path.display()));
             }
+
+            let tok_path = worker::find_tokenizer_json(
+                &params.model_id,
+                &dir,
+                Some(&params.models_base_dir),
+            )
+            .ok_or_else(|| {
+                "找不到 tokenizer.json。請先使用 convert_tokenizer.exe 或 tools/build_tokenizer.py 產生。".to_string()
+            })?;
+
+            tx.send(WorkerEvent::Status(format!(
+                "載入 Candle LLM ({})…",
+                params.model_id
+            )))
+            .ok();
+
+            let llm = CandleLLM::from_files(&sf_path, &tok_path, &device)
+                .map_err(|e| format!("載入 CandleLLM 失敗：{e}"))?;
+            LlmBackend::Candle(Box::new(llm))
         }
     };
 
-    let num_frames = stream.num_frames();
-    if num_frames == 0 {
-        return Err("LLM 未產生任何 Token".into());
+    // Step 3: 長文自動分段（句尾邊界優先；逐段生成後合併，避免長文一次推理卡死）
+    let chunks = match params.chunk_max_chars {
+        Some(max_chars) => split_text_into_chunks(&params.text, max_chars),
+        None => vec![params.text.trim().to_string()],
+    };
+    if chunks.is_empty() {
+        return Err("請輸入要合成的文字".into());
+    }
+    if chunks.len() > 1 {
+        tx.send(WorkerEvent::Status(format!(
+            "📄 長文自動分成 {} 段合成（每段上限 {} 字），所有分段共用相同模型與聲音設定",
+            chunks.len(),
+            params.chunk_max_chars.unwrap_or(DEFAULT_CHUNK_CHARS)
+        )))
+        .ok();
+        if params.backend == BackendKind::Python {
+            tx.send(WorkerEvent::Status(
+                "⚠️ Python 後端每個分段都需重新載入模型，長文建議改用 Candle (native Rust) 後端"
+                    .into(),
+            ))
+            .ok();
+        }
     }
 
-    tx.send(WorkerEvent::Status(format!(
-        "生成 {num_frames} 幀 Token（語音約 {:.1} 秒）",
-        stream.duration_sec()
-    )))
-    .ok();
-
-    if cancel.load(Ordering::SeqCst) {
-        return Err("已取消".into());
-    }
-
-    // Step 3: 載入解碼器權重
+    // Step 4: 確保解碼器權重並建立解碼器（權重只載入一次，供所有分段共用）
     tx.send(WorkerEvent::Status("載入 Tokenizer 解碼器權重…".into()))
         .ok();
     let weight_dir = match worker::ensure_decoder_weights(Some(&params.models_base_dir), tx) {
@@ -531,44 +627,137 @@ fn run_synthesis_inner(
         }
     };
 
+    // 解碼器容量依「最大單段」幀數設定（含語速拉伸），逐段解碼可限制記憶體用量
+    let max_chunk_frames = chunks
+        .iter()
+        .map(|chunk| per_chunk_token_limit(params, chunk) as usize)
+        .max()
+        .unwrap_or(64);
     let target_frames = if params.speed != 1.0 {
-        (num_frames as f64 / params.speed).round() as usize
+        (max_chunk_frames as f64 / params.speed).round() as usize
     } else {
-        num_frames
+        max_chunk_frames
     };
-    let mut config = DecoderConfig::realtime_with_capacity(num_frames.max(target_frames));
+    let mut config = DecoderConfig::realtime_with_capacity(max_chunk_frames.max(target_frames));
     config.speed = params.speed;
 
     let mut decoder = Decoder12Hz::from_safetensors(config, &weight_dir, &device)
         .map_err(|e| format!("載入 Tokenizer 權重失敗：{e}"))?;
 
-    if cancel.load(Ordering::SeqCst) {
-        return Err("已取消".into());
+    // Step 5: 逐段生成 Token → 逐段解碼 → 合併為單一音頻
+    let sample_rate = 24000u32;
+    let gap_samples = (sample_rate as f64 * 0.1).round() as usize; // 分段接縫 100ms 停頓
+    let fade_samples = 120usize; // 5ms 邊界淡化避免爆音
+    let total_chunks = chunks.len();
+    let base_options = base_synthesis_options(params);
+    let mut all_samples: Vec<f32> = Vec::new();
+    let mut total_frames = 0usize;
+
+    for (idx, chunk_text) in chunks.iter().enumerate() {
+        if cancel.load(Ordering::SeqCst) {
+            return Err("已取消".into());
+        }
+
+        let mut options = base_options.clone();
+        options.max_new_tokens = per_chunk_token_limit(params, chunk_text);
+
+        // 加強語言判斷：若為 auto，逐句/逐段自動偵測該段文字的語言
+        let detected_lang = if options.language.trim().is_empty()
+            || options.language.eq_ignore_ascii_case("auto")
+        {
+            let detected = crate::text_frontend::detect_language_from_text(chunk_text);
+            options.language = detected.to_string();
+            Some(detected)
+        } else {
+            None
+        };
+
+        let lang_desc = if let Some(d) = detected_lang {
+            format!("，語言：{}", crate::text_frontend::language_display_name(d))
+        } else {
+            String::new()
+        };
+
+        if total_chunks > 1 {
+            tx.send(WorkerEvent::Status(format!(
+                "🧩 [{}/{}] 生成語音 Token（{} 字，上限 {} 幀 ≈ {:.1} 秒語音{}）…",
+                idx + 1,
+                total_chunks,
+                chunk_text.chars().count(),
+                options.max_new_tokens,
+                options.max_new_tokens as f64 / 12.0,
+                lang_desc
+            )))
+            .ok();
+        } else {
+            tx.send(WorkerEvent::Status(format!(
+                "⚡ 正在推理生成語音 Token（上限 {} 幀，約 {:.1} 秒語音{}）…",
+                options.max_new_tokens,
+                options.max_new_tokens as f64 / 12.0,
+                lang_desc
+            )))
+            .ok();
+        }
+
+        let stream = backend
+            .synthesize(chunk_text, &options)
+            .map_err(|e| format!("分段 {} 語音 Token 生成失敗：{e}", idx + 1))?;
+
+        let num_frames = stream.num_frames();
+        if num_frames == 0 {
+            tx.send(WorkerEvent::Status(format!(
+                "⚠️ 分段 {} 未產生任何 Token，已跳過",
+                idx + 1
+            )))
+            .ok();
+            continue;
+        }
+        total_frames += num_frames;
+
+        let mut samples = decoder
+            .decode_frames(&stream.frames)
+            .map_err(|e| format!("分段 {} 音頻解碼失敗：{e}", idx + 1))?;
+
+        if cancel.load(Ordering::SeqCst) {
+            return Err("已取消".into());
+        }
+
+        if total_chunks > 1 {
+            tx.send(WorkerEvent::Status(format!(
+                "✅ [{}/{}] 完成：{} 幀、約 {:.1} 秒音頻",
+                idx + 1,
+                total_chunks,
+                num_frames,
+                samples.len() as f64 / sample_rate as f64
+            )))
+            .ok();
+            tx.send(WorkerEvent::Progress {
+                current: idx + 1,
+                total: total_chunks,
+            })
+            .ok();
+        }
+
+        apply_edge_fades(&mut samples, fade_samples);
+        if !all_samples.is_empty() {
+            all_samples.extend(std::iter::repeat_n(0.0f32, gap_samples));
+        }
+        all_samples.extend(samples);
     }
 
-    // Step 4: 解碼
-    tx.send(WorkerEvent::Status(format!(
-        "⚡ GPU (CUDA) 正在將 {num_frames} 幀 Codec 解碼為音訊波形…",
-    )))
-    .ok();
-    let sample_rate = 24000u32;
-    let all_samples = decoder
-        .decode_frames(&stream.frames)
-        .map_err(|e| format!("解碼失敗：{e}"))?;
-
-    if cancel.load(Ordering::SeqCst) {
-        return Err("已取消".into());
+    if all_samples.is_empty() {
+        return Err("所有分段都未產生任何音頻".into());
     }
 
     let duration_sec = all_samples.len() as f64 / sample_rate as f64;
     tx.send(WorkerEvent::Status(format!(
-        "產出 {:.2} 秒音頻（{} 個樣本）",
+        "產出 {:.2} 秒音頻（{} 個樣本、共 {total_frames} 幀、{total_chunks} 段合併）",
         duration_sec,
         all_samples.len()
     )))
     .ok();
 
-    // Step 5: 寫入 WAV
+    // Step 6: 寫入 WAV
     tx.send(WorkerEvent::Status(format!(
         "寫入 WAV：{}",
         params.output_path.display()
@@ -631,6 +820,7 @@ pub struct TtsGuiApp {
     model_id: String,
     model_dir: String,
     backend: BackendKind,
+    device_pref: DevicePreference,
     language: String,
     language_auto: bool,
     speaker: String,
@@ -639,6 +829,10 @@ pub struct TtsGuiApp {
     output_path: String,
     max_new_tokens: String,
     seed: String,
+
+    // === 長文分段設定 ===
+    auto_chunk: bool,
+    chunk_chars: String,
 
     // === Voice Clone 參數 ===
     reference_audio: String,
@@ -655,6 +849,8 @@ pub struct TtsGuiApp {
     status_log: Vec<(String, Color32)>,
     is_processing: bool,
     cancel_flag: Arc<AtomicBool>,
+    /// 分段合成進度 (已完成段數, 總段數)
+    chunk_progress: Option<(usize, usize)>,
 
     // === 背景執行緒通訊 ===
     event_rx: Option<mpsc::Receiver<WorkerEvent>>,
@@ -698,6 +894,166 @@ pub fn estimate_max_tokens_for_text(text: &str) -> u32 {
     est.clamp(150, 2048)
 }
 
+/// 每段字數上限預設值（約 120 字 ≈ 480 幀 ≈ 40 秒語音，單段生成可避免長文推理卡死）
+pub const DEFAULT_CHUNK_CHARS: usize = 120;
+
+/// 每段字數上限的允許範圍
+const MIN_CHUNK_CHARS: usize = 10;
+const MAX_CHUNK_CHARS: usize = 2000;
+
+/// 句尾主要標點（一句話拆分優先點）
+const SENTENCE_TERMINATORS: &[char] = &['。', '！', '？', '!', '?', '；', ';', '…', '\n', '\r'];
+
+/// 句尾閉合後引號與括號（保留在句尾，不孤立切斷）
+const CLOSING_QUOTES: &[char] = &[
+    '」', '』', '”', '’', '"', '\'', '）', ')', '】', ']', '》', '＞', '>',
+];
+
+/// 子句標點（單句長度超過保護上限時的次要拆分點）
+const CLAUSE_PUNCTUATION: &[char] = &['，', ',', '、', '：', ':', '—', '·', '-'];
+
+/// 將長文以「一句話」為基本拆分點（依句尾標點與換行切分），並包含單句超長保護。
+///
+/// 切分策略（皆保留標點、不丟失任何非空白字元）：
+/// 1. 嚴格以「完整句子」為邊界進行切分，每句話獨立為一個分段，以取得最佳語氣與停頓；
+/// 2. 句尾的連續標點（如「？！？！」「……」）與後引號/括號（如「！」」「。”」）完整保留在該句尾端；
+/// 3. 若單一句話長度超過 `max_chars`（例如整大段無句號），則自動降級在子句標點切分，仍超長時依字數硬切保護。
+pub fn split_text_into_chunks(text: &str, max_chars: usize) -> Vec<String> {
+    let max_chars = max_chars.max(MIN_CHUNK_CHARS);
+    let text = text.trim();
+    if text.is_empty() {
+        return Vec::new();
+    }
+
+    // Step 1: 依句尾標點與換行切分為個別句子（標點與尾隨引號保留在句尾）
+    let sentences = split_into_individual_sentences(text);
+    if sentences.is_empty() {
+        return Vec::new();
+    }
+
+    // Step 2: 逐句檢查，若單句超過 max_chars 則啟用子句/硬切保護，否則保持單句獨立
+    let mut chunks = Vec::new();
+    for sentence in sentences {
+        let trimmed = sentence.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.chars().count() <= max_chars {
+            chunks.push(trimmed.to_string());
+        } else {
+            // 單句超長：先試子句標點，仍超長則硬切
+            chunks.extend(split_oversized_sentence(trimmed, max_chars));
+        }
+    }
+    chunks
+}
+
+/// 依句尾標點切成個別句子（標點與後續緊鄰的閉合引號/括號保留在句尾）
+fn split_into_individual_sentences(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    let mut sentences = Vec::new();
+    let mut start = 0;
+    let mut i = 0;
+
+    while i < n {
+        let ch = chars[i];
+        let is_sentence_end = if ch == '.' {
+            // 英文點號：檢查是否為句尾（後接空白、換行、引號或結尾，且非數字小數點）
+            let is_decimal = i > 0
+                && i + 1 < n
+                && chars[i - 1].is_ascii_digit()
+                && chars[i + 1].is_ascii_digit();
+            let is_next_space_or_end = i + 1 == n
+                || chars[i + 1].is_whitespace()
+                || CLOSING_QUOTES.contains(&chars[i + 1]);
+            !is_decimal && is_next_space_or_end
+        } else {
+            SENTENCE_TERMINATORS.contains(&ch)
+        };
+
+        if is_sentence_end {
+            // 往前吞掉所有連續的句尾標點（如「？？？」「！！」「……」）與換行
+            while i + 1 < n && (SENTENCE_TERMINATORS.contains(&chars[i + 1]) || chars[i + 1] == '.') {
+                i += 1;
+            }
+            // 再吞掉緊隨其後的閉合引號與括號（如「！」」「。”」）
+            while i + 1 < n && CLOSING_QUOTES.contains(&chars[i + 1]) {
+                i += 1;
+            }
+            let s: String = chars[start..=i].iter().collect();
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                sentences.push(trimmed.to_string());
+            }
+            i += 1;
+            // 跳過接續的空白
+            while i < n && (chars[i] == ' ' || chars[i] == '\t' || chars[i] == '\n' || chars[i] == '\r') {
+                i += 1;
+            }
+            start = i;
+        } else {
+            i += 1;
+        }
+    }
+
+    if start < n {
+        let s: String = chars[start..n].iter().collect();
+        let trimmed = s.trim();
+        if !trimmed.is_empty() {
+            sentences.push(trimmed.to_string());
+        }
+    }
+
+    sentences
+}
+
+/// 超長單句切分：先試子句標點，仍超長則依字數硬切
+fn split_oversized_sentence(sentence: &str, max_chars: usize) -> Vec<String> {
+    let mut pieces = Vec::new();
+    let mut current = String::new();
+    for ch in sentence.chars() {
+        current.push(ch);
+        if CLAUSE_PUNCTUATION.contains(&ch) {
+            pieces.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        pieces.push(current);
+    }
+
+    let mut result = Vec::new();
+    let mut pending = String::new();
+    for piece in pieces {
+        if piece.chars().count() > max_chars {
+            if !pending.trim().is_empty() {
+                result.push(std::mem::take(&mut pending));
+            } else {
+                pending.clear();
+            }
+            let mut buf = String::new();
+            for ch in piece.chars() {
+                buf.push(ch);
+                if buf.chars().count() >= max_chars {
+                    result.push(std::mem::take(&mut buf));
+                }
+            }
+            if !buf.is_empty() {
+                pending = buf;
+            }
+        } else if pending.chars().count() + piece.chars().count() <= max_chars {
+            pending.push_str(&piece);
+        } else {
+            result.push(std::mem::take(&mut pending));
+            pending = piece;
+        }
+    }
+    if !pending.trim().is_empty() {
+        result.push(pending);
+    }
+    result
+}
+
 impl Default for TtsGuiApp {
     fn default() -> Self {
         Self {
@@ -706,6 +1062,7 @@ impl Default for TtsGuiApp {
             model_dir: String::new(),
             models_base_dir: default_models_dir().to_string_lossy().to_string(),
             backend: BackendKind::default(),
+            device_pref: DevicePreference::default(),
             language: "auto".to_string(),
             language_auto: true,
             speaker: "Vivian".to_string(),
@@ -714,6 +1071,8 @@ impl Default for TtsGuiApp {
             output_path: "output.wav".to_string(),
             max_new_tokens: "auto".to_string(),
             seed: String::new(),
+            auto_chunk: true,
+            chunk_chars: DEFAULT_CHUNK_CHARS.to_string(),
             reference_audio: String::new(),
             reference_text: String::new(),
             auto_download: true,
@@ -723,6 +1082,7 @@ impl Default for TtsGuiApp {
             status_log: Vec::new(),
             is_processing: false,
             cancel_flag: Arc::new(AtomicBool::new(false)),
+            chunk_progress: None,
             event_rx: None,
             last_result: None,
         }
@@ -848,13 +1208,45 @@ impl TtsGuiApp {
             Some(self.speaker.trim().to_string())
         };
 
-        let effective_instruct = if is_base {
-            None
-        } else if self.instruct.trim().is_empty() {
+        let effective_instruct = if is_base || self.instruct.trim().is_empty() {
             None
         } else {
             Some(self.instruct.trim().to_string())
         };
+
+        // 長文自動分段設定解析
+        let chunk_max_chars = if self.auto_chunk {
+            match self.chunk_chars.trim().parse::<usize>() {
+                Ok(n) => Some(n.clamp(MIN_CHUNK_CHARS, MAX_CHUNK_CHARS)),
+                Err(_) => {
+                    self.status_log.push((
+                        format!("⚠️ 每段字數格式無效，使用預設 {DEFAULT_CHUNK_CHARS} 字"),
+                        Color32::YELLOW,
+                    ));
+                    Some(DEFAULT_CHUNK_CHARS)
+                }
+            }
+        } else {
+            None
+        };
+
+        // 最大 Token 數：分段合成時自動估算會逐段重新計算，使用者明確指定則作為每段上限
+        let trimmed_max = self.max_new_tokens.trim();
+        let (max_new_tokens, max_tokens_auto) =
+            if trimmed_max.is_empty() || trimmed_max.eq_ignore_ascii_case("auto") {
+                (estimate_max_tokens_for_text(&self.text), true)
+            } else {
+                match trimmed_max.parse::<u32>() {
+                    Ok(v) => (v, false),
+                    Err(_) => {
+                        self.status_log.push((
+                            "⚠️ 最大 Token 數格式無效，改用自動估算".into(),
+                            Color32::YELLOW,
+                        ));
+                        (estimate_max_tokens_for_text(&self.text), true)
+                    }
+                }
+            };
 
         let (tx, rx) = mpsc::channel::<WorkerEvent>();
 
@@ -872,6 +1264,7 @@ impl TtsGuiApp {
                 PathBuf::from(self.models_base_dir.trim())
             },
             backend: self.backend,
+            device_pref: self.device_pref,
             language: if self.language_auto {
                 "auto".into()
             } else {
@@ -903,21 +1296,15 @@ impl TtsGuiApp {
                     }
                 }
             },
-            max_new_tokens: if self.max_new_tokens.trim().is_empty()
-                || self.max_new_tokens.trim().eq_ignore_ascii_case("auto")
-            {
-                estimate_max_tokens_for_text(&self.text)
-            } else {
-                self.max_new_tokens
-                    .trim()
-                    .parse()
-                    .unwrap_or_else(|_| estimate_max_tokens_for_text(&self.text))
-            },
+            max_new_tokens,
+            max_tokens_auto,
+            chunk_max_chars,
             auto_download: self.auto_download,
             hf_mirror: self.effective_hf_endpoint(),
         };
 
         self.is_processing = true;
+        self.chunk_progress = None;
         self.cancel_flag.store(false, Ordering::SeqCst);
         self.event_rx = Some(rx);
 
@@ -927,7 +1314,19 @@ impl TtsGuiApp {
             run_synthesis(params, tx, cancel);
         });
 
-        self.status_log.push(("▶ 開始合成…".into(), Color32::WHITE));
+        let chunk_note = match chunk_max_chars {
+            Some(max_chars) => {
+                let n = split_text_into_chunks(&self.text, max_chars).len();
+                if n > 1 {
+                    format!("（長文自動分成 {n} 段，每段上限 {max_chars} 字，生成後合併）")
+                } else {
+                    String::new()
+                }
+            }
+            None => String::new(),
+        };
+        self.status_log
+            .push((format!("▶ 開始合成…{chunk_note}"), Color32::WHITE));
     }
 
     /// 取消合成
@@ -947,8 +1346,8 @@ impl TtsGuiApp {
                 WorkerEvent::Status(msg) => {
                     self.status_log.push((msg, Color32::WHITE));
                 }
-                WorkerEvent::Progress { .. } => {
-                    // 可以擴充進度條
+                WorkerEvent::Progress { current, total } => {
+                    self.chunk_progress = Some((current, total));
                 }
                 WorkerEvent::DownloadDone(result) => {
                     self.is_processing = false;
@@ -971,6 +1370,7 @@ impl TtsGuiApp {
                 WorkerEvent::Done(result) => {
                     self.is_processing = false;
                     self.is_downloading = false;
+                    self.chunk_progress = None;
                     match result {
                         Ok(res) => {
                             self.last_result = Some(res.clone());
@@ -1312,6 +1712,61 @@ impl eframe::App for TtsGuiApp {
                                         );
                                     });
                                     ui.end_row();
+
+                                    // Long-text auto chunking
+                                    ui.label("長文自動分段：");
+                                    ui.horizontal(|ui| {
+                                        ui.checkbox(&mut self.auto_chunk, "啟用");
+                                        if self.auto_chunk {
+                                            ui.label("每段上限");
+                                            ui.add(
+                                                egui::TextEdit::singleline(&mut self.chunk_chars)
+                                                    .desired_width(56.0)
+                                                    .hint_text(DEFAULT_CHUNK_CHARS.to_string()),
+                                            );
+                                            ui.label("字");
+
+                                            let max_chars = self
+                                                .chunk_chars
+                                                .trim()
+                                                .parse::<usize>()
+                                                .unwrap_or(DEFAULT_CHUNK_CHARS)
+                                                .clamp(MIN_CHUNK_CHARS, MAX_CHUNK_CHARS);
+                                            let total_chars =
+                                                self.text.trim().chars().count();
+                                            if total_chars > max_chars {
+                                                let n = split_text_into_chunks(
+                                                    &self.text,
+                                                    max_chars,
+                                                )
+                                                .len();
+                                                ui.label(
+                                                    RichText::new(format!(
+                                                        "（目前 {total_chars} 字 → 分 {n} 段逐段生成，相同聲音，完成後合併為單一音檔）"
+                                                    ))
+                                                    .size(11.5)
+                                                    .color(Color32::from_rgb(120, 200, 120)),
+                                                );
+                                            } else {
+                                                ui.label(
+                                                    RichText::new(
+                                                        "（文字未達分段門檻，整段一次合成）",
+                                                    )
+                                                    .size(11.5)
+                                                    .color(Color32::from_rgb(180, 180, 180)),
+                                                );
+                                            }
+                                        } else {
+                                            ui.label(
+                                                RichText::new(
+                                                    "（停用：整段一次生成，長文字可能耗時過久或卡死）",
+                                                )
+                                                .size(11.5)
+                                                .color(Color32::from_rgb(220, 160, 60)),
+                                            );
+                                        }
+                                    });
+                                    ui.end_row();
                                 });
                         });
 
@@ -1372,10 +1827,17 @@ impl eframe::App for TtsGuiApp {
                                                     .hint_text("auto"),
                                                 );
                                                 let est = estimate_max_tokens_for_text(&self.text);
-                                                ui.label(
-                                                    RichText::new(format!(
+                                                let hint = if self.auto_chunk {
+                                                    format!(
+                                                        "（整段預估約 {est} 幀；分段合成時此上限套用於每一段，填 auto 即逐段自適應）"
+                                                    )
+                                                } else {
+                                                    format!(
                                                         "（目前預估約 {est} 幀，填 auto 即依字數自適應）"
-                                                    ))
+                                                    )
+                                                };
+                                                ui.label(
+                                                    RichText::new(hint)
                                                     .size(11.5)
                                                     .color(Color32::from_rgb(180, 180, 180)),
                                                 );
@@ -1581,6 +2043,18 @@ impl eframe::App for TtsGuiApp {
                                         .size(13.0)
                                         .color(Color32::from_rgb(100, 180, 255)),
                                 );
+                            } else if let Some((current, total)) = self.chunk_progress {
+                                if total > 1 {
+                                    ui.add(
+                                        egui::ProgressBar::new(current as f32 / total as f32)
+                                            .desired_width(120.0),
+                                    );
+                                    ui.label(
+                                        RichText::new(format!("已完成 {current}/{total} 段"))
+                                            .size(13.0)
+                                            .color(Color32::from_rgb(120, 200, 120)),
+                                    );
+                                }
                             }
                         }
                     });
@@ -1616,7 +2090,7 @@ impl eframe::App for TtsGuiApp {
                     // === 快速提示 ===
                     ui.label(
                         RichText::new(
-                            "💡 提示：合成較長文字時請耐心等候。Candle 後端可選用 CUDA 加速。",
+                            "💡 提示：長文會依「長文自動分段」設定逐段生成（聲音條件一致）後合併為單一音檔，避免一次生成卡死。Candle 後端可選用 CUDA 加速。",
                         )
                         .size(11.0)
                         .color(Color32::GRAY),
@@ -1628,5 +2102,120 @@ impl eframe::App for TtsGuiApp {
         if self.is_processing {
             ctx.request_repaint();
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 測試
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_short_text_returns_single_chunk() {
+        let chunks = split_text_into_chunks("你好，世界。", 100);
+        assert_eq!(chunks, vec!["你好，世界。".to_string()]);
+    }
+
+    #[test]
+    fn split_empty_text_returns_empty() {
+        assert!(split_text_into_chunks("", 100).is_empty());
+        assert!(split_text_into_chunks("   \n  ", 100).is_empty());
+    }
+
+    #[test]
+    fn split_at_sentence_boundaries() {
+        let text = "第一句話。第二句話！第三句話？";
+        let chunks = split_text_into_chunks(text, 100);
+        assert_eq!(chunks.len(), 3, "三句話應切成 3 個分段：{chunks:?}");
+        assert_eq!(chunks[0], "第一句話。");
+        assert_eq!(chunks[1], "第二句話！");
+        assert_eq!(chunks[2], "第三句話？");
+    }
+
+    #[test]
+    fn split_keeps_closing_quotes_with_sentence() {
+        let text = "他說：「你好！」然後轉身離開了。";
+        let chunks = split_text_into_chunks(text, 100);
+        assert_eq!(chunks.len(), 2, "引號應完整保留在句尾：{chunks:?}");
+        assert_eq!(chunks[0], "他說：「你好！」");
+        assert_eq!(chunks[1], "然後轉身離開了。");
+    }
+
+    #[test]
+    fn split_keeps_all_characters() {
+        let text = "今天天氣真好，我們去公園散步吧！路上遇到了老朋友。\n聊了很久，才互相道別再見。";
+        let chunks = split_text_into_chunks(text, 15);
+        let joined: String = chunks.join("");
+        assert_eq!(joined, text.replace('\n', "").trim(), "分段合併後必須與原文一致：{chunks:?}");
+    }
+
+    #[test]
+    fn oversized_sentence_falls_back_to_clause_and_hard_split() {
+        // 沒有句尾標點的超長句：先試子句標點
+        let text = "這是一個非常長的子句，中間有逗號分隔，最後沒有句號結束";
+        let chunks = split_text_into_chunks(text, 12);
+        assert!(chunks.len() >= 2, "應切成多段：{chunks:?}");
+        for chunk in &chunks {
+            assert!(chunk.chars().count() <= 12, "分段超長：{chunk}");
+        }
+
+        // 完全沒有標點的超長句：依字數硬切
+        let text = "甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥";
+        let chunks = split_text_into_chunks(text, 10);
+        assert_eq!(chunks.len(), 3, "24 字上限 10 應切成 3 段：{chunks:?}");
+        for chunk in &chunks {
+            assert!(chunk.chars().count() <= 10);
+        }
+        assert_eq!(chunks.join(""), text);
+    }
+
+    #[test]
+    fn each_sentence_is_individual_chunk() {
+        let text = "嗨。好。走。好。";
+        let chunks = split_text_into_chunks(text, 100);
+        assert_eq!(chunks.len(), 4, "每句話獨立為一個分段：{chunks:?}");
+        assert_eq!(chunks, vec!["嗨。", "好。", "走。", "好。"]);
+    }
+
+    #[test]
+    fn estimate_max_tokens_bounds() {
+        assert_eq!(estimate_max_tokens_for_text(""), 150);
+        assert_eq!(estimate_max_tokens_for_text(&"字".repeat(1000)), 2048);
+        let mid = estimate_max_tokens_for_text(&"字".repeat(120));
+        assert!((150..=2048).contains(&mid));
+    }
+
+    #[test]
+    fn edge_fades_modifies_boundaries_safely() {
+        let mut samples = vec![1.0f32; 100];
+        apply_edge_fades(&mut samples, 10);
+        assert_eq!(samples[0], 0.0);
+        assert!(samples[1] > 0.0 && samples[1] < 1.0);
+        assert_eq!(samples[99], 0.0);
+        assert_eq!(samples[50], 1.0);
+
+        // 短樣本測試
+        let mut short_samples = vec![1.0f32; 1];
+        apply_edge_fades(&mut short_samples, 10);
+        assert_eq!(short_samples, vec![1.0f32]);
+    }
+
+    #[test]
+    fn english_text_chunking() {
+        let text = "Hello world! This is a test sentence. Another sentence goes here; let us continue.";
+        let chunks = split_text_into_chunks(text, 100);
+        assert_eq!(chunks.len(), 4);
+        assert_eq!(
+            chunks,
+            vec![
+                "Hello world!",
+                "This is a test sentence.",
+                "Another sentence goes here;",
+                "let us continue."
+            ]
+        );
     }
 }
