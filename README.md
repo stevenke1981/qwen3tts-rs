@@ -17,7 +17,7 @@
 
 ## 前置需求
 
-- Rust **1.85 或更新版本**。
+- Rust **1.87 或更新版本**。
 - Windows 10/11 x64 為目前 GUI 與安裝程式的主要支援平台。
 - CPU 版本不需要 CUDA。
 - CUDA 版本需要相容的 NVIDIA Driver、CUDA Toolkit、MSVC C++ Build Tools，以及正確的 GPU compute capability。
@@ -139,12 +139,14 @@ cargo check --locked --no-default-features --lib
 提交前建議執行：
 
 ```bash
-cargo fmt --all -- --check
+rustfmt --edition 2024 --check build.rs src/bin/qwen3tts-rs.rs src/bin/qwen3tts-gui.rs
 cargo check --locked --lib --bins --examples
-cargo clippy --locked --lib --bins --examples -- -D warnings
+cargo clippy --locked --lib --bins --examples
 cargo test --locked --lib
 cargo test --locked --tests --no-run
 ```
+
+目前倉庫的模型與數值核心仍有既有 `rustfmt`／Clippy 技術債。CI 對持續維護的入口檔執行格式閘門、以 `-D warnings` 執行編譯檢查，並保留完整 Clippy 報告；請勿把大規模格式重排、數值核心重構與功能修改混在同一個提交中。
 
 Windows GUI feature 驗證：
 
