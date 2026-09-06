@@ -27,7 +27,14 @@ agent_temp*.py
 # Large model weights (keep tokenizer.json fixtures)
 /models/*/
 
-# Multi-agent & temporary runtimes
+# Multi-agent, index and temporary runtimes
 /.agents/
 /.sites-runtime/
 /.qwen/
+/.opencode/
+/.codebase-memory/*.db
+/.codebase-memory/*.db-*
+/.codebase-memory/*.zst
+/.alignment-backup/
+/_tmp_stage_compare/
+/_tmp_compare_stage_dumps.py

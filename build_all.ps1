@@ -1,62 +1,160 @@
-# ==============================================================================
-# Qwen3-TTS 一鍵編譯腳本 (CUDA GPU + 純 CPU 雙版本)
-# ==============================================================================
-$ErrorActionPreference = "Stop"
+[CmdletBinding()]
+param(
+    [ValidatePattern('^[0-9]{2,3}$')]
+    [string]$ComputeCapability = $(if ($env:CUDA_COMPUTE_CAP) { $env:CUDA_COMPUTE_CAP } else { '86' }),
 
-Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host " 🚀 Qwen3-TTS 雙版本編譯 (CUDA GPU 加速版 + 純 CPU 輕量版)" -ForegroundColor Cyan
-Write-Host "==========================================================" -ForegroundColor Cyan
+    [switch]$CpuOnly,
+    [switch]$CudaOnly
+)
 
-# ------------------------------------------------------------------------------
-# 1. 配置 MSVC C++ 編譯器環境（供 nvcc 使用）
-# ------------------------------------------------------------------------------
-Write-Host "`n[1/3] 偵測並配置 MSVC C++ 編譯器環境..." -ForegroundColor Yellow
-$msvcHostX64 = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64"
-if (-not (Test-Path $msvcHostX64)) {
-    $found = Get-ChildItem -Path "C:\Program Files*\Microsoft Visual Studio\**\Hostx64\x64\cl.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($found) {
-        $msvcHostX64 = $found.DirectoryName
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+if ($CpuOnly -and $CudaOnly) {
+    throw '-CpuOnly 與 -CudaOnly 不可同時使用。'
+}
+
+$repoRoot = $PSScriptRoot
+$cargoCommand = Get-Command cargo -ErrorAction Stop
+$cargoPath = $cargoCommand.Source
+
+function Invoke-CargoBuild {
+    param([Parameter(Mandatory)][string[]]$Arguments)
+
+    Write-Host "`n> cargo $($Arguments -join ' ')" -ForegroundColor DarkGray
+    & $script:cargoPath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cargo command failed with exit code $LASTEXITCODE."
     }
 }
-Write-Host "使用 MSVC 路徑: $msvcHostX64"
-$env:NVCC_CCBIN = $msvcHostX64
-$env:PATH = "$msvcHostX64;" + $env:PATH
-$env:CUDA_COMPUTE_CAP = "86"
 
-# ------------------------------------------------------------------------------
-# 2. 編譯 NVIDIA CUDA GPU 加速版本
-# ------------------------------------------------------------------------------
-Write-Host "`n[2/3] 編譯 CUDA GPU 加速版 (Release)..." -ForegroundColor Green
-cargo build --release --bin qwen3tts-gui --features cuda
-if ($LASTEXITCODE -eq 0) {
-    Copy-Item -Path "target\release\qwen3tts-gui.exe" -Destination "target\release\qwen3tts-gui-cuda.exe" -Force
-    Write-Host "✅ CUDA GPU 版本產出成功: target\release\qwen3tts-gui-cuda.exe" -ForegroundColor Green
-} else {
-    Write-Host "❌ CUDA 版本編譯失敗!" -ForegroundColor Red
-    exit 1
+function Import-VisualStudioEnvironment {
+    if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    $vswhereCommand = Get-Command vswhere.exe -ErrorAction SilentlyContinue
+    $vswhereExecutable = if ($vswhereCommand) { $vswhereCommand.Source } else { $null }
+    if (-not $vswhereExecutable) {
+        $candidates = @()
+        if (${env:ProgramFiles(x86)}) {
+            $candidates += Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        }
+        if ($env:ProgramFiles) {
+            $candidates += Join-Path $env:ProgramFiles 'Microsoft Visual Studio\Installer\vswhere.exe'
+        }
+        $vswhereExecutable = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
+
+    if (-not $vswhereExecutable) {
+        throw '找不到 vswhere.exe。請安裝 Visual Studio 2022 Build Tools 與「Desktop development with C++」。'
+    }
+
+    $installationPath = & $vswhereExecutable -latest -products '*' `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        -property installationPath
+    if ($LASTEXITCODE -ne 0 -or -not $installationPath) {
+        throw '找不到含 MSVC x64 工具鏈的 Visual Studio 安裝。'
+    }
+
+    $vcvars = Join-Path ($installationPath | Select-Object -First 1) 'VC\Auxiliary\Build\vcvars64.bat'
+    if (-not (Test-Path $vcvars)) {
+        throw "找不到 vcvars64.bat：$vcvars"
+    }
+
+    Write-Host "載入 MSVC 開發環境：$vcvars" -ForegroundColor DarkGray
+    $environmentLines = & $env:ComSpec /d /s /c "`"$vcvars`" >nul && set"
+    if ($LASTEXITCODE -ne 0) {
+        throw "vcvars64.bat 執行失敗，exit code $LASTEXITCODE。"
+    }
+
+    foreach ($line in $environmentLines) {
+        $parts = $line -split '=', 2
+        if ($parts.Count -eq 2 -and $parts[0] -and -not $parts[0].StartsWith('=')) {
+            [Environment]::SetEnvironmentVariable($parts[0], $parts[1], 'Process')
+        }
+    }
+
+    if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
+        throw 'MSVC 環境已載入，但仍找不到 cl.exe。'
+    }
 }
 
-# ------------------------------------------------------------------------------
-# 3. 編譯 純 CPU 輕量版本（無 GPU 依賴，可在任何 x64 Windows 執行）
-# ------------------------------------------------------------------------------
-Write-Host "`n[3/3] 編譯 純 CPU 輕量版 (Release, No-CUDA)..." -ForegroundColor Green
-cargo build --release --bin qwen3tts-gui --no-default-features --features "cpu,candle-llm"
-if ($LASTEXITCODE -eq 0) {
-    Copy-Item -Path "target\release\qwen3tts-gui.exe" -Destination "target\release\qwen3tts-gui-cpu.exe" -Force
-    Write-Host "✅ 純 CPU 版本產出成功: target\release\qwen3tts-gui-cpu.exe" -ForegroundColor Green
-} else {
-    Write-Host "❌ 純 CPU 版本編譯失敗!" -ForegroundColor Red
-    exit 1
+Push-Location $repoRoot
+try {
+    Write-Host '============================================================' -ForegroundColor Cyan
+    Write-Host ' Qwen3-TTS Rust release builder' -ForegroundColor Cyan
+    Write-Host '============================================================' -ForegroundColor Cyan
+
+    # CLI 與轉換工具不依賴 GUI，可先建立可攜 CPU 版本。
+    Write-Host "`n[Common] 建置 CLI 與 GGUF 轉換工具..." -ForegroundColor Yellow
+    Invoke-CargoBuild -Arguments @(
+        'build', '--locked', '--release',
+        '--no-default-features', '--features', 'cpu,candle-llm',
+        '--bin', 'qwen3tts-rs', '--bin', 'convert-gguf'
+    )
+
+    $releaseDir = Join-Path $repoRoot 'target\release'
+    $cpuOutput = Join-Path $releaseDir 'qwen3tts-gui-cpu.exe'
+    $cudaOutput = Join-Path $releaseDir 'qwen3tts-gui-cuda.exe'
+    $defaultOutput = Join-Path $releaseDir 'qwen3tts-gui.exe'
+
+    if (-not $CpuOnly) {
+        Write-Host "`n[CUDA] 檢查 CUDA Toolkit 與 MSVC..." -ForegroundColor Yellow
+        Import-VisualStudioEnvironment
+
+        $nvcc = Get-Command nvcc.exe -ErrorAction SilentlyContinue
+        if (-not $nvcc) {
+            $nvcc = Get-Command nvcc -ErrorAction SilentlyContinue
+        }
+        if (-not $nvcc) {
+            throw '找不到 nvcc。請安裝 CUDA Toolkit，並將其 bin 目錄加入 PATH。'
+        }
+
+        $cl = Get-Command cl.exe -ErrorAction Stop
+        $env:NVCC_CCBIN = Split-Path -Parent $cl.Source
+        $env:CUDA_COMPUTE_CAP = $ComputeCapability
+
+        Write-Host "CUDA compiler：$($nvcc.Source)" -ForegroundColor DarkGray
+        Write-Host "MSVC compiler：$($cl.Source)" -ForegroundColor DarkGray
+        Write-Host "Compute capability：$ComputeCapability" -ForegroundColor DarkGray
+
+        Invoke-CargoBuild -Arguments @(
+            'build', '--locked', '--release',
+            '--no-default-features', '--features', 'cpu,candle-llm,gui,cuda',
+            '--bin', 'qwen3tts-gui'
+        )
+        Copy-Item $defaultOutput $cudaOutput -Force
+        Write-Host "CUDA GUI：$cudaOutput" -ForegroundColor Green
+    }
+
+    if (-not $CudaOnly) {
+        Write-Host "`n[CPU] 建置不依賴 CUDA 的 GUI..." -ForegroundColor Yellow
+        Invoke-CargoBuild -Arguments @(
+            'build', '--locked', '--release',
+            '--no-default-features', '--features', 'cpu,candle-llm,gui',
+            '--bin', 'qwen3tts-gui'
+        )
+        Copy-Item $defaultOutput $cpuOutput -Force
+        Write-Host "CPU GUI：$cpuOutput" -ForegroundColor Green
+    }
+
+    # CPU build 會覆寫原始檔名；有 CUDA 產物時，讓預設檔名恢復為 CUDA/CPU 自動回退版本。
+    if (Test-Path $cudaOutput) {
+        Copy-Item $cudaOutput $defaultOutput -Force
+    } elseif (Test-Path $cpuOutput) {
+        Copy-Item $cpuOutput $defaultOutput -Force
+    }
+
+    Write-Host "`n============================================================" -ForegroundColor Cyan
+    Write-Host ' 建置完成' -ForegroundColor Green
+    Write-Host " CLI：$(Join-Path $releaseDir 'qwen3tts-rs.exe')"
+    Write-Host " GGUF converter：$(Join-Path $releaseDir 'convert-gguf.exe')"
+    if (Test-Path $defaultOutput) { Write-Host " GUI：$defaultOutput" }
+    if (Test-Path $cudaOutput) { Write-Host " CUDA GUI：$cudaOutput" }
+    if (Test-Path $cpuOutput) { Write-Host " CPU GUI：$cpuOutput" }
+    Write-Host '============================================================' -ForegroundColor Cyan
 }
-
-# ------------------------------------------------------------------------------
-# 4. 再次確保預設 qwen3tts-gui.exe 為具備自動回退的 CUDA 版本
-# ------------------------------------------------------------------------------
-Copy-Item -Path "target\release\qwen3tts-gui-cuda.exe" -Destination "target\release\qwen3tts-gui.exe" -Force
-
-Write-Host "`n==========================================================" -ForegroundColor Cyan
-Write-Host " 🎉 全部編譯完成！產出檔案清單：" -ForegroundColor Cyan
-Write-Host " 1. target\release\qwen3tts-gui.exe      (預設版：具備 GPU/CPU 自動偵測與平滑回退)" -ForegroundColor White
-Write-Host " 2. target\release\qwen3tts-gui-cuda.exe (專屬版：CUDA GPU 硬體加速)" -ForegroundColor White
-Write-Host " 3. target\release\qwen3tts-gui-cpu.exe  (輕量版：純 CPU，免安裝 CUDA 驅動)" -ForegroundColor White
-Write-Host "==========================================================" -ForegroundColor Cyan
+finally {
+    Pop-Location
+}

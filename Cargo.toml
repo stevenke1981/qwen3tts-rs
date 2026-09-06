@@ -2,17 +2,22 @@
 name = "qwen3tts-rs"
 version = "0.2.0"
 edition = "2024"
-description = "Qwen3-TTS Codec Decode module - pure Rust/Candle rewrite"
+rust-version = "1.87"
+description = "Qwen3-TTS inference, codec decoding, CLI and desktop GUI in Rust with Candle"
+readme = "README.md"
 license = "MIT"
-repository = "https://github.com/steven/qwen3tts-rs"
+repository = "https://github.com/stevenke1981/qwen3tts-rs"
+keywords = ["text-to-speech", "tts", "qwen3", "candle", "rust"]
+categories = ["multimedia::audio", "science"]
 
 [features]
 default = ["cpu", "candle-llm"]
-stage-dump = ["sha2"]
+stage-dump = ["dep:sha2"]
 cuda = ["candle-core/cuda"]
 metal = ["candle-core/metal"]
 cpu = []
 candle-llm = []
+gui = ["dep:eframe", "dep:egui", "dep:rfd", "dep:rodio"]
 
 [dependencies]
 # Candle ML framework
@@ -46,15 +51,11 @@ log = "0.4"
 # HuggingFace tokenizer (pure-Rust BPE, used by the native talker backend)
 tokenizers = "0.22"
 
-# GUI framework
-eframe = { version = "0.31", features = ["default"] }
-egui = "0.31"
-
-# Native file dialogs
-rfd = "0.15"
-
-# Audio playback
-rodio = "0.20"
+# Optional desktop GUI and playback stack
+eframe = { version = "0.31", optional = true }
+egui = { version = "0.31", optional = true }
+rfd = { version = "0.15", optional = true }
+rodio = { version = "0.20", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11"
@@ -94,8 +95,13 @@ name = "bench_decoder_12hz"
 harness = false
 
 [[bin]]
+name = "qwen3tts-rs"
+path = "src/bin/qwen3tts-rs.rs"
+
+[[bin]]
 name = "qwen3tts-gui"
 path = "src/bin/qwen3tts-gui.rs"
+required-features = ["gui"]
 
 [[bin]]
 name = "convert-gguf"

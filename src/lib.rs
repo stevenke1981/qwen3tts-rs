@@ -14,6 +14,7 @@
 pub mod alignment_stage_dump;
 pub mod codec;
 pub mod downloader;
+#[cfg(feature = "gui")]
 pub mod gui;
 pub mod paths;
 pub mod quantization;
