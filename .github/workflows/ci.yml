@@ -54,7 +54,7 @@ jobs:
       # focused on the maintained entry points until a dedicated format-only
       # change can be reviewed separately from model and numerical code.
       - name: Check maintained entry-point formatting
-        run: rustfmt --edition 2024 --check src/bin/qwen3tts-rs.rs src/bin/qwen3tts-gui.rs
+        run: rustfmt --edition 2024 --check build.rs src/bin/qwen3tts-rs.rs src/bin/qwen3tts-gui.rs
 
       - name: Check library, binaries and examples
         run: cargo check --locked --lib --bins --examples
