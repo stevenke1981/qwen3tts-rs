@@ -53,7 +53,12 @@ jobs:
       # focused on maintained entry points until a dedicated format-only
       # change can be reviewed separately from model and numerical code.
       - name: Check maintained entry-point formatting
-        run: rustfmt --edition 2024 --check build.rs src/bin/qwen3tts-rs.rs src/bin/qwen3tts-gui.rs
+        run: >-
+          rustfmt --edition 2024 --check
+          build.rs
+          src/bin/qwen3tts-rs.rs
+          src/bin/qwen3tts-gui.rs
+          tests/downloader_gui_test.rs
 
       - name: Check library, binaries and examples
         env:
@@ -162,6 +167,12 @@ jobs:
         env:
           RUSTFLAGS: "-D warnings"
         run: cargo check --locked --no-default-features --features "cpu,candle-llm,gui" --bin qwen3tts-gui
+
+      - name: Compile GUI integration coverage
+        run: >-
+          cargo test --locked --no-default-features
+          --features "cpu,candle-llm,gui"
+          --test downloader_gui_test --no-run
 
       - name: Run GUI unit tests
         run: cargo test --locked --no-default-features --features "cpu,candle-llm,gui" --lib gui::tests
