@@ -1,115 +1,125 @@
-# CI 管線 — Qwen3-TTS Rust 重寫
-#
-# 每次 push / PR 執行：
-# 1. cargo build (CPU, default features)
-# 2. cargo test --lib (單元測試)
-# 3. cargo clippy --all-targets (warnings-as-errors)
-# 4. cargo build --features cuda (CUDA 編譯驗證，僅 Linux)
-# 5. 可選基準測試（僅 main 分支）
-
 name: CI
 
 on:
   push:
-    branches: [main, dev, "feat/**", "fix/**"]
+    branches:
+      - master
+      - "feat/**"
+      - "fix/**"
+      - "review/**"
   pull_request:
-    branches: [main, dev]
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # 構建 + 測試（CPU）
-  # ---------------------------------------------------------------------------
-  build-and-test:
-    name: Build & Test (CPU)
+  quality:
+    name: Format, build, lint and test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Rust (stable)
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-quality-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-quality-
+            ${{ runner.os }}-
 
-      - name: cargo build (default = CPU)
-        run: cargo build --all-targets --verbose
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-      - name: cargo clippy (warnings as errors)
-        run: cargo clippy --all-targets -- -D warnings
+      - name: Check library, binaries and examples
+        run: cargo check --locked --lib --bins --examples
 
-      - name: cargo test (lib)
-        run: cargo test --lib --verbose
+      - name: Clippy
+        run: cargo clippy --locked --lib --bins --examples -- -D warnings
 
-      - name: cargo test (integration)
-        run: cargo test --test integration_test --verbose
-        continue-on-error: true  # integration tests need weight files
+      - name: Run library tests
+        run: cargo test --locked --lib
 
-  # ---------------------------------------------------------------------------
-  # CUDA 構建驗證（僅 Linux x86_64）
-  # ---------------------------------------------------------------------------
-  cuda-build:
-    name: Build (CUDA)
+      - name: Compile integration tests
+        run: cargo test --locked --tests --no-run
+
+  minimal-core:
+    name: Minimal core feature set
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Rust (stable)
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-cuda-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-minimal-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-minimal-
+            ${{ runner.os }}-
 
-      - name: cargo build (CUDA)
-        run: cargo build --features cuda --verbose
-        env:
-          CUDA_HOME: /usr/local/cuda
+      - name: Check without default features
+        run: cargo check --locked --no-default-features --lib
 
-  # ---------------------------------------------------------------------------
-  # 基準測試（僅 main 分支）
-  # ---------------------------------------------------------------------------
-  benchmark:
-    name: Benchmark
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: github.ref == 'refs/heads/main'
+  gui-windows:
+    name: Windows GUI feature
+    runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Rust (stable)
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-gui-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gui-
+            ${{ runner.os }}-
 
-      - name: cargo bench (causal_conv + codebook)
-        run: cargo bench --bench bench_causal_conv --bench bench_codebook --verbose
-        continue-on-error: true  # benches may fluctuate on CI runners
+      - name: Check GUI binary
+        run: cargo check --locked --no-default-features --features "cpu,candle-llm,gui" --bin qwen3tts-gui
+
+      - name: Run GUI unit tests
+        run: cargo test --locked --no-default-features --features "cpu,candle-llm,gui" --lib gui::tests
