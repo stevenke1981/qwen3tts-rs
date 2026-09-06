@@ -1,8 +1,10 @@
 use std::path::Path;
+
 use qwen3tts::downloader::{
-    detect_download_tool, hf_hub_cache_dir, is_model_ready, is_tokenizer_ready,
-    locate_model_snapshot, HF_MIRROR_ENDPOINT, HF_OFFICIAL_ENDPOINT,
+    HF_MIRROR_ENDPOINT, HF_OFFICIAL_ENDPOINT, detect_download_tool, hf_hub_cache_dir,
+    is_model_ready, is_tokenizer_ready, locate_model_snapshot,
 };
+#[cfg(feature = "gui")]
 use qwen3tts::gui::{BackendKind, SynthesisParams, TtsGuiApp};
 
 #[test]
@@ -54,7 +56,8 @@ fn test_locate_model_in_dir() {
     let fake_weight = model_subdir.join("model.safetensors");
     std::fs::write(&fake_weight, b"fake weight").unwrap();
 
-    let found = qwen3tts::downloader::locate_model_in_dir("Qwen/Qwen3-TTS-12Hz-0.6B-Base", &temp_dir);
+    let found =
+        qwen3tts::downloader::locate_model_in_dir("Qwen/Qwen3-TTS-12Hz-0.6B-Base", &temp_dir);
     assert!(found.is_some(), "應能在 models 資料夾下找到模型子目錄");
     assert_eq!(found.unwrap(), model_subdir);
 
@@ -67,6 +70,7 @@ fn test_endpoints_constants() {
     assert_eq!(HF_MIRROR_ENDPOINT, "https://hf-mirror.com");
 }
 
+#[cfg(feature = "gui")]
 #[test]
 fn test_gui_app_default_models_dir() {
     let dir = qwen3tts::gui::default_models_dir();
@@ -77,6 +81,7 @@ fn test_gui_app_default_models_dir() {
     let _ = app;
 }
 
+#[cfg(feature = "gui")]
 #[test]
 fn test_synthesis_params_auto_download_fields() {
     let params = SynthesisParams {
@@ -108,9 +113,10 @@ fn test_synthesis_params_auto_download_fields() {
     assert_eq!(params.chunk_max_chars, Some(120));
 }
 
+#[cfg(feature = "gui")]
 #[test]
 fn test_gui_app_default_chunk_settings() {
-    use qwen3tts::gui::{split_text_into_chunks, DEFAULT_CHUNK_CHARS};
+    use qwen3tts::gui::{DEFAULT_CHUNK_CHARS, split_text_into_chunks};
 
     assert_eq!(DEFAULT_CHUNK_CHARS, 120);
 
