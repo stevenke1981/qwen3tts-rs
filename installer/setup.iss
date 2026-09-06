@@ -3,7 +3,7 @@
 
 #define MyAppName "Qwen3-TTS Rust"
 #define MyAppVersion "0.2.0"
-#define MyAppPublisher "qwen3tts-rs"
+#define MyAppPublisher "qwen3tts-rs contributors"
 #define MyAppURL "https://github.com/stevenke1981/qwen3tts-rs"
 
 [Setup]
@@ -22,7 +22,6 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 PrivilegesRequired=lowest
-SetupIconFile=
 UninstallDisplayIcon={app}\qwen3tts-gui.exe
 
 [Languages]
@@ -32,8 +31,8 @@ Name: "tradchinese"; MessagesFile: "compiler:Languages\TraditionalChinese.isl"
 [Files]
 ; Release binaries
 Source: "..\target\release\qwen3tts-gui.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\target\release\qwen3tts-rs.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\release\convert-gguf.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\target\release\examples\synthesize.exe"; DestDir: "{app}"; DestName: "qwen3tts-synthesize.exe"; Flags: ignoreversion
 
 ; Installer scripts
 Source: "download_weights.ps1"; DestDir: "{app}"; Flags: ignoreversion
@@ -41,13 +40,13 @@ Source: "qwen3tts-env.cmd"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Qwen3-TTS GUI"; Filename: "{app}\qwen3tts-gui.exe"
+Name: "{group}\Qwen3-TTS Command Prompt"; Filename: "{cmd}"; Parameters: "/K ""{app}\qwen3tts-env.cmd"""
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 
 [Run]
 Filename: "{app}\qwen3tts-gui.exe"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-// Download model weights after installation
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
