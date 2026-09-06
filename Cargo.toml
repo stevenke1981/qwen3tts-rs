@@ -2,7 +2,7 @@
 name = "qwen3tts-rs"
 version = "0.2.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 description = "Qwen3-TTS inference, codec decoding, CLI and desktop GUI in Rust with Candle"
 readme = "README.md"
 license = "MIT"
