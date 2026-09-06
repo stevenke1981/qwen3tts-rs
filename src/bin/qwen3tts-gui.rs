@@ -5,14 +5,16 @@
 //! ## 使用方式
 //!
 //! ```bash
-//! # 基本啟動（Python 後端）
-//! cargo run --bin qwen3tts-gui
+//! # CPU + Candle 原生後端
+//! cargo run --bin qwen3tts-gui --no-default-features \
+//!     --features "cpu,candle-llm,gui"
 //!
-//! # 使用 Candle 原生後端
-//! cargo run --bin qwen3tts-gui --features candle-llm
+//! # Python bridge（不啟用 Candle Talker）
+//! cargo run --bin qwen3tts-gui --no-default-features --features "cpu,gui"
 //!
-//! # 使用 CUDA 加速
-//! cargo run --bin qwen3tts-gui --features "candle-llm cuda"
+//! # NVIDIA CUDA 加速
+//! cargo run --bin qwen3tts-gui --no-default-features \
+//!     --features "cpu,candle-llm,gui,cuda"
 //! ```
 
 fn main() -> eframe::Result<()> {
