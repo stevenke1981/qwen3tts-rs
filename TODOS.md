@@ -8,7 +8,8 @@ Overall status: `IN_PROGRESS`
 - [x] Add separate Windows CPU/CUDA builds and automatic bundle workflow.
 - [x] Independently review device handling, launcher and release permissions.
 - [x] Verify local CUDA release build and real-kernel probe on RTX 3070 Ti.
-- [ ] Verify final remote three-platform build, automatic bundle and publication.
+- [x] Verify final remote three-platform build, automatic bundle and publication
+  (run `34095044057`; preview `preview-9e32568c2592-34095044057-1`).
 
 ## P00 — Baseline and parity harness
 

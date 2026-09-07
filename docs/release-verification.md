@@ -42,11 +42,26 @@ Baseline: `a4f49ea` on GitHub `master`.
 - Real release executables staged with `installer/Start-Qwen3TTS.ps1`:
   Windows PowerShell 5.1 `-ProbeOnly` selected CUDA successfully, and
   `-Device Cpu -ProbeOnly` selected the independent CPU executable.
+- `cargo test --locked --no-default-features --features cpu,candle-llm,gui
+  --test gui_device_selection_test`: 7 passed, 0 failed, 0 ignored locally.
+- Candidate run `34094160652`: all three builds and automatic bundle passed.
+  Downloaded Windows CPU and CUDA archives passed SHA-256 verification.
+  Packaged CPU and CUDA GUI probes both exited 0. With CUDA Toolkit entries
+  removed from the test process PATH, the packaged CUDA DLLs still supported
+  the real-kernel probe and the launcher selected CUDA successfully.
 - The MSVC environment command was independently reviewed and run locally:
   exit 0, 133 environment entries. This corrects the remote CUDA job's quoting
   failure; the corrected remote initialization passed in run `34094160652`.
 
 ## Remote evidence
+
+- Mainline CI `34095044017`: success.
+- Mainline release `34095044057`: all three builds, automatic bundle and publish
+  succeeded. Source commit: `9e32568c2592f9aaa2f632add8bb620a6714f74d`.
+- Published release: https://github.com/stevenke1981/qwen3tts-rs/releases/tag/preview-9e32568c2592-34095044057-1
+- Downloaded runtime checks above used candidate `a4c666e`; the published source
+  differs only in documentation. Published artifacts are certified by their
+  own workflow checks, not claimed to be the exact locally executed binaries.
 
 Candidate workflow and CI runs are linked from the GitHub commit checks.
 Every release includes its exact commit and run URL, archive checksums, and

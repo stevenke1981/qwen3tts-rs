@@ -14,9 +14,11 @@
 
 Product release work is tracked separately in `docs/release-verification.md`:
 CPU/CUDA packaging and automatic device selection do not change this alignment
-Gate. Hosted CI run `34093639233` passed all four jobs. Local CUDA release build
-and the real-kernel device probe passed on RTX 3070 Ti; remote CUDA packaging
-and the final automatic bundle remain under verification.
+Gate. Mainline CI run `34095044017` passed. Mainline release run `34095044057`
+passed Windows CPU, Windows CUDA, Linux CPU, automatic bundle and publication.
+Local CUDA release build and the real-kernel device probe passed on RTX 3070 Ti;
+downloaded candidate CPU/CUDA packages passed hashes and runtime device probes.
+Published preview: `preview-9e32568c2592-34095044057-1`.
 
 - Qwen 3.8 Preview's first submission was independently rejected as
   `F8 BLOCKED`; its official export contained 678/723 stages.
