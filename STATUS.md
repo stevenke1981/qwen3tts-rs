@@ -12,6 +12,12 @@
 
 ## P03-T05 Gate Result
 
+Product release work is tracked separately in `docs/release-verification.md`:
+CPU/CUDA packaging and automatic device selection do not change this alignment
+Gate. Hosted CI run `34093639233` passed all four jobs. Local CUDA release build
+and the real-kernel device probe passed on RTX 3070 Ti; remote CUDA packaging
+and the final automatic bundle remain under verification.
+
 - Qwen 3.8 Preview's first submission was independently rejected as
   `F8 BLOCKED`; its official export contained 678/723 stages.
 - Sol reproduced the complete 723-stage Candle run, but the full comparator

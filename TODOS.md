@@ -2,6 +2,14 @@
 
 Overall status: `IN_PROGRESS`
 
+## Product packaging (outside numerical alignment gates)
+
+- [x] Implement CPU/CUDA GUI selection with asynchronous probing and CPU fallback.
+- [x] Add separate Windows CPU/CUDA builds and automatic bundle workflow.
+- [x] Independently review device handling, launcher and release permissions.
+- [x] Verify local CUDA release build and real-kernel probe on RTX 3070 Ti.
+- [ ] Verify final remote three-platform build, automatic bundle and publication.
+
 ## P00 — Baseline and parity harness
 
 - [x] `P00-T01` Pin target/reference/upstream revisions and write baseline delta report
