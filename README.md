@@ -27,7 +27,9 @@
 
 ### 下載預編譯版本
 
-[GitHub Releases](https://github.com/stevenke1981/qwen3tts-rs/releases) 提供 Windows x64 CPU（GUI、CLI 與轉換工具）及 Linux x64 CPU（CLI 與轉換工具）壓縮包。
+[GitHub Releases](https://github.com/stevenke1981/qwen3tts-rs/releases) 提供 Windows x64 CPU、CUDA（GUI、CLI 與轉換工具）及 Linux x64 CPU（CLI 與轉換工具）壓縮包。
+Windows 建議下載 `qwen3tts-rs-windows-x64-auto.zip`，解壓後開啟 `Start-Qwen3TTS.cmd`，會測試 CUDA 並在不可用時開啟 CPU 介面。
+介面的運算裝置可選「自動偵測／CPU／CUDA」，顯示背景偵測結果與最近合成實際使用的裝置。
 主分支每次更新會在測試與編譯成功後建立獨立預覽版；`v*` 版本標籤用於正式發行。
 下載後可用附帶的 SHA-256 校驗碼核對檔案，模型權重仍需另外準備。
 發行觸發方式與限制詳見 [自動發行文件](docs/automatic-releases.md)。

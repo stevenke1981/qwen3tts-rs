@@ -21,7 +21,7 @@ env:
 
 jobs:
   build:
-    name: Build ${{ matrix.target }} CPU
+    name: Build ${{ matrix.target }} ${{ matrix.variant }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -31,9 +31,15 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             features: cpu,candle-llm,gui
+            variant: cpu
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             features: cpu,candle-llm
+            variant: cpu
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            features: cpu,cuda,candle-llm,gui
+            variant: cuda
     defaults:
       run:
         shell: pwsh
@@ -56,15 +62,54 @@ jobs:
             ~/.cargo/git
           key: release-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
+      - name: Install CUDA toolkit
+        if: matrix.variant == 'cuda'
+        id: cuda
+        uses: Jimver/cuda-toolkit@b8bf9c6c28f8a92fbb04dcfcaee872e60c57462d # v0.2.36
+        with:
+          cuda: '13.2.0'
+          method: network
+          sub-packages: '["nvcc", "crt", "nvvm", "nvptxcompiler", "cudart", "cublas", "cublas_dev", "curand", "curand_dev", "nvrtc", "nvrtc_dev"]'
+
+      - name: Initialize MSVC and CUDA build environment
+        if: matrix.variant == 'cuda'
+        env:
+          TOOLKIT_PATH: ${{ steps.cuda.outputs.CUDA_PATH }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0 -or !$vs) { throw 'MSVC installation not found' }
+          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+          $environment = & cmd.exe /d /s /c "`"`"$vcvars`" >nul && set`""
+          if ($LASTEXITCODE -ne 0) { throw 'MSVC environment initialization failed' }
+          foreach ($line in $environment) {
+            if ($line -match '^([^=]+)=(.*)$') {
+              [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+              if ($Matches[1] -in @('PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'VCToolsInstallDir', 'VCINSTALLDIR', 'WindowsSdkDir', 'WindowsSDKVersion', 'WindowsSdkVerBinPath', 'UCRTVersion', 'UniversalCRTSdkDir')) {
+                "$($Matches[1])=$($Matches[2])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              }
+            }
+          }
+          $compiler = (Get-Command cl.exe -ErrorAction Stop).Source
+          "NVCC_CCBIN=$(Split-Path -Parent $compiler)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CUDA_COMPUTE_CAP=86' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CUDA_PATH=$env:TOOLKIT_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          foreach ($relative in @('bin', 'bin/x64')) {
+            $path = Join-Path $env:TOOLKIT_PATH $relative
+            if (Test-Path -LiteralPath $path) { $path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
+          }
+
       - name: Cache target build output
         uses: actions/cache@v4
         with:
           path: target
-          key: release-target-${{ matrix.target }}-cpu-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'build.rs', 'patches/**', '.github/workflows/release.yml') }}-${{ github.sha }}
+          key: release-target-${{ matrix.target }}-${{ matrix.variant }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'build.rs', 'patches/**', '.github/workflows/release.yml') }}-${{ github.sha }}
           restore-keys: |
-            release-target-${{ matrix.target }}-cpu-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'build.rs', 'patches/**', '.github/workflows/release.yml') }}-
+            release-target-${{ matrix.target }}-${{ matrix.variant }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'build.rs', 'patches/**', '.github/workflows/release.yml') }}-
 
       - name: Run library tests
+        if: matrix.variant == 'cpu'
         env:
           BUILD_TARGET: ${{ matrix.target }}
           BUILD_FEATURES: ${{ matrix.features }}
@@ -80,10 +125,11 @@ jobs:
           cargo build --release --locked --no-default-features --features $env:BUILD_FEATURES --target $env:BUILD_TARGET --bins
           if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
 
-      - name: Smoke-test CLI and package
+      - name: Validate and package binaries
         env:
           BUILD_TARGET: ${{ matrix.target }}
           BUILD_FEATURES: ${{ matrix.features }}
+          BUILD_VARIANT: ${{ matrix.variant }}
           BUILD_SHA: ${{ github.sha }}
           BUILD_RUN: ${{ github.run_id }}
           BUILD_ATTEMPT: ${{ github.run_attempt }}
@@ -91,12 +137,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $suffix = if ($IsWindows) { '.exe' } else { '' }
           $binDir = Join-Path "target/$env:BUILD_TARGET" 'release'
-          & (Join-Path $binDir "qwen3tts-rs$suffix") --help
-          if ($LASTEXITCODE -ne 0) { throw 'CLI --help smoke test failed' }
-          & (Join-Path $binDir "convert-gguf$suffix") --help
-          if ($LASTEXITCODE -ne 0) { throw 'Converter --help smoke test failed' }
+          if ($env:BUILD_VARIANT -eq 'cpu') {
+            & (Join-Path $binDir "qwen3tts-rs$suffix") --help
+            if ($LASTEXITCODE -ne 0) { throw 'CLI --help smoke test failed' }
+            & (Join-Path $binDir "convert-gguf$suffix") --help
+            if ($LASTEXITCODE -ne 0) { throw 'Converter --help smoke test failed' }
+          }
 
-          $package = "qwen3tts-rs-$env:BUILD_TARGET-cpu"
+          $package = "qwen3tts-rs-$env:BUILD_TARGET-$env:BUILD_VARIANT"
+          if ($env:BUILD_VARIANT -eq 'cuda') { $package += '-sm86' }
           $stage = Join-Path 'package' $package
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           New-Item -ItemType Directory -Path 'dist' -Force | Out-Null
@@ -108,14 +157,26 @@ jobs:
             Copy-Item -LiteralPath $source -Destination $stage
           }
           Copy-Item -LiteralPath 'README.md', 'LICENSE', 'docs/automatic-releases.md' -Destination $stage
+          if ($env:BUILD_VARIANT -eq 'cuda') {
+            # Hosted runners have no GPU/driver: compile and dependency presence only.
+            $cudaBin = Join-Path $env:CUDA_PATH 'bin'
+            foreach ($pattern in @('cublas64*.dll', 'cublasLt64*.dll', 'curand64*.dll', 'nvrtc64*.dll', 'nvrtc-builtins*.dll', 'cudart64*.dll')) {
+              $libraries = @(Get-ChildItem -LiteralPath $cudaBin -Recurse -File -Filter $pattern)
+              if ($libraries.Count -eq 0) { throw "Missing CUDA runtime dependency: $pattern" }
+              foreach ($library in $libraries) { Copy-Item -LiteralPath $library.FullName -Destination $stage }
+            }
+          }
           $metadata = [ordered]@{
             commit = $env:BUILD_SHA
             target = $env:BUILD_TARGET
             features = $env:BUILD_FEATURES
+            variant = $env:BUILD_VARIANT
+            cuda_compute_cap = if ($env:BUILD_VARIANT -eq 'cuda') { '86' } else { $null }
+            cuda_toolkit = if ($env:BUILD_VARIANT -eq 'cuda') { '13.2.0' } else { $null }
             run_id = $env:BUILD_RUN
             run_attempt = $env:BUILD_ATTEMPT
             rustc = (rustc --version)
-            validation = 'Library tests and CLI --help only; no model or numerical alignment certification.'
+            validation = if ($env:BUILD_VARIANT -eq 'cuda') { 'Compile and required DLL presence only; no GPU runtime verification on hosted runner.' } else { 'Library tests and CLI --help only; no model or numerical alignment certification.' }
           }
           $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage 'build-info.json') -Encoding utf8
           if ($IsWindows) {
@@ -132,14 +193,63 @@ jobs:
       - name: Upload release package
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.target }}
+          name: release-${{ matrix.target }}-${{ matrix.variant }}
           path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  bundle:
+    name: Bundle Windows automatic CPU or CUDA launcher
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout launcher
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download Windows CPU and CUDA packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-x86_64-pc-windows-msvc-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify and assemble automatic package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = 'bundle/qwen3tts-rs-windows-x64-auto'
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          foreach ($variant in @('cpu', 'cuda-sm86')) {
+            $name = "qwen3tts-rs-x86_64-pc-windows-msvc-$variant.zip"
+            $archive = Join-Path 'dist' $name
+            $expected = (Get-Content -LiteralPath "$archive.sha256" -Raw).Trim()
+            $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expected -cne "$actual  $name") { throw "Checksum mismatch: $name" }
+            Expand-Archive -LiteralPath $archive -DestinationPath $stage
+          }
+          Copy-Item -LiteralPath 'installer/Start-Qwen3TTS.ps1', 'installer/Start-Qwen3TTS.cmd', 'docs/automatic-releases.md' -Destination $stage
+          New-Item -ItemType Directory -Path 'auto-dist' -Force | Out-Null
+          $archive = 'auto-dist/qwen3tts-rs-windows-x64-auto.zip'
+          Compress-Archive -Path $stage -DestinationPath $archive
+          $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath "$archive.sha256" -Encoding ascii
+
+      - name: Upload automatic package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-auto
+          path: auto-dist/*
           if-no-files-found: error
           retention-days: 14
 
   publish:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, bundle]
     # Explicitly exclude PRs, manual builds, and forks from publication.
     if: >-
       github.event_name == 'push' &&
@@ -170,7 +280,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $names = @(
+            'qwen3tts-rs-windows-x64-auto.zip',
             'qwen3tts-rs-x86_64-pc-windows-msvc-cpu.zip',
+            'qwen3tts-rs-x86_64-pc-windows-msvc-cuda-sm86.zip',
             'qwen3tts-rs-x86_64-unknown-linux-gnu-cpu.tar.gz'
           )
           $assets = @()
@@ -185,16 +297,18 @@ jobs:
           $preview = $env:BUILD_REF -eq 'refs/heads/master'
           if ($preview) {
             $tag = "preview-$($env:BUILD_SHA.Substring(0, 12))-$env:BUILD_RUN-$env:BUILD_ATTEMPT"
-            $title = "CPU preview $($env:BUILD_SHA.Substring(0, 12))"
+            $title = "CPU and CUDA preview $($env:BUILD_SHA.Substring(0, 12))"
           } else {
             $tag = $env:BUILD_REF_NAME
             $title = $tag
           }
           $notes = @"
-          CPU binaries for commit $env:BUILD_SHA.
+          CPU and CUDA binaries for commit $env:BUILD_SHA.
 
           Windows: CLI, GUI and convert-gguf. Linux x86_64 (Ubuntu 22.04/glibc 2.35 or newer): CLI and convert-gguf.
-          Model weights and CUDA support are not included. Library tests and CLI --help passed on both platforms. GUI interaction, speech quality, model alignment and performance gates are separate and are not certified by this build.
+          Windows has separate CPU and CUDA 13.2 packages; CUDA includes redistributable runtime DLLs, requires an NVIDIA driver supporting CUDA 13.2 and compute capability 8.6 or newer (RTX 30 series or newer). No driver or model weights are included.
+          Recommended Windows download: qwen3tts-rs-windows-x64-auto.zip contains both variants and Start-Qwen3TTS.cmd, which probes CUDA and falls back to the CPU executable.
+          CPU library tests and CLI --help passed on both platforms. CUDA is compile-only with required DLL checks on the hosted runner; GPU runtime validation requires a separate real-GPU run. GUI interaction, speech quality, model alignment and performance gates are separate and are not certified by this build.
 
           Verify the archive using its accompanying SHA256 file. Build: https://github.com/$env:GH_REPO/actions/runs/$env:BUILD_RUN
           "@

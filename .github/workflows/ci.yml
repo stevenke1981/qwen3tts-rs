@@ -168,6 +168,10 @@ jobs:
         shell: pwsh
         run: ./tests/build_cpu_only_test.ps1
 
+      - name: Verify automatic launcher fallback
+        shell: pwsh
+        run: ./tests/automatic_launcher_test.ps1
+
       - name: Check GUI binary
         env:
           RUSTFLAGS: "-D warnings"
@@ -181,3 +185,6 @@ jobs:
 
       - name: Run GUI unit tests
         run: cargo test --locked --no-default-features --features "cpu,candle-llm,gui" --lib gui::tests
+
+      - name: Test device selection interface
+        run: cargo test --locked --no-default-features --features "cpu,candle-llm,gui" --test gui_device_selection_test

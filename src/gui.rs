@@ -137,6 +137,139 @@ impl Default for DevicePreference {
     }
 }
 
+/// Initialize the requested device and return its actual name or failure reason.
+///
+/// This is blocking; desktop callers must run it on a background thread.
+/// Dynamic CUDA DLLs required at process startup must already be installed.
+pub fn probe_device(preference: DevicePreference) -> Result<String, String> {
+    worker::resolve_device(preference).map(|(_, name)| name)
+}
+
+/// Non-blocking device controls shared by the desktop UI and headless tests.
+#[derive(Default)]
+pub struct DeviceSelection {
+    preference: DevicePreference,
+    pending: Option<mpsc::Receiver<Result<String, String>>>,
+    detected: Option<Result<String, String>>,
+    actual: Option<Result<String, String>>,
+}
+
+impl DeviceSelection {
+    /// Return the preference passed to the next synthesis worker.
+    pub fn preference(&self) -> DevicePreference {
+        self.preference
+    }
+
+    /// Change the preference, invalidating the previous probe result.
+    pub fn set_preference(&mut self, preference: DevicePreference) {
+        if self.preference != preference {
+            self.preference = preference;
+            self.detected = None;
+            self.actual = None;
+            // Dropping this receiver prevents an old probe from replacing new state.
+            self.pending = None;
+        }
+    }
+
+    /// Start device initialization on a background thread, never the UI thread.
+    pub fn request_probe(&mut self) {
+        self.request_probe_with(probe_device);
+    }
+
+    /// Start a probe with an injectable resolver for tests or host integrations.
+    pub fn request_probe_with<F>(&mut self, resolver: F)
+    where
+        F: FnOnce(DevicePreference) -> Result<String, String> + Send + 'static,
+    {
+        if self.pending.is_some() {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let preference = self.preference;
+        self.detected = None;
+        self.pending = Some(rx);
+        if let Err(error) = thread::Builder::new().name("device-probe".into()).spawn(move || {
+            let _ = tx.send(resolver(preference));
+        }) {
+            self.pending = None;
+            self.detected = Some(Err(format!("無法啟動裝置偵測：{error}")));
+        }
+    }
+
+    /// Consume any completed probe without blocking.
+    pub fn poll(&mut self) {
+        let Some(rx) = &self.pending else { return };
+        let result = match rx.try_recv() {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => Err("裝置偵測執行緒意外結束，請重新偵測".into()),
+        };
+        self.pending = None;
+        self.detected = Some(result);
+    }
+
+    /// Last completed availability check; it does not certify synthesis success.
+    pub fn detected(&self) -> Option<&Result<String, String>> {
+        self.detected.as_ref()
+    }
+
+    /// Last device resolution reported by the synthesis worker.
+    pub fn actual(&self) -> Option<&Result<String, String>> {
+        self.actual.as_ref()
+    }
+
+    /// Apply typed synthesis events without parsing human-readable log messages.
+    pub fn handle_event(&mut self, event: &WorkerEvent) {
+        if let WorkerEvent::DeviceResolved(result) = event {
+            self.actual = Some(result.clone());
+        }
+    }
+
+    /// Render device controls; GPU initialization runs only inside the probe worker.
+    pub fn show(&mut self, ui: &mut egui::Ui, backend: BackendKind, busy: bool) {
+        self.poll();
+        ui.vertical(|ui| {
+            ui.add_enabled_ui(!busy && self.pending.is_none(), |ui| {
+                ui.horizontal(|ui| {
+                    let mut preference = self.preference;
+                    egui::ComboBox::from_id_salt("device_preference")
+                        .selected_text(preference.name())
+                        .show_ui(ui, |ui| {
+                            for choice in DevicePreference::ALL {
+                                ui.selectable_value(&mut preference, *choice, choice.name());
+                            }
+                        });
+                    self.set_preference(preference);
+                    if ui.add_enabled(self.pending.is_none(), egui::Button::new("重新偵測")).clicked() {
+                        self.request_probe();
+                    }
+                });
+            });
+            if self.detected.is_none() && self.pending.is_none() && !busy {
+                self.request_probe();
+            }
+            if self.pending.is_some() {
+                ui.label("正在背景偵測裝置…");
+                ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+            }
+            for (label, result) in [("偵測結果", &self.detected), ("最近合成裝置", &self.actual)] {
+                if let Some(result) = result {
+                    match result {
+                        Ok(name) => { ui.label(format!("{label}：{name}")); }
+                        Err(reason) => { ui.colored_label(Color32::RED, format!("{label}：{reason}")); }
+                    }
+                }
+            }
+            if !cfg!(feature = "cuda") {
+                ui.label("此 CPU 版本未編譯 CUDA 支援；Auto 使用 CPU，指定 CUDA 會回報錯誤。");
+            }
+            if backend == BackendKind::Python {
+                ui.label("此設定控制 Rust 解碼器；Python 文字前端的 GPU 由 Python 環境自行決定。");
+            }
+        });
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 合成參數
 // ---------------------------------------------------------------------------
@@ -174,6 +307,8 @@ pub struct SynthesisParams {
 /// 背景執行緒回傳給 GUI 的事件
 #[derive(Clone, Debug)]
 pub enum WorkerEvent {
+    /// Device initialization actually performed by the synthesis worker.
+    DeviceResolved(Result<String, String>),
     /// 狀態訊息（顯示在 log 區域）
     Status(String),
     /// 進度更新（例如 LLM token 生成進度）
@@ -346,7 +481,7 @@ mod worker {
             DevicePreference::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    match candle_core::Device::new_cuda(0) {
+                    match initialize_cuda() {
                         Ok(device) => {
                             eprintln!("✅ 成功初始化 CUDA Device 0 (NVIDIA GPU 加速已啟用)");
                             Ok((device, "⚡ CUDA (NVIDIA GPU 硬體加速)".to_string()))
@@ -371,7 +506,7 @@ mod worker {
             DevicePreference::Auto => {
                 #[cfg(feature = "cuda")]
                 {
-                    match candle_core::Device::new_cuda(0) {
+                    match initialize_cuda() {
                         Ok(device) => {
                             eprintln!("✅ 成功初始化 CUDA Device 0 (NVIDIA GPU 加速已啟用)");
                             Ok((device, "⚡ CUDA (NVIDIA GPU 硬體加速)".to_string()))
@@ -380,17 +515,30 @@ mod worker {
                             eprintln!("⚠️ 無法初始化 CUDA Device 0: {err}，自動回退至 CPU");
                             Ok((
                                 candle_core::Device::Cpu,
-                                "🖥️ CPU (自動回退：無可用 GPU)".to_string(),
+                                format!("🖥️ CPU (自動回退：CUDA 初始化失敗：{err})"),
                             ))
                         }
                     }
                 }
                 #[cfg(not(feature = "cuda"))]
                 {
-                    Ok((candle_core::Device::Cpu, "🖥️ CPU (中央處理器)".to_string()))
+                    Ok((candle_core::Device::Cpu, "🖥️ CPU (此版本未編譯 CUDA 支援)".to_string()))
                 }
             }
         }
+    }
+
+    #[cfg(feature = "cuda")]
+    fn initialize_cuda() -> Result<candle_core::Device, String> {
+        // The CUDA loader can panic if its driver library is absent.
+        std::panic::catch_unwind(|| candle_core::Device::new_cuda(0))
+            .map_err(|panic| {
+                let reason = panic.downcast_ref::<String>().map(String::as_str)
+                    .or_else(|| panic.downcast_ref::<&str>().copied())
+                    .unwrap_or("CUDA driver initialization panicked");
+                reason.to_string()
+            })?
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -482,7 +630,11 @@ fn run_synthesis_inner(
     if cancel.load(Ordering::SeqCst) {
         return Err("已取消".into());
     }
-    let (device, device_name) = worker::resolve_device(params.device_pref)?;
+    let resolved = worker::resolve_device(params.device_pref);
+    tx.send(WorkerEvent::DeviceResolved(
+        resolved.as_ref().map(|(_, name)| name.clone()).map_err(Clone::clone),
+    )).ok();
+    let (device, device_name) = resolved?;
     tx.send(WorkerEvent::Status(format!("運算裝置：{device_name}")))
         .ok();
 
@@ -820,7 +972,7 @@ pub struct TtsGuiApp {
     model_id: String,
     model_dir: String,
     backend: BackendKind,
-    device_pref: DevicePreference,
+    device_selection: DeviceSelection,
     language: String,
     language_auto: bool,
     speaker: String,
@@ -1062,7 +1214,7 @@ impl Default for TtsGuiApp {
             model_dir: String::new(),
             models_base_dir: default_models_dir().to_string_lossy().to_string(),
             backend: BackendKind::default(),
-            device_pref: DevicePreference::default(),
+            device_selection: DeviceSelection::default(),
             language: "auto".to_string(),
             language_auto: true,
             speaker: "Vivian".to_string(),
@@ -1264,7 +1416,7 @@ impl TtsGuiApp {
                 PathBuf::from(self.models_base_dir.trim())
             },
             backend: self.backend,
-            device_pref: self.device_pref,
+            device_pref: self.device_selection.preference(),
             language: if self.language_auto {
                 "auto".into()
             } else {
@@ -1343,6 +1495,9 @@ impl TtsGuiApp {
         let Some(rx) = &self.event_rx else { return };
         while let Ok(event) = rx.try_recv() {
             match event {
+                WorkerEvent::DeviceResolved(result) => {
+                    self.device_selection.handle_event(&WorkerEvent::DeviceResolved(result));
+                }
                 WorkerEvent::Status(msg) => {
                     self.status_log.push((msg, Color32::WHITE));
                 }
@@ -1621,23 +1776,7 @@ impl eframe::App for TtsGuiApp {
 
                                     // Device
                                     ui.label("運算裝置：");
-                                    ui.horizontal(|ui| {
-                                        #[cfg(feature = "cuda")]
-                                        {
-                                            ui.label(
-                                                RichText::new("⚡ CUDA (NVIDIA GPU 硬體加速已啟用)")
-                                                    .strong()
-                                                    .color(Color32::from_rgb(80, 220, 80)),
-                                            );
-                                        }
-                                        #[cfg(not(feature = "cuda"))]
-                                        {
-                                            ui.label(
-                                                RichText::new("🖥 CPU 運算")
-                                                    .color(Color32::from_rgb(220, 180, 80)),
-                                            );
-                                        }
-                                    });
+                                    self.device_selection.show(ui, self.backend, self.is_processing);
                                     ui.end_row();
 
                                     // Language

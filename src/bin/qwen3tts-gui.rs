@@ -18,6 +18,21 @@
 //! ```
 
 fn main() -> eframe::Result<()> {
+    let probe = match std::env::args().nth(1).as_deref() {
+        Some("--probe-cuda") => Some(qwen3tts::gui::DevicePreference::Cuda),
+        Some("--probe-device") => Some(qwen3tts::gui::DevicePreference::Auto),
+        _ => None,
+    };
+    if let Some(preference) = probe {
+        match qwen3tts::gui::probe_device(preference) {
+            Ok(description) => println!("{description}"),
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([820.0, 720.0])
