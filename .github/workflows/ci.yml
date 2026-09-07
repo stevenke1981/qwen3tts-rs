@@ -170,7 +170,7 @@ jobs:
 
       - name: Verify automatic launcher fallback
         shell: pwsh
-        run: ./tests/automatic_launcher_test.ps1
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/automatic_launcher_test.ps1
 
       - name: Check GUI binary
         env:

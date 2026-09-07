@@ -531,7 +531,18 @@ mod worker {
     #[cfg(feature = "cuda")]
     fn initialize_cuda() -> Result<candle_core::Device, String> {
         // The CUDA loader can panic if its driver library is absent.
-        std::panic::catch_unwind(|| candle_core::Device::new_cuda(0))
+        std::panic::catch_unwind(|| -> candle_core::Result<candle_core::Device> {
+            let device = candle_core::Device::new_cuda(0)?;
+            // Context creation alone can succeed on a GPU that cannot execute
+            // this binary's PTX target. Verify a kernel and device-to-host copy.
+            let result = candle_core::Tensor::from_slice(&[1.0f32, 2.0], 2, &device)?
+                .affine(2.0, 1.0)?
+                .to_vec1::<f32>()?;
+            if result != [3.0, 5.0] {
+                candle_core::bail!("CUDA device probe returned incorrect results");
+            }
+            Ok(device)
+        })
             .map_err(|panic| {
                 let reason = panic.downcast_ref::<String>().map(String::as_str)
                     .or_else(|| panic.downcast_ref::<&str>().copied())

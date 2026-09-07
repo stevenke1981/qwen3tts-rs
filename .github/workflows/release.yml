@@ -116,6 +116,12 @@ jobs:
         run: |
           cargo test --locked --no-default-features --features $env:BUILD_FEATURES --target $env:BUILD_TARGET --lib
           if ($LASTEXITCODE -ne 0) { throw 'Library tests failed' }
+          if ($IsWindows) {
+            cargo test --locked --no-default-features --features $env:BUILD_FEATURES --target $env:BUILD_TARGET --test gui_device_selection_test
+            if ($LASTEXITCODE -ne 0) { throw 'Device interface tests failed' }
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/automatic_launcher_test.ps1
+            if ($LASTEXITCODE -ne 0) { throw 'Launcher fallback tests failed' }
+          }
 
       - name: Build release binaries
         env:
@@ -142,6 +148,10 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'CLI --help smoke test failed' }
             & (Join-Path $binDir "convert-gguf$suffix") --help
             if ($LASTEXITCODE -ne 0) { throw 'Converter --help smoke test failed' }
+            if ($IsWindows) {
+              & (Join-Path $binDir 'qwen3tts-gui.exe') --probe-device
+              if ($LASTEXITCODE -ne 0) { throw 'CPU device probe failed' }
+            }
           }
 
           $package = "qwen3tts-rs-$env:BUILD_TARGET-$env:BUILD_VARIANT"
