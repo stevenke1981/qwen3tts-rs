@@ -7,6 +7,7 @@ on:
       - "feat/**"
       - "fix/**"
       - "review/**"
+      - "codex/**"
   pull_request:
     branches:
       - master
@@ -162,6 +163,10 @@ jobs:
         run: |
           [void][ScriptBlock]::Create((Get-Content -Raw build_all.ps1))
           [void][ScriptBlock]::Create((Get-Content -Raw build_release_cuda.ps1))
+
+      - name: Verify CPU-only artifact selection
+        shell: pwsh
+        run: ./tests/build_cpu_only_test.ps1
 
       - name: Check GUI binary
         env:

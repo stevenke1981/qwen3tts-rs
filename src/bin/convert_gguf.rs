@@ -280,6 +280,12 @@ fn safetensors_key_to_gguf(sf_key: &str) -> Option<String> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args.len() == 2 && matches!(args[1].as_str(), "--help" | "-h") {
+        println!("用法: convert-gguf talker <model-dir> <output.gguf>");
+        println!("將 Qwen3-TTS Talker + Code Predictor safetensors 權重轉換為 GGUF F32 格式。");
+        println!("<model-dir> 必須包含 config.json 與 model.safetensors。");
+        return;
+    }
     if args.len() < 4 {
         eprintln!("用法: convert-gguf talker <model-dir> <output.gguf>");
         eprintln!();

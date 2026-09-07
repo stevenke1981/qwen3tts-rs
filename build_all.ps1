@@ -140,7 +140,7 @@ try {
     }
 
     # CPU build 會覆寫原始檔名；有 CUDA 產物時，讓預設檔名恢復為 CUDA/CPU 自動回退版本。
-    if (Test-Path $cudaOutput) {
+    if (-not $CpuOnly -and (Test-Path $cudaOutput)) {
         Copy-Item $cudaOutput $defaultOutput -Force
     } elseif (Test-Path $cpuOutput) {
         Copy-Item $cpuOutput $defaultOutput -Force
@@ -151,8 +151,8 @@ try {
     Write-Host " CLI：$(Join-Path $releaseDir 'qwen3tts-rs.exe')"
     Write-Host " GGUF converter：$(Join-Path $releaseDir 'convert-gguf.exe')"
     if (Test-Path $defaultOutput) { Write-Host " GUI：$defaultOutput" }
-    if (Test-Path $cudaOutput) { Write-Host " CUDA GUI：$cudaOutput" }
-    if (Test-Path $cpuOutput) { Write-Host " CPU GUI：$cpuOutput" }
+    if (-not $CpuOnly -and (Test-Path $cudaOutput)) { Write-Host " CUDA GUI：$cudaOutput" }
+    if (-not $CudaOnly -and (Test-Path $cpuOutput)) { Write-Host " CPU GUI：$cpuOutput" }
     Write-Host '============================================================' -ForegroundColor Cyan
 }
 finally {
