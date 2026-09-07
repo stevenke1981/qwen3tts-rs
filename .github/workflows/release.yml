@@ -60,9 +60,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target
-          key: release-target-${{ matrix.target }}-${{ matrix.features }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'build.rs', 'patches/**') }}-${{ github.sha }}
+          key: release-target-${{ matrix.target }}-cpu-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'build.rs', 'patches/**', '.github/workflows/release.yml') }}-${{ github.sha }}
           restore-keys: |
-            release-target-${{ matrix.target }}-${{ matrix.features }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'build.rs', 'patches/**') }}-
+            release-target-${{ matrix.target }}-cpu-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'build.rs', 'patches/**', '.github/workflows/release.yml') }}-
 
       - name: Run library tests
         env:
