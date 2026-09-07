@@ -81,7 +81,7 @@ jobs:
           $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if ($LASTEXITCODE -ne 0 -or !$vs) { throw 'MSVC installation not found' }
           $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
-          $environment = & cmd.exe /d /s /c "`"`"$vcvars`" >nul && set`""
+          $environment = & $env:ComSpec /d /s /c "`"$vcvars`" >nul && set"
           if ($LASTEXITCODE -ne 0) { throw 'MSVC environment initialization failed' }
           foreach ($line in $environment) {
             if ($line -match '^([^=]+)=(.*)$') {
